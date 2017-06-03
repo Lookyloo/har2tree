@@ -13,6 +13,7 @@ setup(
     url='https://github.com/viper-framework/har2tree',
     description='HAR to ETE tree.',
     packages=['har2tree'],
+    scripts=['bin/har2tree'],
     classifiers=[
         'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX :: Linux',
