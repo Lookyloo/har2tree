@@ -13,6 +13,23 @@ class Har2Tree(object):
 
     def __init__(self, har):
         self.har = har
+        self.all_hostnames = set()
+        self.url_tree = Tree()
+
+    def process_tree(self, root_node):
+        if root_node.is_leaf():
+            return
+        domains_nodes = {}
+        for c in root_node.get_children():
+            if not domains_nodes.get(c.hostname):
+                domain = root_node.add_child(name=c.hostname)
+                domain.add_feature('is_domain', True)
+                domains_nodes[c.hostname] = domain
+            else:
+                domain = domains_nodes.get(c.hostname)
+            c.detach()
+            domain.add_child(child=c)
+            self.process_tree(c)
 
     def tree(self, tree_file):
         all_requests = {}
@@ -24,8 +41,9 @@ class Har2Tree(object):
                     if not all_referer.get(h['value']):
                         all_referer[h['value']] = []
                     all_referer[h['value']].append(entry['request']['url'])
-        url_tree = Tree()
-        self._make_subtree(url_tree, self.har['log']['entries'][0], all_referer, all_requests)
+        self._make_subtree(self.url_tree, self.har['log']['entries'][0], all_referer, all_requests)
+        childs = self.url_tree.children
+        self.process_tree(childs[0])
         # print(url_tree.get_ascii(show_internal=True))
         # url_tree.show()
         ts = TreeStyle()
@@ -34,39 +52,39 @@ class Har2Tree(object):
         def my_layout(node):
             if node.is_root():
                 F = TextFace(node.name, tight_text=True)
+            elif node.is_domain:
+                F = TextFace(node.name, tight_text=True, fgcolor='blue')
             else:
-                if node.js and node.cookie:
-                    fgcolor = 'red'
-                elif node.cookie:
-                    fgcolor = 'yellow'
-                elif node.js:
-                    fgcolor = 'blue'
-                else:
-                    fgcolor = 'black'
                 if node.is_leaf():
-                    F = TextFace(node.name[:50], tight_text=True, fgcolor=fgcolor)
+                    F = TextFace(node.name[:50], tight_text=True)
                 else:
-                    F = TextFace(node.hostname, tight_text=True, fgcolor=fgcolor)
-            add_face_to_node(F, node, column=0, position="branch-right")
+                    F = TextFace(node.hostname, tight_text=True)
+            add_face_to_node(F, node, column=5, position="branch-right")
 
         ts.layout_fn = my_layout
-        url_tree.render(tree_file, tree_style=ts)
+        self.url_tree.render(tree_file, tree_style=ts)
 
     def _make_subtree(self, root_node, url_entry, all_referer, all_requests):
         url = url_entry['request']['url']
         u_node = root_node.add_child(name=url)
         u_node.add_feature('hostname', urlparse(url).hostname)
+        u_node.add_feature('is_domain', False)
+        u_node.add_feature('response_cookie', False)
+        u_node.add_feature('request_cookie', False)
+        u_node.add_feature('js', False)
+        self.all_hostnames.add(u_node.hostname)
+        if url_entry['request']['cookies']:
+            u_node.add_feature('request_cookie', True)
+            u_node.add_face(TextFace('\U000027A1\U0001F36A'), column=0)
         if url_entry['response']['cookies']:
-            u_node.add_feature('cookie', True)
-        else:
-            u_node.add_feature('cookie', False)
+            u_node.add_feature('response_cookie', True)
+            u_node.add_face(TextFace('\U00002B05\U0001F36A'), column=0)
         if url_entry['response']['content']['mimeType'].startswith('application/javascript'):
             u_node.add_feature('js', True)
-        else:
-            u_node.add_feature('js', False)
-
+            u_node.add_face(TextFace('\U0001F41B'), column=0)
         if url_entry['response']['redirectURL']:
             url = url_entry['response']['redirectURL']
+            u_node.add_face(TextFace('\U000025B6'), column=0)
             if not url.startswith('http'):
                 # internal redirect
                 parsed = urlparse(url_entry['request']['url'])
