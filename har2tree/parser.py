@@ -9,6 +9,26 @@ except ImportError:
     from urlparse import urlparse
 
 
+def setup_treestyle():
+    ts = TreeStyle()
+    ts.show_leaf_name = False
+
+    def my_layout(node):
+        if node.is_root():
+            F = TextFace(node.name, tight_text=True)
+        elif node.is_domain:
+            F = TextFace(node.name, tight_text=True, fgcolor='blue')
+        else:
+            if node.is_leaf():
+                F = TextFace(node.name[:50], tight_text=True)
+            else:
+                F = TextFace(node.hostname, tight_text=True)
+        add_face_to_node(F, node, column=5, position="branch-right")
+
+    ts.layout_fn = my_layout
+    return ts
+
+
 class Har2Tree(object):
 
     def __init__(self, har):
@@ -31,7 +51,10 @@ class Har2Tree(object):
             domain.add_child(child=c)
             self.process_tree(c)
 
-    def tree(self, tree_file):
+    def render_tree_to_file(self, tree_file):
+        self.url_tree.render(tree_file, tree_style=setup_treestyle())
+
+    def make_tree(self):
         all_requests = {}
         all_referer = {}
         for entry in self.har['log']['entries']:
@@ -40,29 +63,14 @@ class Har2Tree(object):
                 if h['name'] == 'Referer':
                     if not all_referer.get(h['value']):
                         all_referer[h['value']] = []
+                    if h['value'] == entry['request']['url']:
+                        # Redirect to itself, skip to avoid loops.
+                        continue
                     all_referer[h['value']].append(entry['request']['url'])
         self._make_subtree(self.url_tree, self.har['log']['entries'][0], all_referer, all_requests)
         childs = self.url_tree.children
         self.process_tree(childs[0])
-        # print(url_tree.get_ascii(show_internal=True))
-        # url_tree.show()
-        ts = TreeStyle()
-        ts.show_leaf_name = False
-
-        def my_layout(node):
-            if node.is_root():
-                F = TextFace(node.name, tight_text=True)
-            elif node.is_domain:
-                F = TextFace(node.name, tight_text=True, fgcolor='blue')
-            else:
-                if node.is_leaf():
-                    F = TextFace(node.name[:50], tight_text=True)
-                else:
-                    F = TextFace(node.hostname, tight_text=True)
-            add_face_to_node(F, node, column=5, position="branch-right")
-
-        ts.layout_fn = my_layout
-        self.url_tree.render(tree_file, tree_style=ts)
+        return self.url_tree
 
     def _make_subtree(self, root_node, url_entry, all_referer, all_requests):
         url = url_entry['request']['url']
@@ -85,7 +93,13 @@ class Har2Tree(object):
         if url_entry['response']['redirectURL']:
             url = url_entry['response']['redirectURL']
             u_node.add_face(TextFace('\U000025B6'), column=0)
-            if not url.startswith('http'):
+            if url.startswith('//'):
+                # Redirect to an other website...
+                if all_requests.get('http:{}'.format(url)):
+                    url = 'http:{}'.format(url)
+                else:
+                    url = 'https:{}'.format(url)
+            elif not url.startswith('http'):
                 # internal redirect
                 parsed = urlparse(url_entry['request']['url'])
                 parsed._replace(path=url)
