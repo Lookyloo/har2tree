@@ -1,0 +1,5 @@
+flask
+flask-bootstrap
+
+# requires the latest version
+git+https://github.com/etetoolkit/ete.git
