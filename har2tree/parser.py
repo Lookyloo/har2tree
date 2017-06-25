@@ -9,14 +9,14 @@ except ImportError:
     from urlparse import urlparse
 
 
-def setup_treestyle():
+def url_treestyle():
     ts = TreeStyle()
     ts.show_leaf_name = False
 
     def my_layout(node):
         if node.is_root():
             F = TextFace(node.name, tight_text=True)
-        elif node.is_domain:
+        elif node.is_hostname:
             F = TextFace(node.name, tight_text=True, fgcolor='blue')
         else:
             if node.is_leaf():
@@ -29,30 +29,77 @@ def setup_treestyle():
     return ts
 
 
+def hostname_treestyle():
+    ts = TreeStyle()
+    ts.show_leaf_name = False
+
+    def my_layout(node):
+        if node.is_root():
+            F = TextFace(node.name, tight_text=True)
+        else:
+            if node.is_leaf():
+                F = TextFace('{}'.format(node.name), tight_text=True)
+            else:
+                F = TextFace('{} ({})'.format(node.name, len(node.urls)), tight_text=True)
+        add_face_to_node(F, node, column=5, position="branch-right")
+
+    ts.layout_fn = my_layout
+    return ts
+
+
 class Har2Tree(object):
 
     def __init__(self, har):
         self.har = har
         self.all_hostnames = set()
         self.url_tree = Tree()
-
-    def process_tree(self, root_node):
-        if root_node.is_leaf():
-            return
-        domains_nodes = {}
-        for c in root_node.get_children():
-            if not domains_nodes.get(c.hostname):
-                domain = root_node.add_child(name=c.hostname)
-                domain.add_feature('is_domain', True)
-                domains_nodes[c.hostname] = domain
-            else:
-                domain = domains_nodes.get(c.hostname)
-            c.detach()
-            domain.add_child(child=c)
-            self.process_tree(c)
+        self.hostname_tree = Tree()
 
     def render_tree_to_file(self, tree_file):
-        self.url_tree.render(tree_file, tree_style=setup_treestyle())
+        self.url_tree.render(tree_file, tree_style=url_treestyle())
+
+    def make_hostname_tree(self, root_node_url, root_node_hostname):
+        """ Groups all the URLs by domain in the hostname tree.
+        `root_node_url` can be a list of nodes called by the same `root_node_hostname`
+        """
+        if not isinstance(root_node_url, list):
+            root_node_url = [root_node_url]
+        children_hostnames = {}
+        sub_roots = {}
+        for rn in root_node_url:
+            for c in rn.get_children():
+                if c.hostname is None:
+                    # Probably a base64 encoded image
+                    continue
+                hc = children_hostnames.get(c.hostname)
+                if not hc:
+                    hc = root_node_hostname.add_child(name=c.hostname)
+                    hc.add_feature('urls', [c])
+                    hc.add_feature('request_cookie', 0)
+                    hc.add_feature('response_cookie', 0)
+                    hc.add_feature('js', 0)
+                    children_hostnames[c.hostname] = hc
+                else:
+                    hc.urls.append(c)
+                if c.request_cookie:
+                    hc.request_cookie += 1
+                if c.response_cookie:
+                    hc.response_cookie += 1
+                if c.js:
+                    hc.js += 1
+                if not c.is_leaf():
+                    if not sub_roots.get(hc):
+                        sub_roots[hc] = []
+                    sub_roots[hc].append(c)
+        for hostnode in root_node_hostname.get_children():
+            if hostnode.request_cookie:
+                hostnode.add_face(TextFace('\U000027A1\U0001F36A ({})'.format(hostnode.request_cookie)), column=0)
+            if hostnode.response_cookie:
+                hostnode.add_face(TextFace('\U00002B05\U0001F36A ({})'.format(hostnode.response_cookie)), column=0)
+            if hostnode.js:
+                hostnode.add_face(TextFace('\U0001F41B ({})'.format(hostnode.js)), column=0)
+        for hc, sub in sub_roots.items():
+            self.make_hostname_tree(sub, hc)
 
     def make_tree(self):
         all_requests = {}
@@ -69,17 +116,19 @@ class Har2Tree(object):
                     all_referer[h['value']].append(entry['request']['url'])
         self._make_subtree(self.url_tree, self.har['log']['entries'][0], all_referer, all_requests)
         childs = self.url_tree.children
-        self.process_tree(childs[0])
+        self.make_hostname_tree(childs[0], self.hostname_tree)
         return self.url_tree
 
     def _make_subtree(self, root_node, url_entry, all_referer, all_requests):
         url = url_entry['request']['url']
         u_node = root_node.add_child(name=url)
         u_node.add_feature('hostname', urlparse(url).hostname)
-        u_node.add_feature('is_domain', False)
+        u_node.add_feature('is_hostname', False)
         u_node.add_feature('response_cookie', False)
         u_node.add_feature('request_cookie', False)
         u_node.add_feature('js', False)
+        u_node.add_feature('request', url_entry['request'])
+        u_node.add_feature('response', url_entry['response'])
         self.all_hostnames.add(u_node.hostname)
         if url_entry['request']['cookies']:
             u_node.add_feature('request_cookie', True)
