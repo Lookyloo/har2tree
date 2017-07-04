@@ -3,6 +3,9 @@
 
 from ete3 import Tree, TreeStyle, TextFace, add_face_to_node
 
+import json
+import copy
+
 try:
     from urllib.parse import urlparse
 except ImportError:
@@ -16,13 +19,11 @@ def url_treestyle():
     def my_layout(node):
         if node.is_root():
             F = TextFace(node.name, tight_text=True)
-        elif node.is_hostname:
-            F = TextFace(node.name, tight_text=True, fgcolor='blue')
         else:
             if node.is_leaf():
                 F = TextFace(node.name[:50], tight_text=True)
             else:
-                F = TextFace(node.hostname, tight_text=True)
+                F = TextFace(node.name, tight_text=True)
         add_face_to_node(F, node, column=5, position="branch-right")
 
     ts.layout_fn = my_layout
@@ -47,21 +48,101 @@ def hostname_treestyle():
     return ts
 
 
+class CrawledTree(object):
+
+    def __init__(self, harfiles):
+        self.hartrees = self.make_all_harfiles(harfiles)
+        self.root_hartree = None
+        self.hostname_tree = Tree()
+        self.processed = []
+
+    def make_all_harfiles(self, files):
+        loaded = []
+        for har in files:
+            with open(har, 'r') as f:
+                har2tree = Har2Tree(json.load(f))
+            if not har2tree.has_entries:
+                continue
+            har2tree.make_tree()
+            loaded.append(har2tree)
+        return loaded
+
+    def find_parents(self):
+        self.referers = {}
+        for hartree in self.hartrees:
+            if hartree.root_referer:
+                if not self.referers.get(hartree.root_referer):
+                    self.referers[hartree.root_referer] = []
+                self.referers[hartree.root_referer].append(hartree)
+
+    def join_trees(self, root=None):
+        if root is None:
+            self.root_hartree = copy.deepcopy(self.hartrees[0])
+            root = self.root_hartree
+        if root in self.processed:
+            return
+        else:
+            self.processed.append(root)
+        if root.root_url_after_redirect:
+            sub_trees = self.referers.get(root.root_url_after_redirect)
+        else:
+            sub_trees = self.referers.get(root.root_url)
+        if not sub_trees:
+            return
+        for sub_tree in sub_trees:
+            root.url_tree.children[0].add_child(sub_tree.url_tree.children[0])
+
+    def dump_test(self, tree_file):
+        self.root_hartree.make_hostname_tree()
+        # print(self.root_hartree.hostname_tree)
+        self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
+
+
 class Har2Tree(object):
 
     def __init__(self, har):
         self.har = har
+        self.root_url_after_redirect = None
+        self.root_referer = None
         self.all_hostnames = set()
         self.url_tree = Tree()
         self.hostname_tree = Tree()
 
+        if not self.har['log']['entries']:
+            self.has_entries = False
+            return
+        else:
+            self.has_entries = True
+        self.root_url = self.har['log']['entries'][0]['request']['url']
+        self.set_root_after_redirect()
+        self.set_root_referrer()
+
+    def set_root_after_redirect(self):
+        for e in self.har['log']['entries']:
+            if e['response']['redirectURL']:
+                self.root_url_after_redirect = e['response']['redirectURL']
+            else:
+                break
+
+    def set_root_referrer(self):
+        first_entry = self.har['log']['entries'][0]
+        for h in first_entry['request']['headers']:
+            if h['name'] == 'Referer':
+                self.root_referer = h['value']
+                break
+
     def render_tree_to_file(self, tree_file):
         self.url_tree.render(tree_file, tree_style=url_treestyle())
 
-    def make_hostname_tree(self, root_node_url, root_node_hostname):
+    def make_hostname_tree(self, root_node_url=None, root_node_hostname=None):
         """ Groups all the URLs by domain in the hostname tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
+        if root_node_url is None:
+            root_node_url = self.url_tree.children[0]
+        if root_node_hostname is None:
+            self.hostname_tree = Tree()
+            root_node_hostname = self.hostname_tree
         if not isinstance(root_node_url, list):
             root_node_url = [root_node_url]
         children_hostnames = {}
@@ -78,6 +159,7 @@ class Har2Tree(object):
                     hc.add_feature('request_cookie', 0)
                     hc.add_feature('response_cookie', 0)
                     hc.add_feature('js', 0)
+                    hc.add_feature('redirect_to_nothing', 0)
                     children_hostnames[c.hostname] = hc
                 else:
                     hc.urls.append(c)
@@ -87,6 +169,8 @@ class Har2Tree(object):
                     hc.response_cookie += 1
                 if c.js:
                     hc.js += 1
+                if c.redirect_to_nothing:
+                    hc.redirect_to_nothing += 1
                 if not c.is_leaf():
                     if not sub_roots.get(hc):
                         sub_roots[hc] = []
@@ -98,25 +182,27 @@ class Har2Tree(object):
                 hostnode.add_face(TextFace('\U00002B05\U0001F36A ({})'.format(hostnode.response_cookie)), column=0)
             if hostnode.js:
                 hostnode.add_face(TextFace('\U0001F41B ({})'.format(hostnode.js)), column=0)
+            if hostnode.redirect_to_nothing:
+                hostnode.add_face(TextFace('¯\_(ツ)_/¯ ({})'.format(hostnode.redirect_to_nothing)), column=0)
         for hc, sub in sub_roots.items():
             self.make_hostname_tree(sub, hc)
 
     def make_tree(self):
         all_requests = {}
         all_referer = {}
-        for entry in self.har['log']['entries']:
+        if not self.har['log']['entries']:
+            # No entries...
+            return self.url_tree
+        for entry in self.har['log']['entries'][1:]:
             all_requests[entry['request']['url']] = entry
             for h in entry['request']['headers']:
-                if h['name'] == 'Referer':
+                if h['name'] == 'Referer' and not h['value'] == entry['request']['url']:
+                    # Skip redirect to itself to avoid loops.
                     if not all_referer.get(h['value']):
                         all_referer[h['value']] = []
-                    if h['value'] == entry['request']['url']:
-                        # Redirect to itself, skip to avoid loops.
-                        continue
                     all_referer[h['value']].append(entry['request']['url'])
         self._make_subtree(self.url_tree, self.har['log']['entries'][0], all_referer, all_requests)
-        childs = self.url_tree.children
-        self.make_hostname_tree(childs[0], self.hostname_tree)
+        self.make_hostname_tree()
         return self.url_tree
 
     def _make_subtree(self, root_node, url_entry, all_referer, all_requests):
@@ -126,6 +212,8 @@ class Har2Tree(object):
         u_node.add_feature('is_hostname', False)
         u_node.add_feature('response_cookie', False)
         u_node.add_feature('request_cookie', False)
+        u_node.add_feature('redirect', False)
+        u_node.add_feature('redirect_to_nothing', False)
         u_node.add_feature('js', False)
         u_node.add_feature('request', url_entry['request'])
         u_node.add_feature('response', url_entry['response'])
@@ -141,6 +229,7 @@ class Har2Tree(object):
             u_node.add_face(TextFace('\U0001F41B'), column=0)
         if url_entry['response']['redirectURL']:
             url = url_entry['response']['redirectURL']
+            u_node.add_feature('redirect', True)
             u_node.add_face(TextFace('\U000025B6'), column=0)
             if url.startswith('//'):
                 # Redirect to an other website...
@@ -154,7 +243,12 @@ class Har2Tree(object):
                 parsed._replace(path=url)
                 url = '{}://{}{}'.format(parsed.scheme, parsed.netloc, url)
             if not all_requests.get(url):
-                url += '/'
+                if all_requests.get(url + '/'):
+                    url += '/'
+                else:
+                    u_node.add_feature('redirect_to_nothing', True)
+                    u_node.add_face(TextFace('¯\_(ツ)_/¯'), column=0)
+                    return
             self._make_subtree(u_node, all_requests[url], all_referer, all_requests)
         elif all_referer.get(url):
             # URL loads other URL
