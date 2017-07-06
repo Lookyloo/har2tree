@@ -12,7 +12,6 @@
            onMouseOver='highlight_node("{{ nodeid }}", "{{ text }}", {{ area[0] }}, {{ area[1] }}, {{ area[2]-area[0] }}, {{ area[3]-area[1] }});'
            onclick='showPopup({{ nodeid }});'
            href="javascript:void('{{ nodeid }}');">
-           <span class="popuptext" id="{{ nodeid }}">foo</span>
         </div>
       {% endfor %}
       {% for x1, y1, x2, y2, nodeid, text, area in faces %}
@@ -22,7 +21,6 @@
            onMouseOver='highlight_node({{ area[0] }}, {{ area[1] }}, {{ area[2]-area[0] }}, {{ area[3]-area[1] }});'
            onclick='showPopup("{{ nodeid }}");'
            href="javascript:void('{{ nodeid }}');">
-            <span class="popuptext" id="{{ nodeid }}">foo</span>
         </div>
       {% endfor %}
   </MAP>

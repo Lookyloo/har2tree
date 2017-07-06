@@ -51,12 +51,10 @@ def hostname_treestyle():
 class CrawledTree(object):
 
     def __init__(self, harfiles):
-        self.hartrees = self.make_all_harfiles(harfiles)
+        self.hartrees = self.load_all_harfiles(harfiles)
         self.root_hartree = None
-        self.hostname_tree = Tree()
-        self.processed = []
 
-    def make_all_harfiles(self, files):
+    def load_all_harfiles(self, files):
         loaded = []
         for har in files:
             with open(har, 'r') as f:
@@ -79,10 +77,6 @@ class CrawledTree(object):
         if root is None:
             self.root_hartree = copy.deepcopy(self.hartrees[0])
             root = self.root_hartree
-        if root in self.processed:
-            return
-        else:
-            self.processed.append(root)
         if root.root_url_after_redirect:
             sub_trees = self.referers.get(root.root_url_after_redirect)
         else:
@@ -94,7 +88,6 @@ class CrawledTree(object):
 
     def dump_test(self, tree_file):
         self.root_hartree.make_hostname_tree()
-        # print(self.root_hartree.hostname_tree)
         self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
 
 
