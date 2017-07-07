@@ -55,6 +55,7 @@ class CrawledTree(object):
         self.root_hartree = None
 
     def load_all_harfiles(self, files):
+        """Open all the HAR files"""
         loaded = []
         for har in files:
             with open(har, 'r') as f:
@@ -66,6 +67,9 @@ class CrawledTree(object):
         return loaded
 
     def find_parents(self):
+        """Find all the trees where the first entry has a referer.
+        Meaning: We have a sub-tree to attach.
+        """
         self.referers = {}
         for hartree in self.hartrees:
             if hartree.root_referer:
@@ -78,10 +82,13 @@ class CrawledTree(object):
             self.root_hartree = copy.deepcopy(self.hartrees[0])
             root = self.root_hartree
         if root.root_url_after_redirect:
+            # If the first URL is redirected, the referer of the subtree
+            # will be the redirect.
             sub_trees = self.referers.get(root.root_url_after_redirect)
         else:
             sub_trees = self.referers.get(root.root_url)
         if not sub_trees:
+            # No subtree to attach
             return
         for sub_tree in sub_trees:
             root.url_tree.children[0].add_child(sub_tree.url_tree.children[0])
@@ -189,16 +196,24 @@ class Har2Tree(object):
         for entry in self.har['log']['entries'][1:]:
             all_requests[entry['request']['url']] = entry
             for h in entry['request']['headers']:
-                if h['name'] == 'Referer' and not h['value'] == entry['request']['url']:
-                    # Skip redirect to itself to avoid loops.
+                if h['name'] == 'Referer':
+                    if h['value'] == entry['request']['url'] or h['value'] == self.root_referer:
+                        # Skip to avoid loops:
+                        #   * referer to itself
+                        #   * referer to root referer
+                        continue
                     if not all_referer.get(h['value']):
                         all_referer[h['value']] = []
                     all_referer[h['value']].append(entry['request']['url'])
-        self._make_subtree(self.url_tree, self.har['log']['entries'][0], all_referer, all_requests)
+        self._make_subtree(all_referer, all_requests)
         self.make_hostname_tree()
         return self.url_tree
 
-    def _make_subtree(self, root_node, url_entry, all_referer, all_requests):
+    def _make_subtree(self, all_referer, all_requests, root_node=None, url_entry=None):
+        if root_node is None:
+            root_node = self.url_tree
+        if url_entry is None:
+            url_entry = self.har['log']['entries'][0]
         url = url_entry['request']['url']
         u_node = root_node.add_child(name=url)
         u_node.add_feature('hostname', urlparse(url).hostname)
@@ -242,8 +257,8 @@ class Har2Tree(object):
                     u_node.add_feature('redirect_to_nothing', True)
                     u_node.add_face(TextFace('¯\_(ツ)_/¯'), column=0)
                     return
-            self._make_subtree(u_node, all_requests[url], all_referer, all_requests)
+            self._make_subtree(all_referer, all_requests, u_node, all_requests[url])
         elif all_referer.get(url):
             # URL loads other URL
             for u in all_referer.get(url):
-                self._make_subtree(u_node, all_requests[u], all_referer, all_requests)
+                self._make_subtree(all_referer, all_requests, u_node, all_requests[u])
