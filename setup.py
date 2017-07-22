@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from setuptools import setup
-import har2tree
 
 
 setup(
     name='har2tree',
-    version=har2tree.__version__,
+    version='0.1',
     author='Raphaël Vinot',
     author_email='raphael.vinot@circl.lu',
     maintainer='Raphaël Vinot',
@@ -24,5 +23,5 @@ setup(
         'Topic :: Security',
         'Topic :: Internet',
     ],
-    test_suite="tests"
+    test_suite="tests",
 )
