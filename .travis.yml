@@ -45,10 +45,11 @@ install:
     # Builds Complete
     - popd
     - pip install -U -r requirements.txt
-    - pip install -U nose coverage
+    - pip install -U nose coverage coveralls codecov
 
 script:
     - nosetests --with-coverage --cover-package=har2tree tests/test.py
 
 after_success:
-  coveralls
+    - codecov
+    - coveralls

@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/viper-framework/har2tree.svg?branch=master)](https://travis-ci.org/viper-framework/har2tree)
+[![codecov](https://codecov.io/gh/viper-framework/har2tree/branch/master/graph/badge.svg)](https://codecov.io/gh/viper-framework/har2tree)
+
 Har2Tree
 ========
 
