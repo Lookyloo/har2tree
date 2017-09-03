@@ -2,36 +2,21 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from har2tree import Har2Tree
-import json
+from har2tree import CrawledTree
+import os
+from glob import glob
 
 
 class TestBasic(unittest.TestCase):
 
-    def test_buzzfeed(self):
-        with open('tests/data/buzzfeed.har', 'r') as f:
-            h2t = Har2Tree(json.load(f))
-            h2t.tree('test/out/buzzfeed.pdf')
-
-    def test_circl(self):
-        with open('tests/data/circl.har', 'r') as f:
-            h2t = Har2Tree(json.load(f))
-            h2t.tree('test/out/circl.pdf')
-
-    def test_lemonde(self):
-        with open('tests/data/lemonde.har', 'r') as f:
-            h2t = Har2Tree(json.load(f))
-            h2t.tree('test/out/lemonde.pdf')
-
-    def test_liberation(self):
-        with open('tests/data/libe.har', 'r') as f:
-            h2t = Har2Tree(json.load(f))
-            h2t.tree('test/out/libe.pdf')
-
-    def test_nyt(self):
-        with open('tests/data/nyt.har', 'r') as f:
-            h2t = Har2Tree(json.load(f))
-            h2t.tree('test/out/nyt.pdf')
+    def test_lalibre(self):
+        test_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', 'lalibre')
+        out_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'out')
+        to_process = sorted(glob(os.path.join(test_dir, '*.har')))
+        crawled_tree = CrawledTree(to_process)
+        crawled_tree.find_parents()
+        crawled_tree.join_trees()
+        crawled_tree.render_hostname_tree(os.path.join(out_dir, 'lalibre.png'))
 
 
 if __name__ == '__main__':

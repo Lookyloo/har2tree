@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from ete3 import Tree, TreeStyle, TextFace, add_face_to_node
+from ete3 import Tree, TreeStyle, TextFace, add_face_to_node, ImgFace
 
+import os
 import json
 import copy
 
@@ -10,6 +11,32 @@ try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
+
+
+def init_faces():
+    def init_text_faces():
+        face_request_cookie = TextFace('\U000027A1\U0001F36A')
+        face_response_cookie = TextFace('\U00002B05\U0001F36A')
+        face_javascript = TextFace('\U0001F41B')
+        face_redirect = TextFace('\U000025B6')
+        face_redirect_to_nothing = TextFace('¯\_(ツ)_/¯')
+        return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
+
+    def init_img_faces(path):
+        face_request_cookie = ImgFace(os.path.join(path, "request_cookie.png"))
+        face_response_cookie = ImgFace(os.path.join(path, "response_cookie.png"))
+        face_javascript = ImgFace(os.path.join(path, "javascript.png"))
+        face_redirect = ImgFace(os.path.join(path, "redirect.png"))
+        face_redirect_to_nothing = ImgFace(os.path.join(path, "redirect_to_nothing.png"))
+        return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
+
+    img_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', 'img')
+    if img_path and os.path.exists(img_path):
+        # Initialize image faces
+        return init_img_faces(img_path)
+    else:
+        # Initialize default text faces
+        return init_text_faces()
 
 
 def url_treestyle():
@@ -33,16 +60,37 @@ def url_treestyle():
 def hostname_treestyle():
     ts = TreeStyle()
     ts.show_leaf_name = False
+    face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing = init_faces()
 
     def my_layout(node):
         if node.is_root():
-            F = TextFace(node.name, tight_text=True)
+            node.add_face(TextFace(node.name, tight_text=True), column=0)
         else:
+            # Tracking faces
+            if node.request_cookie:
+                node.add_face(face_request_cookie, column=0)
+                node.add_face(TextFace(node.request_cookie), column=1)
+            if node.response_cookie:
+                node.add_face(face_response_cookie, column=0)
+                node.add_face(TextFace(node.response_cookie), column=1)
+            if node.js:
+                node.add_face(face_javascript, column=0)
+                node.add_face(TextFace(node.js), column=1)
+            if node.redirect:
+                node.add_face(face_redirect, column=0)
+                node.add_face(TextFace(node.redirect), column=1)
+            if node.redirect_to_nothing:
+                node.add_face(face_redirect_to_nothing, column=0)
+                node.add_face(TextFace(node.redirect_to_nothing), column=1)
+            # Generic text faces
             if node.is_leaf():
-                F = TextFace('{}'.format(node.name), tight_text=True)
+                node.add_face(TextFace('{}'.format(node.name), tight_text=True), column=4)
             else:
-                F = TextFace('{} ({})'.format(node.name, len(node.urls)), tight_text=True)
-        add_face_to_node(F, node, column=5, position="branch-right")
+                node.add_face(TextFace('{} ({})'.format(node.name, len(node.urls)), tight_text=True), column=4)
+            # Modifies this node's style
+            node.img_style["size"] = 8
+            node.img_style["shape"] = "sphere"
+            node.img_style["fgcolor"] = "#AA0000"
 
     ts.layout_fn = my_layout
     return ts
@@ -93,7 +141,7 @@ class CrawledTree(object):
         for sub_tree in sub_trees:
             root.url_tree.children[0].add_child(sub_tree.url_tree.children[0])
 
-    def dump_test(self, tree_file):
+    def render_hostname_tree(self, tree_file):
         self.root_hartree.make_hostname_tree()
         self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
 
@@ -159,6 +207,7 @@ class Har2Tree(object):
                     hc.add_feature('request_cookie', 0)
                     hc.add_feature('response_cookie', 0)
                     hc.add_feature('js', 0)
+                    hc.add_feature('redirect', 0)
                     hc.add_feature('redirect_to_nothing', 0)
                     children_hostnames[c.hostname] = hc
                 else:
@@ -169,21 +218,14 @@ class Har2Tree(object):
                     hc.response_cookie += 1
                 if c.js:
                     hc.js += 1
+                if c.redirect:
+                    hc.redirect += 1
                 if c.redirect_to_nothing:
                     hc.redirect_to_nothing += 1
                 if not c.is_leaf():
                     if not sub_roots.get(hc):
                         sub_roots[hc] = []
                     sub_roots[hc].append(c)
-        for hostnode in root_node_hostname.get_children():
-            if hostnode.request_cookie:
-                hostnode.add_face(TextFace('\U000027A1\U0001F36A ({})'.format(hostnode.request_cookie)), column=0)
-            if hostnode.response_cookie:
-                hostnode.add_face(TextFace('\U00002B05\U0001F36A ({})'.format(hostnode.response_cookie)), column=0)
-            if hostnode.js:
-                hostnode.add_face(TextFace('\U0001F41B ({})'.format(hostnode.js)), column=0)
-            if hostnode.redirect_to_nothing:
-                hostnode.add_face(TextFace('¯\_(ツ)_/¯ ({})'.format(hostnode.redirect_to_nothing)), column=0)
         for hc, sub in sub_roots.items():
             self.make_hostname_tree(sub, hc)
 
@@ -228,17 +270,13 @@ class Har2Tree(object):
         self.all_hostnames.add(u_node.hostname)
         if url_entry['request']['cookies']:
             u_node.add_feature('request_cookie', True)
-            u_node.add_face(TextFace('\U000027A1\U0001F36A'), column=0)
         if url_entry['response']['cookies']:
             u_node.add_feature('response_cookie', True)
-            u_node.add_face(TextFace('\U00002B05\U0001F36A'), column=0)
         if url_entry['response']['content']['mimeType'].startswith('application/javascript'):
             u_node.add_feature('js', True)
-            u_node.add_face(TextFace('\U0001F41B'), column=0)
         if url_entry['response']['redirectURL']:
             url = url_entry['response']['redirectURL']
             u_node.add_feature('redirect', True)
-            u_node.add_face(TextFace('\U000025B6'), column=0)
             if url.startswith('//'):
                 # Redirect to an other website...
                 if all_requests.get('http:{}'.format(url)):
@@ -255,7 +293,6 @@ class Har2Tree(object):
                     url += '/'
                 else:
                     u_node.add_feature('redirect_to_nothing', True)
-                    u_node.add_face(TextFace('¯\_(ツ)_/¯'), column=0)
                     return
             self._make_subtree(all_referer, all_requests, u_node, all_requests[url])
         elif all_referer.get(url):
