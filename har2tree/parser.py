@@ -23,11 +23,11 @@ def init_faces():
         return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
 
     def init_img_faces(path):
-        face_request_cookie = ImgFace(os.path.join(path, "request_cookie.png"))
-        face_response_cookie = ImgFace(os.path.join(path, "response_cookie.png"))
-        face_javascript = ImgFace(os.path.join(path, "javascript.png"))
-        face_redirect = ImgFace(os.path.join(path, "redirect.png"))
-        face_redirect_to_nothing = ImgFace(os.path.join(path, "redirect_to_nothing.png"))
+        face_request_cookie = ImgFace(os.path.join(path, "cookie_read.png"), height=16)
+        face_response_cookie = ImgFace(os.path.join(path, "cookie_received.png"), height=16)
+        face_javascript = ImgFace(os.path.join(path, "javascript.png"), height=16)
+        face_redirect = ImgFace(os.path.join(path, "redirect.png"), height=16)
+        face_redirect_to_nothing = ImgFace(os.path.join(path, "cookie_in_url.png"), height=16)
         return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
 
     img_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', 'img')
@@ -88,11 +88,15 @@ def hostname_treestyle():
             else:
                 node.add_face(TextFace('{} ({})'.format(node.name, len(node.urls)), tight_text=True), column=4)
             # Modifies this node's style
-            node.img_style["size"] = 8
+            node.img_style["size"] = 2
             node.img_style["shape"] = "sphere"
             node.img_style["fgcolor"] = "#AA0000"
 
     ts.layout_fn = my_layout
+    # ts.mode = "c"
+    # ts.arc_start = -180
+    # ts.arc_span = 360
+    ts.branch_vertical_margin = 10
     return ts
 
 
