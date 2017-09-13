@@ -103,6 +103,7 @@ def hostname_treestyle():
 class CrawledTree(object):
 
     def __init__(self, harfiles):
+        """ Load all the harfiles passed as parameter"""
         self.hartrees = self.load_all_harfiles(harfiles)
         self.root_hartree = None
 
@@ -120,7 +121,7 @@ class CrawledTree(object):
 
     def find_parents(self):
         """Find all the trees where the first entry has a referer.
-        Meaning: We have a sub-tree to attach.
+        Meaning: This is a sub-tree to attach to some other node.
         """
         self.referers = {}
         for hartree in self.hartrees:
@@ -129,21 +130,24 @@ class CrawledTree(object):
                     self.referers[hartree.root_referer] = []
                 self.referers[hartree.root_referer].append(hartree)
 
-    def join_trees(self, root=None):
+    def join_trees(self, root=None, attach_to=None):
         if root is None:
             self.root_hartree = copy.deepcopy(self.hartrees[0])
             root = self.root_hartree
+            attach_to = root.url_tree.children[0]
         if root.root_url_after_redirect:
             # If the first URL is redirected, the referer of the subtree
             # will be the redirect.
-            sub_trees = self.referers.get(root.root_url_after_redirect)
+            sub_trees = self.referers.pop(root.root_url_after_redirect, None)
         else:
-            sub_trees = self.referers.get(root.root_url)
+            sub_trees = self.referers.pop(root.root_url, None)
         if not sub_trees:
             # No subtree to attach
             return
         for sub_tree in sub_trees:
-            root.url_tree.children[0].add_child(sub_tree.url_tree.children[0])
+            to_attach = copy.deepcopy(sub_tree.url_tree.children[0])
+            attach_to.add_child(to_attach)
+            self.join_trees(sub_tree, to_attach)
 
     def render_hostname_tree(self, tree_file):
         self.root_hartree.make_hostname_tree()
