@@ -177,6 +177,11 @@ class Har2Tree(object):
         for e in self.har['log']['entries']:
             if e['response']['redirectURL']:
                 self.root_url_after_redirect = e['response']['redirectURL']
+                if not self.root_url_after_redirect.startswith('http'):
+                    # internal redirect
+                    parsed = urlparse(e['request']['url'])
+                    parsed._replace(path=self.root_url_after_redirect)
+                    self.root_url_after_redirect = '{}://{}{}'.format(parsed.scheme, parsed.netloc, self.root_url_after_redirect)
             else:
                 break
 
