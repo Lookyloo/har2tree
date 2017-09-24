@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from ete3 import Tree, TreeStyle, TextFace, add_face_to_node, ImgFace
+from ete3 import TreeNode, TreeStyle, TextFace, add_face_to_node, ImgFace
 
 import os
 import json
@@ -100,6 +100,36 @@ def hostname_treestyle():
     return ts
 
 
+class HarTreeNode(TreeNode):
+
+    features = ['urls', 'request_cookie', 'response_cookie', 'js', 'redirect',
+                'redirect_to_nothing']
+
+    def to_dict(self):
+        if self.is_root():
+            to_return = {'name': 'root'}
+        else:
+            to_return = {'name': self.name}
+            if self.request_cookie:
+                to_return['request_cookie'] = self.request_cookie
+            if self.response_cookie:
+                to_return['response_cookie'] = self.response_cookie
+            if self.js:
+                to_return['js'] = self.js
+            if self.redirect:
+                to_return['redirect'] = self.redirect
+            if self.redirect_to_nothing:
+                to_return['redirect_to_nothing'] = self.redirect_to_nothing
+        if not self.is_leaf():
+            to_return['children'] = []
+        for child in self.children:
+            to_return['children'].append(child.to_dict())
+        return to_return
+
+    def jsonify(self):
+        return json.dumps(self.to_dict())
+
+
 class CrawledTree(object):
 
     def __init__(self, harfiles):
@@ -149,6 +179,9 @@ class CrawledTree(object):
             attach_to.add_child(to_attach)
             self.join_trees(sub_tree, to_attach)
 
+    def jsonify(self):
+        return self.root_hartree.jsonify()
+
     def render_hostname_tree(self, tree_file):
         self.root_hartree.make_hostname_tree()
         self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
@@ -161,8 +194,8 @@ class Har2Tree(object):
         self.root_url_after_redirect = None
         self.root_referer = None
         self.all_hostnames = set()
-        self.url_tree = Tree()
-        self.hostname_tree = Tree()
+        self.url_tree = HarTreeNode()
+        self.hostname_tree = HarTreeNode()
 
         if not self.har['log']['entries']:
             self.has_entries = False
@@ -185,6 +218,9 @@ class Har2Tree(object):
             else:
                 break
 
+    def jsonify(self):
+        return self.hostname_tree.jsonify()
+
     def set_root_referrer(self):
         first_entry = self.har['log']['entries'][0]
         for h in first_entry['request']['headers']:
@@ -202,7 +238,7 @@ class Har2Tree(object):
         if root_node_url is None:
             root_node_url = self.url_tree.children[0]
         if root_node_hostname is None:
-            self.hostname_tree = Tree()
+            self.hostname_tree = HarTreeNode()
             root_node_hostname = self.hostname_tree
         if not isinstance(root_node_url, list):
             root_node_url = [root_node_url]
@@ -215,7 +251,7 @@ class Har2Tree(object):
                     continue
                 hc = children_hostnames.get(c.hostname)
                 if not hc:
-                    hc = root_node_hostname.add_child(name=c.hostname)
+                    hc = root_node_hostname.add_child(HarTreeNode(name=c.hostname))
                     hc.add_feature('urls', [c])
                     hc.add_feature('request_cookie', 0)
                     hc.add_feature('response_cookie', 0)
@@ -226,9 +262,9 @@ class Har2Tree(object):
                 else:
                     hc.urls.append(c)
                 if c.request_cookie:
-                    hc.request_cookie += 1
+                    hc.request_cookie += len(c.request_cookie)
                 if c.response_cookie:
-                    hc.response_cookie += 1
+                    hc.response_cookie += len(c.response_cookie)
                 if c.js:
                     hc.js += 1
                 if c.redirect:
@@ -270,21 +306,17 @@ class Har2Tree(object):
         if url_entry is None:
             url_entry = self.har['log']['entries'][0]
         url = url_entry['request']['url']
-        u_node = root_node.add_child(name=url)
+        u_node = root_node.add_child(HarTreeNode(name=url))
         u_node.add_feature('hostname', urlparse(url).hostname)
         u_node.add_feature('is_hostname', False)
-        u_node.add_feature('response_cookie', False)
-        u_node.add_feature('request_cookie', False)
+        u_node.add_feature('response_cookie', url_entry['response']['cookies'])
+        u_node.add_feature('request_cookie', url_entry['request']['cookies'])
         u_node.add_feature('redirect', False)
         u_node.add_feature('redirect_to_nothing', False)
         u_node.add_feature('js', False)
         u_node.add_feature('request', url_entry['request'])
         u_node.add_feature('response', url_entry['response'])
         self.all_hostnames.add(u_node.hostname)
-        if url_entry['request']['cookies']:
-            u_node.add_feature('request_cookie', True)
-        if url_entry['response']['cookies']:
-            u_node.add_feature('response_cookie', True)
         if url_entry['response']['content']['mimeType'].startswith('application/javascript'):
             u_node.add_feature('js', True)
         if url_entry['response']['redirectURL']:
