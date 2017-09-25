@@ -7,7 +7,7 @@ try:
     from ete3 import TreeStyle, TextFace, add_face_to_node, ImgFace
     HAVE_PyQt = True
 except ImportError:
-    HAVE_PyQt = True
+    HAVE_PyQt = False
 
 import os
 import json
