@@ -14,6 +14,9 @@ Installation
 The core dependency is ETE Toolkit, which you can install following the guide
 on the official website: http://etetoolkit.org/download/
 
+Note: if you don't want to export the tree to an image using PyQt4, no need to do the
+virtualenv magic.
+
 Protip
 ======
 

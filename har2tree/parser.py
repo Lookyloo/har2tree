@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from ete3 import TreeNode, TreeStyle, TextFace, add_face_to_node, ImgFace
+from ete3 import TreeNode
+
+try:
+    from ete3 import TreeStyle, TextFace, add_face_to_node, ImgFace
+    HAVE_PyQt = True
+except ImportError:
+    HAVE_PyQt = True
 
 import os
 import json
@@ -184,6 +190,8 @@ class CrawledTree(object):
         return self.root_hartree.jsonify()
 
     def render_hostname_tree(self, tree_file):
+        if not HAVE_PyQt:
+            raise Exception('You need PyQt4 for exporting as image, please refer to the documentation.')
         self.root_hartree.make_hostname_tree()
         self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
 
