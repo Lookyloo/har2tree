@@ -16,6 +16,7 @@ class TestBasic(unittest.TestCase):
         crawled_tree = CrawledTree(to_process)
         crawled_tree.find_parents()
         crawled_tree.join_trees()
+        crawled_tree.jsonify()
         crawled_tree.render_hostname_tree(os.path.join(out_dir, 'lalibre.png'))
 
 
