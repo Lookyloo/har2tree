@@ -6,6 +6,7 @@ from ete3 import TreeNode, TreeStyle, TextFace, add_face_to_node, ImgFace
 import os
 import json
 import copy
+from datetime import datetime
 
 try:
     from urllib.parse import urlparse
@@ -102,9 +103,6 @@ def hostname_treestyle():
 
 class HarTreeNode(TreeNode):
 
-    features = ['urls', 'request_cookie', 'response_cookie', 'js', 'redirect',
-                'redirect_to_nothing']
-
     def to_dict(self):
         if self.is_root():
             to_return = {'name': 'root'}
@@ -163,6 +161,9 @@ class CrawledTree(object):
     def join_trees(self, root=None, attach_to=None):
         if root is None:
             self.root_hartree = copy.deepcopy(self.hartrees[0])
+            self.start_time = self.root_hartree.start_time
+            self.user_agent = self.root_hartree.user_agent
+            self.root_url = self.root_hartree.root_url
             root = self.root_hartree
             attach_to = root.url_tree.children[0]
         if root.root_url_after_redirect:
@@ -202,6 +203,11 @@ class Har2Tree(object):
             return
         else:
             self.has_entries = True
+        self.start_time = datetime.strptime(self.har['log']['entries'][0]['startedDateTime'], '%Y-%m-%dT%X.%fZ')
+        for header in self.har['log']['entries'][0]['request']['headers']:
+            if header['name'] == 'User-Agent':
+                self.user_agent = header['value']
+                break
         self.root_url = self.har['log']['entries'][0]['request']['url']
         self.set_root_after_redirect()
         self.set_root_referrer()
