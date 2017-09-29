@@ -185,6 +185,7 @@ class CrawledTree(object):
             to_attach = copy.deepcopy(sub_tree.url_tree.children[0])
             attach_to.add_child(to_attach)
             self.join_trees(sub_tree, to_attach)
+        self.root_hartree.make_hostname_tree()
 
     def jsonify(self):
         return self.root_hartree.jsonify()
@@ -192,7 +193,6 @@ class CrawledTree(object):
     def render_hostname_tree(self, tree_file):
         if not HAVE_PyQt:
             raise Exception('You need PyQt4 for exporting as image, please refer to the documentation.')
-        self.root_hartree.make_hostname_tree()
         self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
 
 
