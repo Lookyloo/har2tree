@@ -75,12 +75,11 @@ class URLNode(HarTreeNode):
         self.features_to_skip.append('body')
 
     def load_har_entry(self, har_entry, all_requests):
-        url = har_entry['request']['url']
         if not self.name:
             # We're in the actual root node
-            self.add_feature('name', url)
+            self.add_feature('name', har_entry['request']['url'])
 
-        self.add_feature('hostname', urlparse(url).hostname)
+        self.add_feature('hostname', urlparse(self.name).hostname)
         self.add_feature('response_cookie', har_entry['response']['cookies'])
         self.add_feature('request_cookie', har_entry['request']['cookies'])
         if har_entry['response']['content'].get('text'):
@@ -110,15 +109,27 @@ class URLNode(HarTreeNode):
                     url = 'https:{}'.format(url)
             elif not url.startswith('http'):
                 # internal redirect
-                parsed = urlparse(har_entry['request']['url'])
+                parsed = urlparse(self.name)
                 parsed._replace(path=url)
+                if not url[0] == '/':
+                    # Yeah, that happens, and the browser fixes it...
+                    url = '/' + url
                 url = '{}://{}{}'.format(parsed.scheme, parsed.netloc, url)
+
+            if not all_requests.get(url) and all_requests.get(url + '/'):
+                url += '/'
+            else:
+                # sometimes, the port is in the redirect, and striped later on...
+                if url.startswith('https://') and ':443' in url:
+                    url = url.replace(':443', '')
+                if url.startswith('http://') and ':80' in url:
+                    url = url.replace(':80', '')
+
+            # At this point, we should have a URL available in all_requests...
             if not all_requests.get(url):
-                if all_requests.get(url + '/'):
-                    url += '/'
-                else:
-                    self.add_feature('redirect_to_nothing', True)
-                    # Abord, no subtree
+                # ..... Or not. Unable to find a URL for this redirect
+                print(self.name, url)
+                self.add_feature('redirect_to_nothing', True)
             self.add_feature('redirect_url', url)
 
 
