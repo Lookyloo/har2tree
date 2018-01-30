@@ -15,22 +15,33 @@ import copy
 from datetime import datetime
 import uuid
 from urllib.parse import urlparse
-from abc import ABC, abstractmethod
 from base64 import b64decode
 from collections import defaultdict
 
 
-class HarTreeNode(ABC, TreeNode):
+class HarTreeNode(TreeNode):
+
+    features_to_skip = ['dist', 'support']
 
     def __init__(self, **kwargs):
         super(HarTreeNode, self).__init__(**kwargs)
         self.add_feature('uuid', str(uuid.uuid4()))
 
-    @abstractmethod
     def to_dict(self):
-        raise Exception('Not implemented.')
+        to_return = {'uuid': self.uuid}
+        for feature in self.features:
+            if feature in self.features_to_skip:
+                continue
+            to_return[feature] = getattr(self, feature)
+        if not to_return.get('name'):
+            to_return['name'] = 'root'
+        if not self.is_leaf():
+            to_return['children'] = []
+        for child in self.children:
+            to_return['children'].append(child.to_dict())
+        return to_return
 
-    def jsonify(self):
+    def to_json(self):
         return json.dumps(self.to_dict())
 
 
@@ -38,57 +49,16 @@ class HostNode(HarTreeNode):
 
     def __init__(self, **kwargs):
         super(HostNode, self).__init__(**kwargs)
-
-    def to_dict(self):
-        to_return = {'uuid': self.uuid}
-        if self.is_root():
-            to_return['name'] = 'root'
-        else:
-            to_return['name'] = self.name
-            if self.request_cookie:
-                to_return['request_cookie'] = self.request_cookie
-            if self.response_cookie:
-                to_return['response_cookie'] = self.response_cookie
-            if self.js:
-                to_return['js'] = self.js
-            if self.redirect:
-                to_return['redirect'] = self.redirect
-            if self.redirect_to_nothing:
-                to_return['redirect_to_nothing'] = self.redirect_to_nothing
-        if not self.is_leaf():
-            to_return['children'] = []
-        for child in self.children:
-            to_return['children'].append(child.to_dict())
-        return to_return
+        # Do not add the URLs in the json dump
+        self.features_to_skip.append('urls')
 
 
 class URLNode(HarTreeNode):
 
     def __init__(self, **kwargs):
         super(URLNode, self).__init__(**kwargs)
-
-    def to_dict(self):
-        to_return = {'uuid': self.uuid}
-        if self.is_root():
-            to_return['name'] = 'root'
-        else:
-            to_return['name'] = self.name
-            to_return['hostname'] = self.hostname
-            if self.response_cookie:
-                to_return['response_cookie'] = self.response_cookie
-            if self.request_cookie:
-                to_return['request_cookie'] = self.request_cookie
-            if self.redirect:
-                to_return['redirect'] = self.redirect
-            if self.redirect_to_nothing:
-                to_return['redirect_to_nothing'] = self.redirect_to_nothing
-            if self.js:
-                to_return['js'] = self.js
-        if not self.is_leaf():
-            to_return['children'] = []
-        for child in self.children:
-            to_return['children'].append(child.to_dict())
-        return to_return
+        # Do not add the body in the json dump
+        self.features_to_skip.append('body')
 
 
 class CrawledTree(object):
@@ -126,7 +96,7 @@ class CrawledTree(object):
             self.user_agent = self.root_hartree.user_agent
             self.root_url = self.root_hartree.root_url
             root = self.root_hartree
-            attach_to = root.url_tree.children[0]
+            attach_to = root.url_tree
         if root.root_url_after_redirect:
             # If the first URL is redirected, the referer of the subtree
             # will be the redirect.
@@ -137,13 +107,13 @@ class CrawledTree(object):
             # No subtree to attach
             return
         for sub_tree in sub_trees:
-            to_attach = copy.deepcopy(sub_tree.url_tree.children[0])
+            to_attach = copy.deepcopy(sub_tree.url_tree)
             attach_to.add_child(to_attach)
             self.join_trees(sub_tree, to_attach)
-        self.root_hartree.make_hostname_tree()
+        self.root_hartree.make_hostname_tree(self.root_hartree.url_tree, self.root_hartree.hostname_tree)
 
-    def jsonify(self):
-        return self.root_hartree.jsonify()
+    def to_json(self):
+        return self.root_hartree.to_json()
 
     def render_hostname_tree(self, tree_file):
         # NOTE: Requires PyQT stuff
@@ -194,8 +164,8 @@ class Har2Tree(object):
             else:
                 break
 
-    def jsonify(self):
-        return self.hostname_tree.jsonify()
+    def to_json(self):
+        return self.hostname_tree.to_json()
 
     def set_root_referrer(self):
         first_entry = self.har['log']['entries'][0]
@@ -210,50 +180,46 @@ class Har2Tree(object):
             raise Exception('You need PyQt4 for exporting as image, please refer to the documentation.')
         self.url_tree.render(tree_file, tree_style=url_treestyle())
 
-    def make_hostname_tree(self, root_node_url=None, root_node_hostname=None):
+    def make_hostname_tree(self, root_nodes_url, root_node_hostname):
         """ Groups all the URLs by domain in the hostname tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
-        if root_node_url is None:
-            root_node_url = self.url_tree.children[0]
-        if root_node_hostname is None:
-            self.hostname_tree = HostNode()
-            root_node_hostname = self.hostname_tree
-        if not isinstance(root_node_url, list):
-            root_node_url = [root_node_url]
+        if not isinstance(root_nodes_url, list):
+            root_nodes_url = [root_nodes_url]
         children_hostnames = {}
         sub_roots = defaultdict(list)
-        for rn in root_node_url:
-            for c in rn.get_children():
-                if c.hostname is None:
+        for root_node_url in root_nodes_url:
+            for child_node_url in root_node_url.get_children():
+                if child_node_url.hostname is None:
                     # Probably a base64 encoded image
                     continue
-                hc = children_hostnames.get(c.hostname)
-                if not hc:
-                    hc = root_node_hostname.add_child(HostNode(name=c.hostname))
-                    hc.add_feature('urls', [c])
-                    hc.add_feature('request_cookie', 0)
-                    hc.add_feature('response_cookie', 0)
-                    hc.add_feature('js', 0)
-                    hc.add_feature('redirect', 0)
-                    hc.add_feature('redirect_to_nothing', 0)
-                    children_hostnames[c.hostname] = hc
+                child_node_hostname = children_hostnames.get(child_node_url.hostname)
+                if not child_node_hostname:
+                    child_node_hostname = root_node_hostname.add_child(HostNode(name=child_node_url.hostname))
+                    child_node_hostname.add_feature('urls', [child_node_url])
+                    child_node_hostname.add_feature('request_cookie', 0)
+                    child_node_hostname.add_feature('response_cookie', 0)
+                    child_node_hostname.add_feature('js', 0)
+                    child_node_hostname.add_feature('redirect', 0)
+                    child_node_hostname.add_feature('redirect_to_nothing', 0)
+                    children_hostnames[child_node_url.hostname] = child_node_hostname
                 else:
-                    hc.urls.append(c)
-                if c.request_cookie:
-                    hc.request_cookie += len(c.request_cookie)
-                if c.response_cookie:
-                    hc.response_cookie += len(c.response_cookie)
-                if c.js:
-                    hc.js += 1
-                if c.redirect:
-                    hc.redirect += 1
-                if c.redirect_to_nothing:
-                    hc.redirect_to_nothing += 1
-                if not c.is_leaf():
-                    sub_roots[hc].append(c)
-        for hc, sub in sub_roots.items():
-            self.make_hostname_tree(sub, hc)
+                    child_node_hostname.urls.append(child_node_url)
+                if hasattr(child_node_url, 'request_cookie'):
+                    child_node_hostname.request_cookie += len(child_node_url.request_cookie)
+                if hasattr(child_node_url, 'response_cookie'):
+                    child_node_hostname.response_cookie += len(child_node_url.response_cookie)
+                if hasattr(child_node_url, 'js'):
+                    child_node_hostname.js += 1
+                if hasattr(child_node_url, 'redirect'):
+                    child_node_hostname.redirect += 1
+                if hasattr(child_node_url, 'redirect_to_nothing'):
+                    child_node_hostname.redirect_to_nothing += 1
+
+                if not child_node_url.is_leaf():
+                    sub_roots[child_node_hostname].append(child_node_url)
+        for child_node_hostname, child_nodes_url in sub_roots.items():
+            self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
     def make_tree(self):
         all_requests = {}
@@ -271,27 +237,39 @@ class Har2Tree(object):
                         #   * referer to root referer
                         continue
                     all_referer[h['value']].append(entry['request']['url'])
-        self._make_subtree(all_referer, all_requests)
-        self.make_hostname_tree()
+        self._make_subtree(all_referer, all_requests, self.url_tree, self.har['log']['entries'][0])
+        # Initialize the hostname tree root
+        self.hostname_tree.add_feature('name', self.url_tree.hostname)
+        self.hostname_tree.add_feature('urls', [self.url_tree])
+        self.hostname_tree.add_feature('request_cookie', 0)
+        self.hostname_tree.add_feature('response_cookie', 0)
+        self.hostname_tree.add_feature('js', 0)
+        self.hostname_tree.add_feature('redirect', 0)
+        self.hostname_tree.add_feature('redirect_to_nothing', 0)
+        if hasattr(self.url_tree, 'request_cookie'):
+            self.hostname_tree.request_cookie += len(self.url_tree.request_cookie)
+        if hasattr(self.url_tree, 'response_cookie'):
+            self.hostname_tree.response_cookie += len(self.url_tree.response_cookie)
+        if hasattr(self.url_tree, 'js'):
+            self.hostname_tree.js += 1
+        if hasattr(self.url_tree, 'redirect'):
+            self.hostname_tree.redirect += 1
+        if hasattr(self.url_tree, 'redirect_to_nothing'):
+            self.hostname_tree.redirect_to_nothing += 1
+        self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
-    def _make_subtree(self, all_referer, all_requests, root_node=None, url_entry=None):
-        if root_node is None:
-            root_node = self.url_tree
-        if url_entry is None:
-            url_entry = self.har['log']['entries'][0]
+    def _make_subtree(self, all_referer, all_requests, root_node, url_entry):
         url = url_entry['request']['url']
-        u_node = root_node.add_child(URLNode(name=url))
+        if not root_node.name:
+            u_node = root_node
+            u_node.add_feature('name', url)
+        else:
+            u_node = root_node.add_child(URLNode(name=url))
         u_node.add_feature('hostname', urlparse(url).hostname)
         u_node.add_feature('is_hostname', False)
         u_node.add_feature('response_cookie', url_entry['response']['cookies'])
         u_node.add_feature('request_cookie', url_entry['request']['cookies'])
-        u_node.add_feature('redirect', False)
-        u_node.add_feature('redirect_to_nothing', False)
-        u_node.add_feature('js', False)
-        u_node.add_feature('image', False)
-        u_node.add_feature('css', False)
-        u_node.add_feature('json', False)
         u_node.add_feature('empty_response', False)
         if url_entry['response']['content'].get('text'):
             u_node.add_feature('body', b64decode(url_entry['response']['content']['text']))
@@ -332,7 +310,7 @@ class Har2Tree(object):
             self._make_subtree(all_referer, all_requests, u_node, all_requests[url])
         elif all_referer.get(url):
             # URL loads other URL
-            for u in all_referer.get(url):
+            for u in all_referer.pop(url):
                 self._make_subtree(all_referer, all_requests, u_node, all_requests[u])
 
 
