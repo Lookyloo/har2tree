@@ -3,13 +3,6 @@
 
 from ete3 import TreeNode
 
-try:
-    from ete3 import TreeStyle, TextFace, add_face_to_node, ImgFace
-    HAVE_PyQt = True
-except ImportError:
-    HAVE_PyQt = False
-
-import os
 import json
 import copy
 from datetime import datetime
@@ -28,17 +21,15 @@ class HarTreeNode(TreeNode):
         self.add_feature('uuid', str(uuid.uuid4()))
 
     def to_dict(self):
-        to_return = {'uuid': self.uuid}
+        to_return = {'uuid': self.uuid, 'children': []}
         for feature in self.features:
             if feature in self.features_to_skip:
                 continue
             to_return[feature] = getattr(self, feature)
-        if not to_return.get('name'):
-            to_return['name'] = 'root'
-        if not self.is_leaf():
-            to_return['children'] = []
+
         for child in self.children:
             to_return['children'].append(child.to_dict())
+
         return to_return
 
     def to_json(self):
@@ -52,6 +43,29 @@ class HostNode(HarTreeNode):
         # Do not add the URLs in the json dump
         self.features_to_skip.append('urls')
 
+        self.add_feature('urls', [])
+        self.add_feature('request_cookie', 0)
+        self.add_feature('response_cookie', 0)
+        self.add_feature('js', 0)
+        self.add_feature('redirect', 0)
+        self.add_feature('redirect_to_nothing', 0)
+
+    def add_url(self, url):
+        if not self.name:
+            # Only used when initializing the root node
+            self.add_feature('name', url.hostname)
+        self.urls.append(url)
+        if hasattr(url, 'request_cookie'):
+            self.request_cookie += len(url.request_cookie)
+        if hasattr(url, 'response_cookie'):
+            self.response_cookie += len(url.response_cookie)
+        if hasattr(url, 'js'):
+            self.js += 1
+        if hasattr(url, 'redirect'):
+            self.redirect += 1
+        if hasattr(url, 'redirect_to_nothing'):
+            self.redirect_to_nothing += 1
+
 
 class URLNode(HarTreeNode):
 
@@ -59,6 +73,53 @@ class URLNode(HarTreeNode):
         super(URLNode, self).__init__(**kwargs)
         # Do not add the body in the json dump
         self.features_to_skip.append('body')
+
+    def load_har_entry(self, har_entry, all_requests):
+        url = har_entry['request']['url']
+        if not self.name:
+            # We're in the actual root node
+            self.add_feature('name', url)
+
+        self.add_feature('hostname', urlparse(url).hostname)
+        self.add_feature('response_cookie', har_entry['response']['cookies'])
+        self.add_feature('request_cookie', har_entry['request']['cookies'])
+        if har_entry['response']['content'].get('text'):
+            self.add_feature('body', b64decode(har_entry['response']['content']['text']))
+        self.add_feature('request', har_entry['request'])
+        self.add_feature('response', har_entry['response'])
+        if (har_entry['response']['content']['mimeType'].startswith('application/javascript') or
+                har_entry['response']['content']['mimeType'].startswith('application/x-javascript')):
+            self.add_feature('js', True)
+        if har_entry['response']['content']['mimeType'].startswith('image'):
+            self.add_feature('image', True)
+        if har_entry['response']['content']['mimeType'].startswith('text/css'):
+            self.add_feature('css', True)
+        if har_entry['response']['content']['mimeType'].startswith('application/json'):
+            self.add_feature('json', True)
+        if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
+            self.add_feature('empty_response', True)
+
+        if har_entry['response']['redirectURL']:
+            url = har_entry['response']['redirectURL']
+            self.add_feature('redirect', True)
+            if url.startswith('//'):
+                # Redirect to an other website...
+                if all_requests.get('http:{}'.format(url)):
+                    url = 'http:{}'.format(url)
+                else:
+                    url = 'https:{}'.format(url)
+            elif not url.startswith('http'):
+                # internal redirect
+                parsed = urlparse(har_entry['request']['url'])
+                parsed._replace(path=url)
+                url = '{}://{}{}'.format(parsed.scheme, parsed.netloc, url)
+            if not all_requests.get(url):
+                if all_requests.get(url + '/'):
+                    url += '/'
+                else:
+                    self.add_feature('redirect_to_nothing', True)
+                    # Abord, no subtree
+            self.add_feature('redirect_url', url)
 
 
 class CrawledTree(object):
@@ -115,12 +176,6 @@ class CrawledTree(object):
     def to_json(self):
         return self.root_hartree.to_json()
 
-    def render_hostname_tree(self, tree_file):
-        # NOTE: Requires PyQT stuff
-        if not HAVE_PyQt:
-            raise Exception('You need PyQt4 for exporting as image, please refer to the documentation.')
-        self.root_hartree.hostname_tree.render(tree_file, tree_style=hostname_treestyle())
-
 
 class Har2Tree(object):
 
@@ -128,7 +183,6 @@ class Har2Tree(object):
         self.har = har
         self.root_url_after_redirect = None
         self.root_referer = None
-        self.all_hostnames = set()
         self.url_tree = URLNode()
         self.hostname_tree = HostNode()
 
@@ -174,12 +228,6 @@ class Har2Tree(object):
                 self.root_referer = h['value']
                 break
 
-    def render_tree_to_file(self, tree_file):
-        # NOTE: Requires PyQT stuff
-        if not HAVE_PyQt:
-            raise Exception('You need PyQt4 for exporting as image, please refer to the documentation.')
-        self.url_tree.render(tree_file, tree_style=url_treestyle())
-
     def make_hostname_tree(self, root_nodes_url, root_node_hostname):
         """ Groups all the URLs by domain in the hostname tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
@@ -196,25 +244,8 @@ class Har2Tree(object):
                 child_node_hostname = children_hostnames.get(child_node_url.hostname)
                 if not child_node_hostname:
                     child_node_hostname = root_node_hostname.add_child(HostNode(name=child_node_url.hostname))
-                    child_node_hostname.add_feature('urls', [child_node_url])
-                    child_node_hostname.add_feature('request_cookie', 0)
-                    child_node_hostname.add_feature('response_cookie', 0)
-                    child_node_hostname.add_feature('js', 0)
-                    child_node_hostname.add_feature('redirect', 0)
-                    child_node_hostname.add_feature('redirect_to_nothing', 0)
                     children_hostnames[child_node_url.hostname] = child_node_hostname
-                else:
-                    child_node_hostname.urls.append(child_node_url)
-                if hasattr(child_node_url, 'request_cookie'):
-                    child_node_hostname.request_cookie += len(child_node_url.request_cookie)
-                if hasattr(child_node_url, 'response_cookie'):
-                    child_node_hostname.response_cookie += len(child_node_url.response_cookie)
-                if hasattr(child_node_url, 'js'):
-                    child_node_hostname.js += 1
-                if hasattr(child_node_url, 'redirect'):
-                    child_node_hostname.redirect += 1
-                if hasattr(child_node_url, 'redirect_to_nothing'):
-                    child_node_hostname.redirect_to_nothing += 1
+                child_node_hostname.add_url(child_node_url)
 
                 if not child_node_url.is_leaf():
                     sub_roots[child_node_hostname].append(child_node_url)
@@ -239,166 +270,22 @@ class Har2Tree(object):
                     all_referer[h['value']].append(entry['request']['url'])
         self._make_subtree(all_referer, all_requests, self.url_tree, self.har['log']['entries'][0])
         # Initialize the hostname tree root
-        self.hostname_tree.add_feature('name', self.url_tree.hostname)
-        self.hostname_tree.add_feature('urls', [self.url_tree])
-        self.hostname_tree.add_feature('request_cookie', 0)
-        self.hostname_tree.add_feature('response_cookie', 0)
-        self.hostname_tree.add_feature('js', 0)
-        self.hostname_tree.add_feature('redirect', 0)
-        self.hostname_tree.add_feature('redirect_to_nothing', 0)
-        if hasattr(self.url_tree, 'request_cookie'):
-            self.hostname_tree.request_cookie += len(self.url_tree.request_cookie)
-        if hasattr(self.url_tree, 'response_cookie'):
-            self.hostname_tree.response_cookie += len(self.url_tree.response_cookie)
-        if hasattr(self.url_tree, 'js'):
-            self.hostname_tree.js += 1
-        if hasattr(self.url_tree, 'redirect'):
-            self.hostname_tree.redirect += 1
-        if hasattr(self.url_tree, 'redirect_to_nothing'):
-            self.hostname_tree.redirect_to_nothing += 1
+        self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
     def _make_subtree(self, all_referer, all_requests, root_node, url_entry):
-        url = url_entry['request']['url']
         if not root_node.name:
+            # We're in the actual root node
             u_node = root_node
-            u_node.add_feature('name', url)
+            u_node.add_feature('name', url_entry['request']['url'])
         else:
-            u_node = root_node.add_child(URLNode(name=url))
-        u_node.add_feature('hostname', urlparse(url).hostname)
-        u_node.add_feature('is_hostname', False)
-        u_node.add_feature('response_cookie', url_entry['response']['cookies'])
-        u_node.add_feature('request_cookie', url_entry['request']['cookies'])
-        u_node.add_feature('empty_response', False)
-        if url_entry['response']['content'].get('text'):
-            u_node.add_feature('body', b64decode(url_entry['response']['content']['text']))
-        u_node.add_feature('request', url_entry['request'])
-        u_node.add_feature('response', url_entry['response'])
-        self.all_hostnames.add(u_node.hostname)
-        if url_entry['response']['content']['mimeType'].startswith('application/javascript') or url_entry['response']['content']['mimeType'].startswith('application/x-javascript'):
-            u_node.add_feature('js', True)
-        if url_entry['response']['content']['mimeType'].startswith('image'):
-            u_node.add_feature('image', True)
-        if url_entry['response']['content']['mimeType'].startswith('text/css'):
-            u_node.add_feature('css', True)
-        if url_entry['response']['content']['mimeType'].startswith('application/json'):
-            u_node.add_feature('json', True)
-        if not url_entry['response']['content'].get('text') or url_entry['response']['content']['text'] == '':
-            u_node.add_feature('empty_response', True)
+            u_node = root_node.add_child(URLNode(name=url_entry['request']['url']))
+        u_node.load_har_entry(url_entry, all_requests)
 
-        if url_entry['response']['redirectURL']:
-            url = url_entry['response']['redirectURL']
-            u_node.add_feature('redirect', True)
-            if url.startswith('//'):
-                # Redirect to an other website...
-                if all_requests.get('http:{}'.format(url)):
-                    url = 'http:{}'.format(url)
-                else:
-                    url = 'https:{}'.format(url)
-            elif not url.startswith('http'):
-                # internal redirect
-                parsed = urlparse(url_entry['request']['url'])
-                parsed._replace(path=url)
-                url = '{}://{}{}'.format(parsed.scheme, parsed.netloc, url)
-            if not all_requests.get(url):
-                if all_requests.get(url + '/'):
-                    url += '/'
-                else:
-                    u_node.add_feature('redirect_to_nothing', True)
-                    return
-            self._make_subtree(all_referer, all_requests, u_node, all_requests[url])
-        elif all_referer.get(url):
+        if hasattr(u_node, 'redirect') and not hasattr(u_node, 'redirect_to_nothing'):
+            self._make_subtree(all_referer, all_requests, u_node, all_requests[u_node.redirect_url])
+        elif all_referer.get(u_node.name):
             # URL loads other URL
-            for u in all_referer.pop(url):
+            for u in all_referer.pop(u_node.name):
                 self._make_subtree(all_referer, all_requests, u_node, all_requests[u])
-
-
-def init_faces():
-    # NOTE: Requires PyQT stuff
-    def init_text_faces():
-        face_request_cookie = TextFace('\U000027A1\U0001F36A')
-        face_response_cookie = TextFace('\U00002B05\U0001F36A')
-        face_javascript = TextFace('\U0001F41B')
-        face_redirect = TextFace('\U000025B6')
-        face_redirect_to_nothing = TextFace('¯\_(ツ)_/¯')
-        return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
-
-    def init_img_faces(path):
-        face_request_cookie = ImgFace(os.path.join(path, "cookie_read.png"), height=16)
-        face_response_cookie = ImgFace(os.path.join(path, "cookie_received.png"), height=16)
-        face_javascript = ImgFace(os.path.join(path, "javascript.png"), height=16)
-        face_redirect = ImgFace(os.path.join(path, "redirect.png"), height=16)
-        face_redirect_to_nothing = ImgFace(os.path.join(path, "cookie_in_url.png"), height=16)
-        return face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing
-
-    img_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', 'img')
-    if img_path and os.path.exists(img_path):
-        # Initialize image faces
-        return init_img_faces(img_path)
-    else:
-        # Initialize default text faces
-        return init_text_faces()
-
-
-def url_treestyle():
-    # NOTE: Requires PyQT stuff
-    ts = TreeStyle()
-    ts.show_leaf_name = False
-
-    def my_layout(node):
-        if node.is_root():
-            F = TextFace(node.name, tight_text=True)
-        else:
-            if node.is_leaf():
-                F = TextFace(node.name[:50], tight_text=True)
-            else:
-                F = TextFace(node.name, tight_text=True)
-        add_face_to_node(F, node, column=5, position="branch-right")
-
-    ts.layout_fn = my_layout
-    return ts
-
-
-def hostname_treestyle():
-    # NOTE: Requires PyQT stuff
-    ts = TreeStyle()
-    ts.show_leaf_name = False
-    face_request_cookie, face_response_cookie, face_javascript, face_redirect, face_redirect_to_nothing = init_faces()
-
-    def my_layout(node):
-        if node.is_root():
-            node.add_face(TextFace(node.name, tight_text=True), column=0)
-        else:
-            # Tracking faces
-            if node.request_cookie:
-                node.add_face(face_request_cookie, column=0)
-                node.add_face(TextFace(node.request_cookie), column=1)
-            if node.response_cookie:
-                node.add_face(face_response_cookie, column=0)
-                node.add_face(TextFace(node.response_cookie), column=1)
-            if node.js:
-                node.add_face(face_javascript, column=0)
-                node.add_face(TextFace(node.js), column=1)
-            if node.redirect:
-                node.add_face(face_redirect, column=0)
-                node.add_face(TextFace(node.redirect), column=1)
-            if node.redirect_to_nothing:
-                node.add_face(face_redirect_to_nothing, column=0)
-                node.add_face(TextFace(node.redirect_to_nothing), column=1)
-            # Generic text faces
-            if node.is_leaf():
-                node.add_face(TextFace('{}'.format(node.name), tight_text=True), column=4)
-            else:
-                node.add_face(TextFace('{} ({})'.format(node.name, len(node.urls)), tight_text=True), column=4)
-            # Modifies this node's style
-            node.img_style["size"] = 2
-            node.img_style["shape"] = "sphere"
-            node.img_style["fgcolor"] = "#AA0000"
-
-    ts.layout_fn = my_layout
-    # ts.mode = "c"
-    # ts.arc_start = -180
-    # ts.arc_span = 360
-    ts.branch_vertical_margin = 10
-    return ts
