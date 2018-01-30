@@ -10,6 +10,8 @@ import uuid
 from urllib.parse import urlparse
 from base64 import b64decode
 from collections import defaultdict
+import logging
+import re
 
 
 class HarTreeNode(TreeNode):
@@ -80,6 +82,8 @@ class URLNode(HarTreeNode):
             self.add_feature('name', har_entry['request']['url'])
 
         self.add_feature('hostname', urlparse(self.name).hostname)
+        if not self.hostname:
+            logging.warning('Something is broken in that node: {}'.format(har_entry))
         self.add_feature('response_cookie', har_entry['response']['cookies'])
         self.add_feature('request_cookie', har_entry['request']['cookies'])
         if har_entry['response']['content'].get('text'):
@@ -99,38 +103,69 @@ class URLNode(HarTreeNode):
             self.add_feature('empty_response', True)
 
         if har_entry['response']['redirectURL']:
-            url = har_entry['response']['redirectURL']
             self.add_feature('redirect', True)
-            if url.startswith('//'):
-                # Redirect to an other website...
-                if all_requests.get('http:{}'.format(url)):
-                    url = 'http:{}'.format(url)
-                else:
-                    url = 'https:{}'.format(url)
-            elif not url.startswith('http'):
-                # internal redirect
-                parsed = urlparse(self.name)
-                parsed._replace(path=url)
-                if not url[0] == '/':
+            redirect_url = har_entry['response']['redirectURL']
+            if re.match('^https?://', redirect_url):
+                # we have a proper URL... hopefully
+                # DO NOT REMOVE THIS CLOSE, required to make the difference with a path
+                pass
+            elif redirect_url.startswith('//'):
+                # URL without scheme => takes the scheme from the caller
+                parsed_request_url = urlparse(self.name)
+                redirect_url = '{}:{}'.format(parsed_request_url.scheme, redirect_url)
+                if redirect_url not in all_requests:
+                    logging.warning('URL without scheme: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+            elif redirect_url.startswith('/') or redirect_url[0] not in [';', '?', '#']:
+                # We have a path
+                if redirect_url[0] != '/':
                     # Yeah, that happens, and the browser fixes it...
-                    url = '/' + url
-                url = '{}://{}{}'.format(parsed.scheme, parsed.netloc, url)
+                    redirect_url = '/{}'.format(redirect_url)
+                parsed_request_url = urlparse(self.name)
+                redirect_url = '{}://{}{}'.format(parsed_request_url.scheme, parsed_request_url.netloc, redirect_url)
+                if redirect_url not in all_requests:
+                    # There is something weird, to investigate
+                    logging.warning('URL without netloc: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+            elif redirect_url.startswith(';'):
+                # URL starts at the parameters
+                redirect_url = '{}{}'.format(self.name.split(';')[0], redirect_url)
+                if redirect_url not in all_requests:
+                    logging.warning('URL with only parameter: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+            elif redirect_url.startswith('?'):
+                # URL starts at the query
+                redirect_url = '{}{}'.format(self.name.split('?')[0], redirect_url)
+                if redirect_url not in all_requests:
+                    logging.warning('URL with only query: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+            elif redirect_url.startswith('#'):
+                # URL starts at the fragment
+                redirect_url = '{}{}'.format(self.name.split('#')[0], redirect_url)
+                if redirect_url not in all_requests:
+                    logging.warning('URL with only fragment: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
 
-            if not all_requests.get(url) and all_requests.get(url + '/'):
-                url += '/'
-            else:
+            if redirect_url not in all_requests:
                 # sometimes, the port is in the redirect, and striped later on...
-                if url.startswith('https://') and ':443' in url:
-                    url = url.replace(':443', '')
-                if url.startswith('http://') and ':80' in url:
-                    url = url.replace(':80', '')
+                if redirect_url.startswith('https://') and ':443' in redirect_url:
+                    redirect_url = redirect_url.replace(':443', '')
+                if redirect_url.startswith('http://') and ':80' in redirect_url:
+                    redirect_url = redirect_url.replace(':80', '')
+
+            if redirect_url not in all_requests and redirect_url + '/' in all_requests:
+                # last think I can think of
+                redirect_url += '/'
 
             # At this point, we should have a URL available in all_requests...
-            if not all_requests.get(url):
+            if redirect_url in all_requests:
+                self.add_feature('redirect_url', redirect_url)
+            else:
                 # ..... Or not. Unable to find a URL for this redirect
-                print(self.name, url)
                 self.add_feature('redirect_to_nothing', True)
-            self.add_feature('redirect_url', url)
+                self.add_feature('redirect_url', har_entry['response']['redirectURL'])
+                logging.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                    original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
 
 
 class CrawledTree(object):
@@ -250,7 +285,7 @@ class Har2Tree(object):
         for root_node_url in root_nodes_url:
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
-                    # Probably a base64 encoded image
+                    logging.warning('Fucked up hostname: {}'.format(child_node_url))
                     continue
                 child_node_hostname = children_hostnames.get(child_node_url.hostname)
                 if not child_node_hostname:
