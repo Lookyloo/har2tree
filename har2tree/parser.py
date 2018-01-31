@@ -51,6 +51,17 @@ class HostNode(HarTreeNode):
         self.add_feature('js', 0)
         self.add_feature('redirect', 0)
         self.add_feature('redirect_to_nothing', 0)
+        self.add_feature('image', 0)
+        self.add_feature('css', 0)
+        self.add_feature('json', 0)
+        self.add_feature('html', 0)
+        self.add_feature('font', 0)
+        self.add_feature('octet_stream', 0)
+        self.add_feature('text', 0)
+        self.add_feature('video', 0)
+        self.add_feature('livestream', 0)
+        self.add_feature('unset_mimetype', 0)
+        self.add_feature('unknown_mimetype', 0)
 
     def add_url(self, url):
         if not self.name:
@@ -67,6 +78,28 @@ class HostNode(HarTreeNode):
             self.redirect += 1
         if hasattr(url, 'redirect_to_nothing'):
             self.redirect_to_nothing += 1
+        if hasattr(url, 'image'):
+            self.image += 1
+        if hasattr(url, 'css'):
+            self.css += 1
+        if hasattr(url, 'json'):
+            self.json += 1
+        if hasattr(url, 'html'):
+            self.html += 1
+        if hasattr(url, 'font'):
+            self.font += 1
+        if hasattr(url, 'octet_stream'):
+            self.octet_stream += 1
+        if hasattr(url, 'text'):
+            self.text += 1
+        if hasattr(url, 'video'):
+            self.video += 1
+        if hasattr(url, 'livestream'):
+            self.livestream += 1
+        if hasattr(url, 'unset_mimetype'):
+            self.unset_mimetype += 1
+        if hasattr(url, 'unknown_mimetype'):
+            self.unknown_mimetype += 1
 
 
 class URLNode(HarTreeNode):
@@ -84,30 +117,52 @@ class URLNode(HarTreeNode):
         self.add_feature('hostname', urlparse(self.name).hostname)
         if not self.hostname:
             logging.warning('Something is broken in that node: {}'.format(har_entry))
-        self.add_feature('response_cookie', har_entry['response']['cookies'])
-        self.add_feature('request_cookie', har_entry['request']['cookies'])
-        if har_entry['response']['content'].get('text'):
-            self.add_feature('body', b64decode(har_entry['response']['content']['text']))
+
         self.add_feature('request', har_entry['request'])
         self.add_feature('response', har_entry['response'])
-        if (har_entry['response']['content']['mimeType'].startswith('application/javascript') or
-                har_entry['response']['content']['mimeType'].startswith('application/x-javascript')):
-            self.add_feature('js', True)
-        if har_entry['response']['content']['mimeType'].startswith('image'):
-            self.add_feature('image', True)
-        if har_entry['response']['content']['mimeType'].startswith('text/css'):
-            self.add_feature('css', True)
-        if har_entry['response']['content']['mimeType'].startswith('application/json'):
-            self.add_feature('json', True)
+
+        self.add_feature('response_cookie', har_entry['response']['cookies'])
+        self.add_feature('request_cookie', har_entry['request']['cookies'])
+
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
             self.add_feature('empty_response', True)
+        else:
+            self.add_feature('body', b64decode(har_entry['response']['content']['text']))
+
+        if ('javascript' in har_entry['response']['content']['mimeType'] or
+                'ecmascript' in har_entry['response']['content']['mimeType']):
+            self.add_feature('js', True)
+        elif har_entry['response']['content']['mimeType'].startswith('image'):
+            self.add_feature('image', True)
+        elif har_entry['response']['content']['mimeType'].startswith('text/css'):
+            self.add_feature('css', True)
+        elif 'json' in har_entry['response']['content']['mimeType']:
+            self.add_feature('json', True)
+        elif har_entry['response']['content']['mimeType'].startswith('text/html'):
+            self.add_feature('html', True)
+        elif 'font' in har_entry['response']['content']['mimeType']:
+            self.add_feature('font', True)
+        elif 'octet-stream' in har_entry['response']['content']['mimeType']:
+            self.add_feature('octet_stream', True)
+        elif ('text/plain' in har_entry['response']['content']['mimeType'] or
+                'xml' in har_entry['response']['content']['mimeType']):
+            self.add_feature('text', True)
+        elif 'video' in har_entry['response']['content']['mimeType']:
+            self.add_feature('video', True)
+        elif 'mpegurl' in har_entry['response']['content']['mimeType'].lower():
+            self.add_feature('livestream', True)
+        elif not har_entry['response']['content']['mimeType']:
+            self.add_feature('unset_mimetype', True)
+        else:
+            self.add_feature('unknown_mimetype', True)
+            logging.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
 
         if har_entry['response']['redirectURL']:
             self.add_feature('redirect', True)
             redirect_url = har_entry['response']['redirectURL']
             if re.match('^https?://', redirect_url):
                 # we have a proper URL... hopefully
-                # DO NOT REMOVE THIS CLOSE, required to make the difference with a path
+                # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
                 pass
             elif redirect_url.startswith('//'):
                 # URL without scheme => takes the scheme from the caller
