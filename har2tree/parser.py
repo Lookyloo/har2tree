@@ -12,6 +12,8 @@ from base64 import b64decode
 from collections import defaultdict
 import logging
 import re
+import os
+from io import BytesIO
 
 
 class HarTreeNode(TreeNode):
@@ -62,6 +64,11 @@ class HostNode(HarTreeNode):
         self.add_feature('livestream', 0)
         self.add_feature('unset_mimetype', 0)
         self.add_feature('unknown_mimetype', 0)
+
+    def to_dict(self):
+        to_return = super(HostNode, self).to_dict()
+        to_return['urls_count'] = len(self.urls)
+        return to_return
 
     def add_url(self, url):
         if not self.name:
@@ -127,7 +134,14 @@ class URLNode(HarTreeNode):
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
             self.add_feature('empty_response', True)
         else:
-            self.add_feature('body', b64decode(har_entry['response']['content']['text']))
+            self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
+            self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
+            parsed_response_url = urlparse(self.name)
+            filename = os.path.basename(parsed_response_url.path)
+            if filename:
+                self.add_feature('filename', filename)
+            else:
+                self.add_feature('filename', 'file.bin')
 
         if ('javascript' in har_entry['response']['content']['mimeType'] or
                 'ecmascript' in har_entry['response']['content']['mimeType']):
