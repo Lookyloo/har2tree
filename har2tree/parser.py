@@ -14,6 +14,7 @@ import logging
 import re
 import os
 from io import BytesIO
+import hashlib
 
 
 class HarTreeNode(TreeNode):
@@ -38,6 +39,17 @@ class HarTreeNode(TreeNode):
 
     def to_json(self):
         return json.dumps(self.to_dict())
+
+
+class IframeNode(HarTreeNode):
+
+    def __init__(self, **kwargs):
+        super(IframeNode, self).__init__(**kwargs)
+        self.features_to_skip.append('body')
+
+    def load_iframe(self, iframe):
+        self.add_feature('body_hash', hashlib.sha256(iframe['html'].encode()).hexdigest())
+        self.add_feature('body', iframe['html'])
 
 
 class HostNode(HarTreeNode):
@@ -126,6 +138,11 @@ class URLNode(HarTreeNode):
             logging.warning('Something is broken in that node: {}'.format(har_entry))
 
         self.add_feature('request', har_entry['request'])
+        # Try to get a referer from the headers
+        for h in self.request['headers']:
+            if h['name'] == 'Referer':
+                self.add_feature('referer', h['value'])
+
         self.add_feature('response', har_entry['response'])
 
         self.add_feature('response_cookie', har_entry['response']['cookies'])
@@ -135,6 +152,7 @@ class URLNode(HarTreeNode):
             self.add_feature('empty_response', True)
         else:
             self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
+            self.add_feature('body_hash', hashlib.sha256(har_entry['response']['content']['text'].encode()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
             parsed_response_url = urlparse(self.name)
             filename = os.path.basename(parsed_response_url.path)
@@ -248,8 +266,15 @@ class CrawledTree(object):
         """Open all the HAR files"""
         loaded = []
         for har in files:
-            with open(har, 'r') as f:
-                har2tree = Har2Tree(json.load(f))
+            # Only using the referrers isn't enough to build the tree (i.e. iframes).
+            # The filename is supposed to be '[id].frames.json'
+            iframefile = os.path.join(os.path.dirname(har), os.path.basename(har).split('.')[0] + '.frames.json')
+            if os.path.isfile(iframefile):
+                with open(har, 'r') as f, open(iframefile, 'r') as i:
+                    har2tree = Har2Tree(json.load(f), json.load(i))
+            else:
+                with open(har, 'r') as f:
+                    har2tree = Har2Tree(json.load(f))
             if not har2tree.has_entries:
                 continue
             har2tree.make_tree()
@@ -294,11 +319,10 @@ class CrawledTree(object):
 
 class Har2Tree(object):
 
-    def __init__(self, har):
+    def __init__(self, har, iframes=[]):
         self.har = har
         self.root_url_after_redirect = None
         self.root_referer = None
-        self.url_tree = URLNode()
         self.hostname_tree = HostNode()
 
         if not self.har['log']['entries']:
@@ -314,6 +338,24 @@ class Har2Tree(object):
         self.root_url = self.har['log']['entries'][0]['request']['url']
         self.set_root_after_redirect()
         self.set_root_referrer()
+        self.iframe_tree = IframeNode(name=self.root_url)
+        if iframes:
+            self.load_iframes(iframes, root=self.iframe_tree)
+        self.nodes_list = []
+        self.all_url_requests = {url_entry['request']['url']: [] for url_entry in self.har['log']['entries']}
+
+        for url_entry in self.har['log']['entries']:
+            n = URLNode(name=url_entry['request']['url'])
+            n.load_har_entry(url_entry, self.all_url_requests.keys())
+            self.nodes_list.append(n)
+            self.all_url_requests[n.name].append(n)
+        self.url_tree = self.nodes_list[0]
+
+    def load_iframes(self, iframes, root):
+        for iframe in iframes:
+            i = root.add_child(IframeNode(name=iframe['requestedUrl']))
+            i.load_iframe(iframe)
+            self.load_iframes(iframe['childFrames'], root=i)
 
     def get_host_node_by_uuid(self, uuid):
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
@@ -368,39 +410,46 @@ class Har2Tree(object):
             self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
     def make_tree(self):
-        all_requests = {}
         all_referer = defaultdict(list)
         if not self.har['log']['entries']:
             # No entries...
             return self.url_tree
-        for entry in self.har['log']['entries'][1:]:
-            all_requests[entry['request']['url']] = entry
-            for h in entry['request']['headers']:
-                if h['name'] == 'Referer':
-                    if h['value'] == entry['request']['url'] or h['value'] == self.root_referer:
-                        # Skip to avoid loops:
-                        #   * referer to itself
-                        #   * referer to root referer
-                        continue
-                    all_referer[h['value']].append(entry['request']['url'])
-        self._make_subtree(all_referer, all_requests, self.url_tree, self.har['log']['entries'][0])
+        for entry in self.nodes_list[1:]:
+            if 'referer' in entry.features:
+                if entry.referer == entry.name:
+                    # Skip to avoid loops:
+                    #   * referer to itself
+                    continue
+                else:
+                    all_referer[entry.referer].append(entry.name)
+            else:
+                # Lookup in the iframe tree
+                marching_urls = self.iframe_tree.search_nodes(name=entry.name)
+                if not marching_urls:
+                    print('No Referer: ', entry.name)
+                    pass
+                else:
+                    for marching_url in marching_urls:
+                        parents = marching_url.get_ancestors()
+                        all_referer[parents[0].name].append(entry.name)
+        self._make_subtree(all_referer, self.url_tree, self.nodes_list[0])
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
-    def _make_subtree(self, all_referer, all_requests, root_node, url_entry):
-        if not root_node.name:
+    def _make_subtree(self, all_referer, root_node, url_nodes):
+        if not isinstance(url_nodes, list):
             # We're in the actual root node
-            u_node = root_node
-            u_node.add_feature('name', url_entry['request']['url'])
+            unodes = [root_node]
         else:
-            u_node = root_node.add_child(URLNode(name=url_entry['request']['url']))
-        u_node.load_har_entry(url_entry, all_requests)
-
-        if hasattr(u_node, 'redirect') and not hasattr(u_node, 'redirect_to_nothing'):
-            self._make_subtree(all_referer, all_requests, u_node, all_requests[u_node.redirect_url])
-        elif all_referer.get(u_node.name):
-            # URL loads other URL
-            for u in all_referer.pop(u_node.name):
-                self._make_subtree(all_referer, all_requests, u_node, all_requests[u])
+            unodes = []
+            for url_node in url_nodes:
+                unodes.append(root_node.add_child(url_node))
+        for unode in unodes:
+            if hasattr(unode, 'redirect') and not hasattr(unode, 'redirect_to_nothing'):
+                self._make_subtree(all_referer, unode, self.all_url_requests.get(unode.redirect_url))
+            elif all_referer.get(unode.name):
+                # URL loads other URL
+                for u in all_referer.pop(unode.name):
+                    self._make_subtree(all_referer, unode, self.all_url_requests.get(u))
