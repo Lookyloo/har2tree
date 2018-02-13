@@ -378,7 +378,8 @@ class Har2Tree(object):
             n.load_har_entry(url_entry, all_url_requests.keys())
             if hasattr(n, 'redirect_url'):
                 all_redirects.append(n.redirect_url)
-            elif hasattr(n, 'referer'):
+
+            if hasattr(n, 'referer'):
                 if n.referer == n.name:
                     # Skip to avoid loops:
                     #   * referer to itself
@@ -399,6 +400,7 @@ class Har2Tree(object):
                             break
                 else:
                     print('No clue where it comes from: ', n.name)
+
             nodes_list.append(n)
             if all_url_requests[n.name]:
                 # The same URL request has already been requested
@@ -456,7 +458,6 @@ class Har2Tree(object):
         '''
         to_return = None
         for e in self.har['log']['entries']:
-            print(e['request']['url'], e['response']['redirectURL'])
             if e['response']['redirectURL']:
                 to_return = e['response']['redirectURL']
                 if not to_return.startswith('http'):
@@ -540,4 +541,4 @@ class Har2Tree(object):
                         # else:
                         #    print('\ttoo late', unode.name, unode.end_time, matching_url.name, matching_url.start_time)
             else:
-                logging.debug('No child' + unode.name)
+                logging.debug('No child: ' + unode.name)
