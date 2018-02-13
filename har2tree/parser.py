@@ -132,16 +132,21 @@ class URLNode(HarTreeNode):
         # Do not add the body in the json dump
         self.features_to_skip.append('body')
         self.features_to_skip.append('start_time')
-        self.features_to_skip.append('end_time')
+        self.features_to_skip.append('time')
+        self.features_to_skip.append('time_content_received')
 
     def load_har_entry(self, har_entry, all_requests):
         if not self.name:
             # We're in the actual root node
             self.add_feature('name', har_entry['request']['url'])
 
-        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%fZ'))
-        self.add_feature('time', har_entry['time'])
-        self.add_feature('end_time', self.start_time + timedelta(milliseconds=self.time))
+        # If the URL contains a fragment (i.e. something after a #), it is stripped in the referer.
+        # So we need an alternative URL to do a lookup against
+        self.add_feature('alternative_url_for_referer', self.name.split('#')[0])
+
+        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%fZ'))  # Instant the request is made
+        self.add_feature('time', timedelta(milliseconds=har_entry['time']))
+        self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
         if not self.hostname:
             logging.warning('Something is broken in that node: {}'.format(har_entry))
@@ -355,11 +360,11 @@ class Har2Tree(object):
 
         if iframes:
             self._load_iframes(iframes, root=self.iframe_tree, scheme=iframe_scheme)
-        print(self.iframe_tree)
+        # print(self.iframe_tree)
 
         self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer = self._load_url_entries()
 
-        self.url_tree = self.nodes_list[0]
+        self.url_tree = self.nodes_list.pop(0)
         self.start_time = self.url_tree.start_time
         self.user_agent = self.url_tree.user_agent
 
@@ -491,7 +496,7 @@ class Har2Tree(object):
         for root_node_url in root_nodes_url:
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
-                    logging.warning('Fucked up hostname: {}'.format(child_node_url))
+                    logging.warning('Fucked up URL: {}'.format(child_node_url))
                     continue
                 child_node_hostname = children_hostnames.get(child_node_url.hostname)
                 if not child_node_hostname:
@@ -506,6 +511,13 @@ class Har2Tree(object):
 
     def make_tree(self):
         self._make_subtree(self.url_tree)
+        if self.nodes_list:
+            print('Nodes not in tree')
+        for node in self.nodes_list:
+            if hasattr(node, 'referer'):
+                print(node.name, node.referer, node.start_time, self.url_tree.start_time, self.url_tree.time_content_received)
+            else:
+                print(node.name, node.start_time, self.url_tree.start_time)
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
@@ -514,31 +526,59 @@ class Har2Tree(object):
     def _make_subtree(self, root, nodes_to_attach=None):
         if nodes_to_attach is None:
             # We're in the actual root node
-            unodes = [self.nodes_list[0]]
+            unodes = [self.url_tree]
+
         else:
             unodes = []
             for url_node in nodes_to_attach:
                 unodes.append(root.add_child(url_node))
         for unode in unodes:
             if hasattr(unode, 'redirect') and not hasattr(unode, 'redirect_to_nothing'):
+                if unode.redirect_url not in self.all_redirects:
+                    # Let's follow that redirect only once.
+                    continue
+                self.all_redirects.remove(unode.redirect_url)
                 matching_urls = self.all_url_requests.get(unode.redirect_url)
                 for matching_url in matching_urls:
-                    if unode.start_time < matching_url.start_time:  # <= unode.end_time:
-                        self._make_subtree(unode, [matching_url])
-                    elif unode.start_time > matching_url.start_time:
-                        print('\ttoo early', unode.redirect_url)
-                    # else:
-                    #    print('\ttoo late', unode.redirect_url)
+                    if matching_url in self.nodes_list:
+                        self.nodes_list.remove(matching_url)
+
+                self._make_subtree(unode, matching_urls)
+                # for matching_url in matching_urls:
+                #    if unode.time_content_received < matching_url.start_time:
+                #        if matching_url not in self.nodes_list:
+                #            print('Already removed referer', matching_url.name)
+                #            pass
+                #        else:
+                #            self.nodes_list.remove(matching_url)
+                #        self._make_subtree(unode, [matching_url])
+                #    elif unode.time_content_received > matching_url.start_time:
+                #        print('\ttoo early', unode.name, matching_url.name, unode.time_content_received, matching_url.start_time)
             elif self.all_referer.get(unode.name):
                 # URL loads other URL
                 for u in self.all_referer.pop(unode.name):
                     matching_urls = self.all_url_requests.get(u)
                     for matching_url in matching_urls:
-                        if unode.start_time < matching_url.start_time:  # <= unode.end_time:
-                            self._make_subtree(unode, [matching_url])
-                        elif unode.start_time > matching_url.start_time:
-                            print('\ttoo early', unode.name)
-                        # else:
-                        #    print('\ttoo late', unode.name, unode.end_time, matching_url.name, matching_url.start_time)
+                        if matching_url in self.nodes_list:
+                            self.nodes_list.remove(matching_url)
+                    self._make_subtree(unode, matching_urls)
+                    # for matching_url in matching_urls:
+                    #    if unode.time_content_received < matching_url.start_time:
+                    #        if matching_url not in self.nodes_list:
+                    #            # print('Already removed referer', matching_url.name)
+                    #            pass
+                    #        else:
+                    #            self.nodes_list.remove(matching_url)
+                    #        self._make_subtree(unode, [matching_url])
+                    #    elif unode.time_content_received > matching_url.start_time:
+                    #        print('\ttoo early', unode.name, matching_url.name, unode.time_content_received, matching_url.start_time)
+            elif self.all_referer.get(unode.alternative_url_for_referer):
+                # URL loads other URL
+                for u in self.all_referer.pop(unode.alternative_url_for_referer):
+                    matching_urls = self.all_url_requests.get(u)
+                    for matching_url in matching_urls:
+                        if matching_url in self.nodes_list:
+                            self.nodes_list.remove(matching_url)
+                    self._make_subtree(unode, matching_urls)
             else:
                 logging.debug('No child: ' + unode.name)
