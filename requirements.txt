@@ -1,3 +1,4 @@
 ete3
 six
 scipy
+beautifulsoup4
