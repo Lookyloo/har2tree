@@ -17,8 +17,8 @@ import os
 from io import BytesIO
 import hashlib
 from operator import itemgetter
-
 from bs4 import BeautifulSoup
+import html
 
 
 class HarTreeNode(TreeNode):
@@ -50,34 +50,64 @@ class HarTreeNode(TreeNode):
         to_return = {'img': [], 'script': [], 'video': [], 'audio': [],
                      'iframe': [], 'embed': [], 'source': [],
                      'link': [],
-                     'object': []}
-        soup = BeautifulSoup(html_doc, 'html.parser')
+                     'object': [],
+                     'css': []}
+        if b'bcp.crwdcntrl.net' in html_doc.getvalue():
+            print(html_doc.getvalue())
+        soup = BeautifulSoup(html_doc, 'lxml')
         for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
             if link.get('src'):
                 to_attach = link.get('src')
-                if to_attach.startswith('\\"'):
+                if to_attach.startswith('data'):
+                    print('=====', to_attach)
+                    continue
+                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
                     to_attach = to_attach[2:-2]
                 if to_attach.startswith('//'):
                     to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(to_attach)
+                to_return[link.name].append(html.unescape(to_attach))
 
         for link in soup.find_all(['link']):
             if link.get('href'):
                 to_attach = link.get('href')
-                if to_attach.startswith('\\"'):
+                if to_attach.startswith('data'):
+                    print('=====', to_attach)
+                    continue
+                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
                     to_attach = to_attach[2:-2]
                 if to_attach.startswith('//'):
                     to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(to_attach)
+                to_return[link.name].append(html.unescape(to_attach))
 
         for link in soup.find_all(['object']):
             if link.get('data'):
                 to_attach = link.get('data')
-                if to_attach.startswith('\\"'):
+                if to_attach.startswith('data'):
+                    print('=====', to_attach)
+                    continue
+                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
                     to_attach = to_attach[2:-2]
                 if to_attach.startswith('//'):
                     to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(to_attach)
+                to_return[link.name].append(html.unescape(to_attach))
+
+        # external stull loaded from css content, because reasons.
+        external_urls_css = re.findall(b'background.*url\((.*?)\)', html_doc.getvalue())
+        for url in external_urls_css:
+            if url.startswith(b'data'):
+                # print(html_doc.getvalue())
+                continue
+            to_attach = url.decode().strip()
+            if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
+                to_attach = to_attach[2:-2]
+            if to_attach.startswith('\'') or to_attach.startswith('"'):
+                to_attach = to_attach[1:-1]
+            if to_attach.startswith('//'):
+                to_attach = '{}:{}'.format(scheme, to_attach)
+            if to_attach.startswith('http'):
+                to_return['css'].append(html.unescape(to_attach))
+            else:
+                print('CSS regex - not a URL', to_attach)
 
         return to_return
 
@@ -90,8 +120,8 @@ class IframeNode(HarTreeNode):
         self.features_to_skip.append('external_ressources')
 
     def load_iframe(self, iframe, scheme):
-        self.add_feature('body_hash', hashlib.sha256(iframe['html'].encode()).hexdigest())
-        self.add_feature('body', iframe['html'])
+        self.add_feature('body', BytesIO(iframe['html'].encode()))
+        self.add_feature('body_hash', hashlib.sha256(self.body.getvalue()).hexdigest())
         if self.body:
             self.add_feature('external_ressources', self._find_external_ressources(self.body, scheme))
 
@@ -211,10 +241,9 @@ class URLNode(HarTreeNode):
             self.add_feature('empty_response', True)
         else:
             self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
-            self.add_feature('body_hash', hashlib.sha256(har_entry['response']['content']['text'].encode()).hexdigest())
+            self.add_feature('body_hash', hashlib.sha256(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
-            if 'html' in self.mimetype:
-                self.add_feature('external_ressources', self._find_external_ressources(self.body, self.url_split.scheme))
+            self.add_feature('external_ressources', self._find_external_ressources(self.body, self.url_split.scheme))
             parsed_response_url = urlparse(self.name)
             filename = os.path.basename(parsed_response_url.path)
             if filename:
@@ -447,9 +476,6 @@ class Har2Tree(object):
                             all_referer[parent.name].append(n.name)
                             break
 
-            if n.name not in all_redirects and not hasattr(n, 'referer') and not hasattr(n, 'iframe'):
-                print('No clue where it comes from: ', n.name)
-
             nodes_list.append(n)
             if all_url_requests[n.name]:
                 # The same URL request has already been requested
@@ -473,12 +499,11 @@ class Har2Tree(object):
         return nodes_list, all_url_requests, all_redirects, all_referer
 
     def _load_iframes(self, iframes, root, scheme):
+        if hasattr(root, 'external_ressources'):
+            for external_tag, links in root.external_ressources.items():
+                for link in links:
+                    root.add_child(IframeNode(name=link))
         for iframe in iframes:
-            if hasattr(self, 'external_ressources'):
-                for external_tag, links in root.external_ressources.items():
-                    for link in links:
-                        root.add_child(IframeNode(name=link))
-
             child = root.add_child(IframeNode(name=iframe['requestedUrl']))
             child.load_iframe(iframe, scheme=scheme)
             self._load_iframes(iframe['childFrames'], root=child, scheme=scheme)
@@ -591,12 +616,11 @@ class Har2Tree(object):
                         for link in links:
                             if link.startswith('data'):
                                 # Not a URL
-                                print(link)
+                                print('DATA ', external_tag, '--', link, '--')
                                 continue
                             if link not in self.all_url_requests:
-                                print('MISSING', link)
+                                # print('MISSING', link)
                                 continue
-                            print('external ressource', link)
                             matching_urls = [url_node for url_node in self.all_url_requests.get(link) if url_node in self.nodes_list]
                             [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                             self._make_subtree(unode, matching_urls)
