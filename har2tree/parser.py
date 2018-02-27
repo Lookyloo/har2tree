@@ -44,6 +44,28 @@ class HarTreeNode(TreeNode):
     def to_json(self):
         return json.dumps(self.to_dict())
 
+    def _url_cleanup(self, dict_to_clean, scheme):
+        to_return = {}
+        for key, urls in dict_to_clean.items():
+            to_return[key] = []
+            for url in urls:
+                if url.startswith('data'):
+                    # print(html_doc.getvalue())
+                    continue
+                to_attach = url.strip()
+                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
+                    to_attach = to_attach[2:-2]
+                if to_attach.startswith('\'') or to_attach.startswith('"'):
+                    to_attach = to_attach[1:-1]
+                if to_attach.startswith('//'):
+                    to_attach = '{}:{}'.format(scheme, to_attach)
+                to_attach = url.strip()
+                if to_attach.startswith('http'):
+                    to_return[key].append(html.unescape(to_attach))
+                else:
+                    logging.info('{} - not a URL - {}'.format(key, to_attach))
+        return to_return
+
     def _find_external_ressources(self, html_doc, scheme):
         # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
         # Because this is awful.
@@ -51,65 +73,28 @@ class HarTreeNode(TreeNode):
                      'iframe': [], 'embed': [], 'source': [],
                      'link': [],
                      'object': [],
-                     'css': []}
-        if b'bcp.crwdcntrl.net' in html_doc.getvalue():
-            print(html_doc.getvalue())
+                     'css': [],
+                     'full_regex': []}
         soup = BeautifulSoup(html_doc, 'lxml')
         for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
             if link.get('src'):
-                to_attach = link.get('src')
-                if to_attach.startswith('data'):
-                    print('=====', to_attach)
-                    continue
-                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
-                    to_attach = to_attach[2:-2]
-                if to_attach.startswith('//'):
-                    to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(html.unescape(to_attach))
+                to_return[link.name].append(link.get('src'))
 
         for link in soup.find_all(['link']):
             if link.get('href'):
-                to_attach = link.get('href')
-                if to_attach.startswith('data'):
-                    print('=====', to_attach)
-                    continue
-                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
-                    to_attach = to_attach[2:-2]
-                if to_attach.startswith('//'):
-                    to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(html.unescape(to_attach))
+                to_return[link.name].append(link.get('href'))
 
         for link in soup.find_all(['object']):
             if link.get('data'):
-                to_attach = link.get('data')
-                if to_attach.startswith('data'):
-                    print('=====', to_attach)
-                    continue
-                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
-                    to_attach = to_attach[2:-2]
-                if to_attach.startswith('//'):
-                    to_attach = '{}:{}'.format(scheme, to_attach)
-                to_return[link.name].append(html.unescape(to_attach))
+                to_return[link.name].append(link.get('data'))
 
         # external stull loaded from css content, because reasons.
-        external_urls_css = re.findall(b'background.*url\((.*?)\)', html_doc.getvalue())
-        for url in external_urls_css:
-            if url.startswith(b'data'):
-                # print(html_doc.getvalue())
-                continue
-            to_attach = url.decode().strip()
-            if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
-                to_attach = to_attach[2:-2]
-            if to_attach.startswith('\'') or to_attach.startswith('"'):
-                to_attach = to_attach[1:-1]
-            if to_attach.startswith('//'):
-                to_attach = '{}:{}'.format(scheme, to_attach)
-            if to_attach.startswith('http'):
-                to_return['css'].append(html.unescape(to_attach))
-            else:
-                print('CSS regex - not a URL', to_attach)
+        to_return['css'] = [url.decode() for url in re.findall(b'background.*url\((.*?)\)', html_doc.getvalue())]
 
-        return to_return
+        # Just regex in the whole blob, because we can
+        to_return['full_regex'] = [url.decode() for url in re.findall(b'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+
+        return self._url_cleanup(to_return, scheme)
 
 
 class IframeNode(HarTreeNode):
@@ -477,24 +462,6 @@ class Har2Tree(object):
                             break
 
             nodes_list.append(n)
-            if all_url_requests[n.name]:
-                # The same URL request has already been requested
-                # TODO: Figure out how to attach the right URL to the right node
-                # This bloc is for debug purposes only
-                for node in all_url_requests[n.name]:
-                    if hasattr(node, 'empty_response') and hasattr(n, 'empty_response'):
-                        print('\tNo body at all... -> Cookies?')
-                        continue
-                    if hasattr(node, 'empty_response') and not hasattr(n, 'empty_response'):
-                        print('\tOld no body, new has body... ')
-                        continue
-                    if not hasattr(node, 'empty_response') and hasattr(n, 'empty_response'):
-                        print('\tNew no body, old has body... ')
-                        continue
-                    if node.body_hash == n.body_hash:
-                        print('\tDuplicate')
-                    else:
-                        print('\tNot duplicate')
             all_url_requests[n.name].append(n)
         return nodes_list, all_url_requests, all_redirects, all_referer
 
@@ -568,13 +535,20 @@ class Har2Tree(object):
 
     def make_tree(self):
         self._make_subtree(self.url_tree)
+
         if self.nodes_list:
-            print('Nodes not in tree')
-        for node in self.nodes_list:
-            if hasattr(node, 'referer'):
-                print(node.name, node.referer, node.start_time, self.url_tree.start_time, self.url_tree.time_content_received)
-            else:
-                print(node.name, node.start_time, self.url_tree.start_time)
+            print('Nodes not in tree yet')
+            for node in self.nodes_list:
+                if hasattr(node, 'referer'):
+                    print('==== has referer', node.name, node.referer, node.start_time, self.url_tree.start_time, self.url_tree.time_content_received)
+                else:
+                    print(node.name, node.start_time, self.url_tree.start_time)
+            orphan = self.url_tree.add_child(URLNode(name='orphan urls'))
+            orphan.add_feature('hostname', 'orphan.url')
+            while self.nodes_list:
+                # Dirty attach everything else, starting with the first one fired
+                self._make_subtree(orphan, [self.nodes_list.pop(0)])
+
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
@@ -590,36 +564,40 @@ class Har2Tree(object):
                 unodes.append(root.add_child(url_node))
         for unode in unodes:
             if hasattr(unode, 'redirect') and not hasattr(unode, 'redirect_to_nothing'):
+                # If the subnode has a redirect URL set, we get all the requests matching this URL
+                # One may think the entry related to this redirect URL has a referer to the parent. One would be wrong.
+                # URL 1 has a referer, and redirects to URL 2. URL 2 has the same referer as URL 1.
                 if unode.redirect_url not in self.all_redirects:
-                    # Let's follow that redirect only once.
                     continue
-                self.all_redirects.remove(unode.redirect_url)
+                self.all_redirects.remove(unode.redirect_url)  # Makes sure we only follow a redirect once
                 matching_urls = [url_node for url_node in self.all_url_requests.get(unode.redirect_url) if url_node in self.nodes_list]
                 [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                 self._make_subtree(unode, matching_urls)
             else:
                 if self.all_referer.get(unode.name):
-                    # URL loads other URL
-                    for u in self.all_referer.pop(unode.name):
-                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list]
+                    # The URL (unode.name) is in the list of known referers
+                    for u in self.all_referer.get(unode.name):
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
                         [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                         self._make_subtree(unode, matching_urls)
+                    # remove the referer from the list if empty
+                    if not self.all_referer.get(unode.name):
+                        self.all_referer.pop(unode.name)
                 if self.all_referer.get(unode.alternative_url_for_referer):
-                    # URL loads other URL
-                    for u in self.all_referer.pop(unode.alternative_url_for_referer):
-                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list]
+                    # The URL (unode.name) stripped at the first `#` is in the list of known referers
+                    for u in self.all_referer.get(unode.alternative_url_for_referer):
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
                         [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                         self._make_subtree(unode, matching_urls)
+                    # remove the referer from the list if empty
+                    if not self.all_referer.get(unode.alternative_url_for_referer):
+                        self.all_referer.pop(unode.alternative_url_for_referer)
                 if hasattr(unode, 'external_ressources'):
                     # the url loads external things, and some of them have no referer....
                     for external_tag, links in unode.external_ressources.items():
                         for link in links:
-                            if link.startswith('data'):
-                                # Not a URL
-                                print('DATA ', external_tag, '--', link, '--')
-                                continue
                             if link not in self.all_url_requests:
-                                # print('MISSING', link)
+                                # We have a lot of false positives
                                 continue
                             matching_urls = [url_node for url_node in self.all_url_requests.get(link) if url_node in self.nodes_list]
                             [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
