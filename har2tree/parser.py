@@ -74,7 +74,8 @@ class HarTreeNode(TreeNode):
                      'link': [],
                      'object': [],
                      'css': [],
-                     'full_regex': []}
+                     'full_regex': [],
+                     'javascript': []}
         soup = BeautifulSoup(html_doc, 'lxml')
         for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
             if link.get('src'):
@@ -90,6 +91,10 @@ class HarTreeNode(TreeNode):
 
         # external stull loaded from css content, because reasons.
         to_return['css'] = [url.decode() for url in re.findall(b'background.*url\((.*?)\)', html_doc.getvalue())]
+
+        # Javascript changing the current page
+        # I never found a website where it matched anything useful
+        # to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
 
         # Just regex in the whole blob, because we can
         to_return['full_regex'] = [url.decode() for url in re.findall(b'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
@@ -194,7 +199,7 @@ class URLNode(HarTreeNode):
     def load_har_entry(self, har_entry, all_requests):
         if not self.name:
             # We're in the actual root node
-            self.add_feature('name', har_entry['request']['url'])
+            self.add_feature('name', har_entry['request']['url'])  # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
 
         self.add_feature('url_split', urlparse(self.name))
 
@@ -539,10 +544,7 @@ class Har2Tree(object):
         if self.nodes_list:
             print('Nodes not in tree yet')
             for node in self.nodes_list:
-                if hasattr(node, 'referer'):
-                    print('==== has referer', node.name, node.referer, node.start_time, self.url_tree.start_time, self.url_tree.time_content_received)
-                else:
-                    print(node.name, node.start_time, self.url_tree.start_time)
+                print(node.name)
             orphan = self.url_tree.add_child(URLNode(name='orphan urls'))
             orphan.add_feature('hostname', 'orphan.url')
             while self.nodes_list:
