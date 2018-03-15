@@ -140,6 +140,7 @@ class HostNode(HarTreeNode):
         self.add_feature('livestream', 0)
         self.add_feature('unset_mimetype', 0)
         self.add_feature('unknown_mimetype', 0)
+        self.add_feature('iframe', 0)
 
     def to_dict(self):
         to_return = super(HostNode, self).to_dict()
@@ -175,14 +176,12 @@ class HostNode(HarTreeNode):
             self.octet_stream += 1
         if hasattr(url, 'text'):
             self.text += 1
-        if hasattr(url, 'video'):
+        if hasattr(url, 'video') or hasattr(url, 'livestream'):
             self.video += 1
-        if hasattr(url, 'livestream'):
-            self.livestream += 1
-        if hasattr(url, 'unset_mimetype'):
-            self.unset_mimetype += 1
-        if hasattr(url, 'unknown_mimetype'):
+        if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
             self.unknown_mimetype += 1
+        if hasattr(url, 'iframe'):
+            self.iframe += 1
 
 
 class URLNode(HarTreeNode):
