@@ -111,7 +111,7 @@ class IframeNode(HarTreeNode):
 
     def load_iframe(self, iframe, scheme):
         self.add_feature('body', BytesIO(iframe['html'].encode()))
-        self.add_feature('body_hash', hashlib.sha256(self.body.getvalue()).hexdigest())
+        self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
         if self.body:
             self.add_feature('external_ressources', self._find_external_ressources(self.body, scheme))
 
@@ -230,7 +230,7 @@ class URLNode(HarTreeNode):
             self.add_feature('empty_response', True)
         else:
             self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
-            self.add_feature('body_hash', hashlib.sha256(self.body.getvalue()).hexdigest())
+            self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
             self.add_feature('external_ressources', self._find_external_ressources(self.body, self.url_split.scheme))
             parsed_response_url = urlparse(self.name)
