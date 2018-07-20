@@ -2,3 +2,5 @@ ete3
 six
 scipy
 beautifulsoup4
+lxml
+cchardet
