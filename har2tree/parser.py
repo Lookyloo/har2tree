@@ -23,7 +23,7 @@ import html
 
 class HarTreeNode(TreeNode):
 
-    features_to_skip = ['dist', 'support']
+    features_to_skip = set(['dist', 'support'])
 
     def __init__(self, **kwargs):
         super(HarTreeNode, self).__init__(**kwargs)
@@ -106,8 +106,8 @@ class IframeNode(HarTreeNode):
 
     def __init__(self, **kwargs):
         super(IframeNode, self).__init__(**kwargs)
-        self.features_to_skip.append('body')
-        self.features_to_skip.append('external_ressources')
+        self.features_to_skip.add('body')
+        self.features_to_skip.add('external_ressources')
 
     def load_iframe(self, iframe, scheme):
         self.add_feature('body', BytesIO(iframe['html'].encode()))
@@ -121,7 +121,7 @@ class HostNode(HarTreeNode):
     def __init__(self, **kwargs):
         super(HostNode, self).__init__(**kwargs)
         # Do not add the URLs in the json dump
-        self.features_to_skip.append('urls')
+        self.features_to_skip.add('urls')
 
         self.add_feature('urls', [])
         self.add_feature('request_cookie', 0)
@@ -189,11 +189,11 @@ class URLNode(HarTreeNode):
     def __init__(self, **kwargs):
         super(URLNode, self).__init__(**kwargs)
         # Do not add the body in the json dump
-        self.features_to_skip.append('body')
-        self.features_to_skip.append('url_split')
-        self.features_to_skip.append('start_time')
-        self.features_to_skip.append('time')
-        self.features_to_skip.append('time_content_received')
+        self.features_to_skip.add('body')
+        self.features_to_skip.add('url_split')
+        self.features_to_skip.add('start_time')
+        self.features_to_skip.add('time')
+        self.features_to_skip.add('time_content_received')
 
     def load_har_entry(self, har_entry, all_requests):
         if not self.name:
