@@ -23,11 +23,10 @@ import html
 
 class HarTreeNode(TreeNode):
 
-    features_to_skip = set(['dist', 'support'])
-
     def __init__(self, **kwargs):
         super(HarTreeNode, self).__init__(**kwargs)
         self.add_feature('uuid', str(uuid.uuid4()))
+        self.features_to_skip = set(['dist', 'support'])
 
     def to_dict(self):
         to_return = {'uuid': self.uuid, 'children': []}
