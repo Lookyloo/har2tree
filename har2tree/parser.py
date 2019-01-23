@@ -89,14 +89,14 @@ class HarTreeNode(TreeNode):
                 to_return[link.name].append(link.get('data'))
 
         # external stull loaded from css content, because reasons.
-        to_return['css'] = [url.decode() for url in re.findall(b'background.*url\((.*?)\)', html_doc.getvalue())]
+        to_return['css'] = [url.decode() for url in re.findall(rb'background.*url\((.*?)\)', html_doc.getvalue())]
 
         # Javascript changing the current page
         # I never found a website where it matched anything useful
         # to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
 
         # Just regex in the whole blob, because we can
-        to_return['full_regex'] = [url.decode() for url in re.findall(b'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+        to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
 
         return self._url_cleanup(to_return, scheme)
 
@@ -239,8 +239,8 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('filename', 'file.bin')
 
-        if ('javascript' in har_entry['response']['content']['mimeType'] or
-                'ecmascript' in har_entry['response']['content']['mimeType']):
+        if ('javascript' in har_entry['response']['content']['mimeType']
+                or 'ecmascript' in har_entry['response']['content']['mimeType']):
             self.add_feature('js', True)
         elif har_entry['response']['content']['mimeType'].startswith('image'):
             self.add_feature('image', True)
@@ -254,8 +254,8 @@ class URLNode(HarTreeNode):
             self.add_feature('font', True)
         elif 'octet-stream' in har_entry['response']['content']['mimeType']:
             self.add_feature('octet_stream', True)
-        elif ('text/plain' in har_entry['response']['content']['mimeType'] or
-                'xml' in har_entry['response']['content']['mimeType']):
+        elif ('text/plain' in har_entry['response']['content']['mimeType']
+                or 'xml' in har_entry['response']['content']['mimeType']):
             self.add_feature('text', True)
         elif 'video' in har_entry['response']['content']['mimeType']:
             self.add_feature('video', True)

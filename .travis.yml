@@ -7,12 +7,12 @@ python:
   - "3.6-dev"
 
 install:
-    - pip install -U -r requirements.txt
-    - pip install -U nose coverage coveralls codecov
+    - pip install pipenv
+    - pipenv install --dev
 
 script:
-    - nosetests --with-coverage --cover-package=har2tree tests/test.py
+    - pipenv run nosetests --with-coverage --cover-package=har2tree tests/test.py
 
 after_success:
-    - codecov
-    - coveralls
+    - pipenv run codecov
+    - pipenv run coveralls

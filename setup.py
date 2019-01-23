@@ -25,5 +25,6 @@ setup(
     ],
     test_suite="tests",
     include_package_data=True,
-    package_data={'har2tree': ['data/img/*.png']}
+    package_data={'har2tree': ['data/img/*.png']},
+    install_requires=['ete3', 'six', 'beautifulsoup4', 'lxml']
 )
