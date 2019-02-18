@@ -21,6 +21,12 @@ from bs4 import BeautifulSoup
 import html
 
 
+class Har2TreeError(Exception):
+    def __init__(self, message):
+        super(Har2TreeError, self).__init__(message)
+        self.message = message
+
+
 class HarTreeNode(TreeNode):
 
     def __init__(self, **kwargs):
@@ -337,6 +343,8 @@ class CrawledTree(object):
     def __init__(self, harfiles):
         """ Load all the harfiles passed as parameter"""
         self.hartrees = self.load_all_harfiles(harfiles)
+        if not self.hartrees:
+            raise Har2TreeError('No usable HAR files found.')
         self.root_hartree = None
 
     def load_all_harfiles(self, files):
