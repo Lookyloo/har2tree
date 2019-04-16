@@ -289,10 +289,18 @@ class URLNode(HarTreeNode):
             elif redirect_url.startswith('/') or redirect_url[0] not in [';', '?', '#']:
                 # We have a path
                 if redirect_url[0] != '/':
-                    # Yeah, that happens, and the browser fixes it...
-                    redirect_url = '/{}'.format(redirect_url)
-                parsed_request_url = urlparse(self.name)
-                redirect_url = '{}://{}{}'.format(self.url_split.scheme, parsed_request_url.netloc, redirect_url)
+                    # Yeah, that happens, and the browser appends the path in redirect_url to the current path
+                    if self.name[-1] == '/':
+                        # Example: http://foo.bar/some/path/ and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
+                        redirect_url = '{}{}'.format(self.name, redirect_url)
+                    else:
+                        # Need to strip the last part of the URL down to the first / (included), and attach the redirect
+                        # Example: http://foo.bar/some/path/blah and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
+                        last_slash = self.name.rfind('/') + 1
+                        redirect_url = '{}{}'.format(self.name[:last_slash], redirect_url)
+                else:
+                    parsed_request_url = urlparse(self.name)
+                    redirect_url = '{}://{}{}'.format(self.url_split.scheme, parsed_request_url.netloc, redirect_url)
                 if redirect_url not in all_requests:
                     # There is something weird, to investigate
                     logging.warning('URL without netloc: {original_url} - {original_redirect} - {modified_redirect}'.format(
