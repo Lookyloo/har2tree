@@ -8,7 +8,7 @@ import json
 import copy
 from datetime import datetime, timedelta
 import uuid
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote_plus
 from base64 import b64decode
 from collections import defaultdict
 import logging
@@ -25,6 +25,76 @@ class Har2TreeError(Exception):
     def __init__(self, message):
         super(Har2TreeError, self).__init__(message)
         self.message = message
+
+
+# Standalone methods to extract and cleanup content from an HTML blob.
+def url_cleanup(dict_to_clean, scheme):
+    to_return = {}
+    for key, urls in dict_to_clean.items():
+        to_return[key] = []
+        for url in urls:
+            if url.startswith('data'):
+                # print(html_doc.getvalue())
+                continue
+            to_attach = url.strip()
+            if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
+                to_attach = to_attach[2:-2]
+            if to_attach.startswith('\'') or to_attach.startswith('"'):
+                to_attach = to_attach[1:-1]
+            if to_attach.startswith('//'):
+                to_attach = '{}:{}'.format(scheme, to_attach)
+            to_attach = to_attach.strip()
+            if to_attach.startswith('http'):
+                to_attach = html.unescape(to_attach)
+                # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
+                try:
+                    parsed = urlparse(to_attach)
+                    to_attach = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+                    to_return[key].append(unquote_plus(to_attach))
+                except Exception:
+                    logging.info('{} - not a URL - {}'.format(key, to_attach))
+            else:
+                logging.info('{} - not a URL - {}'.format(key, to_attach))
+    return to_return
+
+
+def find_external_ressources(html_doc, scheme):
+    # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
+    # Because this is awful.
+    to_return = {'img': [], 'script': [], 'video': [], 'audio': [],
+                 'iframe': [], 'embed': [], 'source': [],
+                 'link': [],
+                 'object': [],
+                 'css': [],
+                 'full_regex': [],
+                 'javascript': []}
+    soup = BeautifulSoup(html_doc, 'lxml')
+    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
+        if link.get('src'):
+            # print('******** src', link.get('src'))
+            to_return[link.name].append(link.get('src'))
+
+    for link in soup.find_all(['link']):
+        if link.get('href'):
+            to_return[link.name].append(link.get('href'))
+
+    for link in soup.find_all(['object']):
+        if link.get('data'):
+            to_return[link.name].append(link.get('data'))
+
+    # external stull loaded from css content, because reasons.
+    to_return['css'] = [url.decode() for url in re.findall(rb'background.*url\((.*?)\)', html_doc.getvalue())]
+
+    # Javascript changing the current page
+    # I never found a website where it matched anything useful
+    # to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+
+    # Just regex in the whole blob, because we can
+    to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+    # print("################ REGEXES ", to_return['full_regex'])
+    return url_cleanup(to_return, scheme)
+
+# ##################################################################
 
 
 class HarTreeNode(TreeNode):
@@ -49,70 +119,6 @@ class HarTreeNode(TreeNode):
     def to_json(self):
         return json.dumps(self.to_dict())
 
-    def _url_cleanup(self, dict_to_clean, scheme):
-        to_return = {}
-        for key, urls in dict_to_clean.items():
-            to_return[key] = []
-            for url in urls:
-                if url.startswith('data'):
-                    # print(html_doc.getvalue())
-                    continue
-                to_attach = url.strip()
-                if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
-                    to_attach = to_attach[2:-2]
-                if to_attach.startswith('\'') or to_attach.startswith('"'):
-                    to_attach = to_attach[1:-1]
-                if to_attach.startswith('//'):
-                    to_attach = '{}:{}'.format(scheme, to_attach)
-                to_attach = url.strip()
-                if to_attach.startswith('http'):
-                    to_attach = html.unescape(to_attach)
-                    # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
-                    try:
-                        parsed = urlparse(to_attach)
-                        to_attach = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
-                        to_return[key].append(to_attach)
-                    except Exception:
-                        logging.info('{} - not a URL - {}'.format(key, to_attach))
-                else:
-                    logging.info('{} - not a URL - {}'.format(key, to_attach))
-        return to_return
-
-    def _find_external_ressources(self, html_doc, scheme):
-        # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
-        # Because this is awful.
-        to_return = {'img': [], 'script': [], 'video': [], 'audio': [],
-                     'iframe': [], 'embed': [], 'source': [],
-                     'link': [],
-                     'object': [],
-                     'css': [],
-                     'full_regex': [],
-                     'javascript': []}
-        soup = BeautifulSoup(html_doc, 'lxml')
-        for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
-            if link.get('src'):
-                to_return[link.name].append(link.get('src'))
-
-        for link in soup.find_all(['link']):
-            if link.get('href'):
-                to_return[link.name].append(link.get('href'))
-
-        for link in soup.find_all(['object']):
-            if link.get('data'):
-                to_return[link.name].append(link.get('data'))
-
-        # external stull loaded from css content, because reasons.
-        to_return['css'] = [url.decode() for url in re.findall(rb'background.*url\((.*?)\)', html_doc.getvalue())]
-
-        # Javascript changing the current page
-        # I never found a website where it matched anything useful
-        # to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
-
-        # Just regex in the whole blob, because we can
-        to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
-
-        return self._url_cleanup(to_return, scheme)
-
 
 class IframeNode(HarTreeNode):
 
@@ -125,7 +131,9 @@ class IframeNode(HarTreeNode):
         self.add_feature('body', BytesIO(iframe['html'].encode()))
         self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
         if self.body:
-            self.add_feature('external_ressources', self._find_external_ressources(self.body, scheme))
+            ext = find_external_ressources(self.body, scheme)
+            # print('In Iframe Node', ext)
+            self.add_feature('external_ressources', ext)
 
 
 class HostNode(HarTreeNode):
@@ -210,7 +218,7 @@ class URLNode(HarTreeNode):
     def load_har_entry(self, har_entry, all_requests):
         if not self.name:
             # We're in the actual root node
-            self.add_feature('name', har_entry['request']['url'])  # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
+            self.add_feature('name', unquote_plus(har_entry['request']['url']))  # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
 
         self.add_feature('url_split', urlparse(self.name))
 
@@ -229,7 +237,7 @@ class URLNode(HarTreeNode):
         # Try to get a referer from the headers
         for h in self.request['headers']:
             if h['name'] == 'Referer':
-                self.add_feature('referer', h['value'])
+                self.add_feature('referer', unquote_plus(h['value']))
             if h['name'] == 'User-Agent':
                 self.add_feature('user_agent', h['value'])
 
@@ -244,7 +252,7 @@ class URLNode(HarTreeNode):
             self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
-            self.add_feature('external_ressources', self._find_external_ressources(self.body, self.url_split.scheme))
+            self.add_feature('external_ressources', find_external_ressources(self.body, self.url_split.scheme))
             parsed_response_url = urlparse(self.name)
             filename = os.path.basename(parsed_response_url.path)
             if filename:
@@ -283,6 +291,8 @@ class URLNode(HarTreeNode):
         if har_entry['response']['redirectURL']:
             self.add_feature('redirect', True)
             redirect_url = har_entry['response']['redirectURL']
+            # Remove all possible quotes
+            redirect_url = unquote_plus(redirect_url)
             if re.match('^https?://', redirect_url):
                 # we have a proper URL... hopefully
                 # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
@@ -368,10 +378,12 @@ class CrawledTree(object):
         for har in files:
             # Only using the referrers isn't enough to build the tree (i.e. iframes).
             # The filename is supposed to be '[id].frames.json'
-            iframefile = os.path.join(os.path.dirname(har), os.path.basename(har).split('.')[0] + '.frames.json')
-            if os.path.isfile(iframefile):
-                with open(har, 'r') as f, open(iframefile, 'r') as i:
-                    har2tree = Har2Tree(json.load(f), json.load(i))
+            har = Path(har)
+            iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
+            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
+            if iframefile.is_file() and htmlfile.is_file():
+                with open(har, 'r') as f, open(iframefile, 'r') as i, open(htmlfile, 'rb') as h:
+                    har2tree = Har2Tree(json.load(f), json.load(i), BytesIO(h.read()))
             else:
                 with open(har, 'r') as f:
                     har2tree = Har2Tree(json.load(f))
@@ -419,7 +431,7 @@ class CrawledTree(object):
 
 class Har2Tree(object):
 
-    def __init__(self, har, iframes=[]):
+    def __init__(self, har, iframes=[], rendered_HTML=''):
         self.har = har
         self.hostname_tree = HostNode()
         if not self.har['log']['entries']:
@@ -451,6 +463,8 @@ class Har2Tree(object):
         self.start_time = self.url_tree.start_time
         self.user_agent = self.url_tree.user_agent
 
+        root_url_after_redirect_parsed = urlparse(self.root_url_after_redirect)
+        self.all_ressources_rendered = find_external_ressources(rendered_HTML, root_url_after_redirect_parsed.scheme)
         self.root_referer = self._find_root_referrer()
 
     def _load_url_entries(self):
@@ -460,10 +474,10 @@ class Har2Tree(object):
         all_redirects = []
         all_referer = defaultdict(list)
         all_iframes = defaultdict(list)
-        all_url_requests = {url_entry['request']['url']: [] for url_entry in self.har['log']['entries']}
+        all_url_requests = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har['log']['entries']}
 
         for url_entry in self.har['log']['entries']:
-            n = URLNode(name=url_entry['request']['url'])
+            n = URLNode(name=unquote_plus(url_entry['request']['url']))
             n.load_har_entry(url_entry, all_url_requests.keys())
             if hasattr(n, 'redirect_url'):
                 all_redirects.append(n.redirect_url)
@@ -472,22 +486,28 @@ class Har2Tree(object):
                 if n.referer == n.name:
                     # Skip to avoid loops:
                     #   * referer to itself
-                    logging.warning('Referer to itself ' + n.name)
+                    logging.warning('Referer to itself {}'.format(n.name))
                     continue
                 else:
                     all_referer[n.referer].append(n.name)
             else:
                 # Lookup in the iframe tree
-                matching_urls = self.iframe_tree.search_nodes(name=n.name)
-                if matching_urls:
+                matching_urls_in_iframe_tree = self.iframe_tree.search_nodes(name=n.name)
+                if matching_urls_in_iframe_tree:
+                    # This URL is in the iframe tree
                     n.add_feature('iframe', True)
-                    for matching_url in matching_urls:
-                        for parent in matching_url.get_ancestors():
+                    for iframe_node in matching_urls_in_iframe_tree:
+                        for parent in iframe_node.get_ancestors():
                             if parent.name.startswith('about'):
                                 continue
                             all_iframes[parent.name].append(n.name)
                             # Just in case we have an other node with the same URL that isn't from the iframe
                             n.add_feature('iframe_parent', parent.name)
+                            if hasattr(iframe_node, 'iframe_rendered_body'):
+                                # Doesn't exists if the node is created out of the HTML content of the iframe.
+                                n.add_feature('iframe_rendered_body', iframe_node.body)
+                                n.add_feature('iframe_rendered_body_hash', iframe_node.body_hash)
+                                n.add_feature('iframe_external_ressources', iframe_node.external_ressources)
                             break
 
             nodes_list.append(n)
@@ -500,7 +520,7 @@ class Har2Tree(object):
                 for link in links:
                     root.add_child(IframeNode(name=link))
         for iframe in iframes:
-            child = root.add_child(IframeNode(name=iframe['requestedUrl']))
+            child = root.add_child(IframeNode(name=unquote_plus(iframe['requestedUrl'])))
             child.load_iframe(iframe, scheme=scheme)
             self._load_iframes(iframe['childFrames'], root=child, scheme=scheme)
 
@@ -566,14 +586,21 @@ class Har2Tree(object):
         self._make_subtree(self.url_tree)
 
         if self.nodes_list:
-            print('Nodes not in tree yet')
-            for node in self.nodes_list:
-                print(node.name)
-            orphan = self.url_tree.add_child(URLNode(name='orphan urls'))
+            orphan = URLNode(name='orphan urls')
             orphan.add_feature('hostname', 'orphan.url')
             while self.nodes_list:
-                # Dirty attach everything else, starting with the first one fired
-                self._make_subtree(orphan, [self.nodes_list.pop(0)])
+                node = self.nodes_list.pop(0)
+                for key, values in self.all_ressources_rendered.items():
+                    if node.name in values:
+                        node.add_feature('dynamic', True)
+                        self._make_subtree(self.url_tree, [node])
+                        break
+                else:
+                    # Dirty attach everything else
+                    print('Remaining URL:', node.name)
+                    self._make_subtree(orphan, [node])
+            if orphan.children:
+                self.url_tree.add_child(orphan)
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
@@ -633,6 +660,16 @@ class Har2Tree(object):
                 if hasattr(unode, 'external_ressources'):
                     # the url loads external things, and some of them have no referer....
                     for external_tag, links in unode.external_ressources.items():
+                        for link in links:
+                            if link not in self.all_url_requests:
+                                # We have a lot of false positives
+                                continue
+                            matching_urls = [url_node for url_node in self.all_url_requests.get(link) if url_node in self.nodes_list]
+                            [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
+                            self._make_subtree(unode, matching_urls)
+                if hasattr(unode, 'iframe_external_ressources'):
+                    # the iframes load external things too
+                    for external_tag, links in unode.iframe_external_ressources.items():
                         for link in links:
                             if link not in self.all_url_requests:
                                 # We have a lot of false positives
