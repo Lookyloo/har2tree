@@ -3,10 +3,10 @@
 
 from ete3 import TreeNode
 
+from pathlib import Path
 import json
 import copy
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import uuid
 from urllib.parse import urlparse
 from base64 import b64decode
@@ -66,7 +66,14 @@ class HarTreeNode(TreeNode):
                     to_attach = '{}:{}'.format(scheme, to_attach)
                 to_attach = url.strip()
                 if to_attach.startswith('http'):
-                    to_return[key].append(html.unescape(to_attach))
+                    to_attach = html.unescape(to_attach)
+                    # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
+                    try:
+                        parsed = urlparse(to_attach)
+                        to_attach = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+                        to_return[key].append(to_attach)
+                    except Exception:
+                        logging.info('{} - not a URL - {}'.format(key, to_attach))
                 else:
                     logging.info('{} - not a URL - {}'.format(key, to_attach))
         return to_return
@@ -438,7 +445,7 @@ class Har2Tree(object):
         if iframes:
             self._load_iframes(iframes, root=self.iframe_tree, scheme=iframe_scheme)
 
-        self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer = self._load_url_entries()
+        self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes = self._load_url_entries()
 
         self.url_tree = self.nodes_list.pop(0)
         self.start_time = self.url_tree.start_time
@@ -452,6 +459,7 @@ class Har2Tree(object):
         nodes_list = []
         all_redirects = []
         all_referer = defaultdict(list)
+        all_iframes = defaultdict(list)
         all_url_requests = {url_entry['request']['url']: [] for url_entry in self.har['log']['entries']}
 
         for url_entry in self.har['log']['entries']:
@@ -477,12 +485,14 @@ class Har2Tree(object):
                         for parent in matching_url.get_ancestors():
                             if parent.name.startswith('about'):
                                 continue
-                            all_referer[parent.name].append(n.name)
+                            all_iframes[parent.name].append(n.name)
+                            # Just in case we have an other node with the same URL that isn't from the iframe
+                            n.add_feature('iframe_parent', parent.name)
                             break
 
             nodes_list.append(n)
             all_url_requests[n.name].append(n)
-        return nodes_list, all_url_requests, all_redirects, all_referer
+        return nodes_list, all_url_requests, all_redirects, all_referer, all_iframes
 
     def _load_iframes(self, iframes, root, scheme):
         if hasattr(root, 'external_ressources'):
@@ -593,21 +603,33 @@ class Har2Tree(object):
                 if self.all_referer.get(unode.name):
                     # The URL (unode.name) is in the list of known referers
                     for u in self.all_referer.get(unode.name):
-                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u)
+                                         if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
                         [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                         self._make_subtree(unode, matching_urls)
-                    # remove the referer from the list if empty
                     if not self.all_referer.get(unode.name):
+                        # remove the referer from the list if empty
                         self.all_referer.pop(unode.name)
                 if self.all_referer.get(unode.alternative_url_for_referer):
                     # The URL (unode.name) stripped at the first `#` is in the list of known referers
                     for u in self.all_referer.get(unode.alternative_url_for_referer):
-                        matching_urls = [url_node for url_node in self.all_url_requests.get(u) if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u)
+                                         if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
                         [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                         self._make_subtree(unode, matching_urls)
                     # remove the referer from the list if empty
                     if not self.all_referer.get(unode.alternative_url_for_referer):
                         self.all_referer.pop(unode.alternative_url_for_referer)
+                if self.all_iframes.get(unode.name):
+                    # This node loads iframes. As we already have a tree, we just attach all the clildrens to the node.
+                    for u in self.all_iframes.get(unode.name):
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u)
+                                         if url_node in self.nodes_list and hasattr(url_node, 'iframe_parent') and url_node.iframe_parent == unode.name]
+                        [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
+                        self._make_subtree(unode, matching_urls)
+                    # remove the referer from the list if empty
+                    if not self.all_iframes.get(unode.name):
+                        self.all_iframes.pop(unode.name)
                 if hasattr(unode, 'external_ressources'):
                     # the url loads external things, and some of them have no referer....
                     for external_tag, links in unode.external_ressources.items():
