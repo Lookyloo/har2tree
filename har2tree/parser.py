@@ -431,7 +431,7 @@ class CrawledTree(object):
 
 class Har2Tree(object):
 
-    def __init__(self, har, iframes=[], rendered_HTML=''):
+    def __init__(self, har, iframes=[], rendered_HTML=BytesIO()):
         self.har = har
         self.hostname_tree = HostNode()
         if not self.har['log']['entries']:

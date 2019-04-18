@@ -17,6 +17,14 @@ class TestBasic(unittest.TestCase):
         crawled_tree.join_trees()
         crawled_tree.to_json()
 
+    def test_wired(self):
+        test_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', 'wired')
+        to_process = sorted(glob(os.path.join(test_dir, '*.har')))
+        crawled_tree = CrawledTree(to_process)
+        crawled_tree.find_parents()
+        crawled_tree.join_trees()
+        crawled_tree.to_json()
+
 
 if __name__ == '__main__':
     unittest.main()
