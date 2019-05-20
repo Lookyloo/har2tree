@@ -27,8 +27,80 @@ class Har2TreeError(Exception):
         self.message = message
 
 
+def rebuild_url(base_url, partial, known_urls):
+    splitted_base_url = urlparse(base_url)
+    # Remove all possible quotes
+    partial = partial.strip()
+    partial = html.unescape(partial)
+    partial = unquote_plus(partial)
+    if not partial:
+        return ''
+    if re.match('^https?://', partial):
+        # we have a proper URL... hopefully
+        # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
+        final_url = partial
+    elif partial.startswith('//'):
+        # URL without scheme => takes the scheme from the caller
+        final_url = f'{splitted_base_url.scheme}:{partial}'
+        if final_url not in known_urls:
+            logging.info(f'URL without scheme: {base_url} - {partial} - {final_url}')
+    elif partial.startswith('/') or partial[0] not in [';', '?', '#']:
+        # We have a path
+        if partial[0] != '/':
+            # Yeah, that happens, and the browser appends the path in redirect_url to the current path
+            if base_url[-1] == '/':
+                # Example: http://foo.bar/some/path/ and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
+                final_url = f'{base_url}{partial}'
+            else:
+                # Need to strip the last part of the URL down to the first / (included), and attach the redirect
+                # Example: http://foo.bar/some/path/blah and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
+                last_slash = base_url.rfind('/') + 1
+                final_url = f'{base_url[:last_slash]}{partial}'
+        else:
+            final_url = f'{splitted_base_url.scheme}://{splitted_base_url.netloc}{partial}'
+        if final_url not in known_urls:
+            # There is something weird, to investigate
+            logging.info(f'URL without netloc: {base_url} - {partial} - {final_url}')
+    elif partial.startswith(';'):
+        # URL starts at the parameters
+        final_url = '{}{}'.format(base_url.split(';')[0], partial)
+        if final_url not in known_urls:
+            logging.info(f'URL with only parameter: {base_url} - {partial} - {final_url}')
+    elif partial.startswith('?'):
+        # URL starts at the query
+        final_url = '{}{}'.format(base_url.split('?')[0], partial)
+        if final_url not in known_urls:
+            logging.info(f'URL with only query: {base_url} - {partial} - {final_url}')
+    elif partial.startswith('#'):
+        # URL starts at the fragment
+        final_url = '{}{}'.format(base_url.split('#')[0], partial)
+        if final_url not in known_urls:
+            logging.info(f'URL with only fragment: {base_url} - {partial} - {final_url}')
+
+    if final_url not in known_urls:
+        # sometimes, the port is in the redirect, and striped later on...
+        if final_url.startswith('https://') and ':443' in final_url:
+            final_url = final_url.replace(':443', '')
+        if final_url.startswith('http://') and ':80' in final_url:
+            final_url = final_url.replace(':80', '')
+
+    if final_url not in known_urls:
+        # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
+        try:
+            parsed = urlparse(final_url)
+            final_url = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+        except Exception:
+            logging.info(f'Not a URL: {base_url} - {partial}')
+
+    if final_url not in known_urls and final_url + '/' in known_urls:
+        # last thing I can think of
+        final_url = f'{final_url}/'
+
+    return final_url
+
+
 # Standalone methods to extract and cleanup content from an HTML blob.
-def url_cleanup(dict_to_clean, scheme):
+def url_cleanup(dict_to_clean, base_url, all_requests):
     to_return = {}
     for key, urls in dict_to_clean.items():
         to_return[key] = []
@@ -41,24 +113,15 @@ def url_cleanup(dict_to_clean, scheme):
                 to_attach = to_attach[2:-2]
             if to_attach.startswith('\'') or to_attach.startswith('"'):
                 to_attach = to_attach[1:-1]
-            if to_attach.startswith('//'):
-                to_attach = '{}:{}'.format(scheme, to_attach)
-            to_attach = to_attach.strip()
+            to_attach = rebuild_url(base_url, to_attach, all_requests)
             if to_attach.startswith('http'):
-                to_attach = html.unescape(to_attach)
-                # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
-                try:
-                    parsed = urlparse(to_attach)
-                    to_attach = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
-                    to_return[key].append(unquote_plus(to_attach))
-                except Exception:
-                    logging.info('{} - not a URL - {}'.format(key, to_attach))
+                to_return[key].append(to_attach)
             else:
                 logging.info('{} - not a URL - {}'.format(key, to_attach))
     return to_return
 
 
-def find_external_ressources(html_doc, scheme):
+def find_external_ressources(html_doc, base_url, all_requests, full_text_search=True):
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
     to_return = {'img': [], 'script': [], 'video': [], 'audio': [],
@@ -82,17 +145,18 @@ def find_external_ressources(html_doc, scheme):
         if link.get('data'):
             to_return[link.name].append(link.get('data'))
 
-    # external stull loaded from css content, because reasons.
-    to_return['css'] = [url.decode() for url in re.findall(rb'background.*url\((.*?)\)', html_doc.getvalue())]
+    # external stuff loaded from css content, because reasons.
+    to_return['css'] = [url.decode() for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue())]
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    # to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+    to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
 
-    # Just regex in the whole blob, because we can
-    to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
-    # print("################ REGEXES ", to_return['full_regex'])
-    return url_cleanup(to_return, scheme)
+    if full_text_search:
+        # Just regex in the whole blob, because we can
+        to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+        # print("################ REGEXES ", to_return['full_regex'])
+    return url_cleanup(to_return, base_url, all_requests)
 
 # ##################################################################
 
@@ -127,11 +191,11 @@ class IframeNode(HarTreeNode):
         self.features_to_skip.add('body')
         self.features_to_skip.add('external_ressources')
 
-    def load_iframe(self, iframe, scheme):
+    def load_iframe(self, iframe, base_url, all_requests):
         self.add_feature('body', BytesIO(iframe['html'].encode()))
         self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
         if self.body:
-            ext = find_external_ressources(self.body, scheme)
+            ext = find_external_ressources(self.body, base_url, all_requests)
             # print('In Iframe Node', ext)
             self.add_feature('external_ressources', ext)
 
@@ -252,7 +316,7 @@ class URLNode(HarTreeNode):
             self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
-            self.add_feature('external_ressources', find_external_ressources(self.body, self.url_split.scheme))
+            self.add_feature('external_ressources', find_external_ressources(self.body, self.name, all_requests))
             parsed_response_url = urlparse(self.name)
             filename = os.path.basename(parsed_response_url.path)
             if filename:
@@ -291,67 +355,8 @@ class URLNode(HarTreeNode):
         if har_entry['response']['redirectURL']:
             self.add_feature('redirect', True)
             redirect_url = har_entry['response']['redirectURL']
-            # Remove all possible quotes
-            redirect_url = unquote_plus(redirect_url)
-            if re.match('^https?://', redirect_url):
-                # we have a proper URL... hopefully
-                # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
-                pass
-            elif redirect_url.startswith('//'):
-                # URL without scheme => takes the scheme from the caller
-                redirect_url = '{}:{}'.format(self.url_split.scheme, redirect_url)
-                if redirect_url not in all_requests:
-                    logging.warning('URL without scheme: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
-            elif redirect_url.startswith('/') or redirect_url[0] not in [';', '?', '#']:
-                # We have a path
-                if redirect_url[0] != '/':
-                    # Yeah, that happens, and the browser appends the path in redirect_url to the current path
-                    if self.name[-1] == '/':
-                        # Example: http://foo.bar/some/path/ and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
-                        redirect_url = '{}{}'.format(self.name, redirect_url)
-                    else:
-                        # Need to strip the last part of the URL down to the first / (included), and attach the redirect
-                        # Example: http://foo.bar/some/path/blah and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
-                        last_slash = self.name.rfind('/') + 1
-                        redirect_url = '{}{}'.format(self.name[:last_slash], redirect_url)
-                else:
-                    parsed_request_url = urlparse(self.name)
-                    redirect_url = '{}://{}{}'.format(self.url_split.scheme, parsed_request_url.netloc, redirect_url)
-                if redirect_url not in all_requests:
-                    # There is something weird, to investigate
-                    logging.warning('URL without netloc: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
-            elif redirect_url.startswith(';'):
-                # URL starts at the parameters
-                redirect_url = '{}{}'.format(self.name.split(';')[0], redirect_url)
-                if redirect_url not in all_requests:
-                    logging.warning('URL with only parameter: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
-            elif redirect_url.startswith('?'):
-                # URL starts at the query
-                redirect_url = '{}{}'.format(self.name.split('?')[0], redirect_url)
-                if redirect_url not in all_requests:
-                    logging.warning('URL with only query: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
-            elif redirect_url.startswith('#'):
-                # URL starts at the fragment
-                redirect_url = '{}{}'.format(self.name.split('#')[0], redirect_url)
-                if redirect_url not in all_requests:
-                    logging.warning('URL with only fragment: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                        original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
-
-            if redirect_url not in all_requests:
-                # sometimes, the port is in the redirect, and striped later on...
-                if redirect_url.startswith('https://') and ':443' in redirect_url:
-                    redirect_url = redirect_url.replace(':443', '')
-                if redirect_url.startswith('http://') and ':80' in redirect_url:
-                    redirect_url = redirect_url.replace(':80', '')
-
-            if redirect_url not in all_requests and redirect_url + '/' in all_requests:
-                # last think I can think of
-                redirect_url += '/'
-
+            # Rebuild the redirect URL so it matches the entry that sould be in all_requests
+            redirect_url = rebuild_url(self.name, redirect_url, all_requests)
             # At this point, we should have a URL available in all_requests...
             if redirect_url in all_requests:
                 self.add_feature('redirect_url', redirect_url)
@@ -449,13 +454,14 @@ class Har2Tree(object):
 
         if self.root_url_after_redirect:
             self.iframe_tree = IframeNode(name=self.root_url_after_redirect)
-            iframe_scheme = urlparse(self.root_url_after_redirect).scheme
+            iframe_base_url = self.root_url_after_redirect
         else:
             self.iframe_tree = IframeNode(name=self.root_url)
-            iframe_scheme = urlparse(self.root_url).scheme
+            iframe_base_url = self.root_url
 
         if iframes:
-            self._load_iframes(iframes, root=self.iframe_tree, scheme=iframe_scheme)
+            all_requests = [unquote_plus(url_entry['request']['url']) for url_entry in self.har['log']['entries']]
+            self._load_iframes(iframes, root=self.iframe_tree, base_url=iframe_base_url, all_requests=all_requests)
 
         self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes = self._load_url_entries()
 
@@ -463,8 +469,7 @@ class Har2Tree(object):
         self.start_time = self.url_tree.start_time
         self.user_agent = self.url_tree.user_agent
 
-        root_url_after_redirect_parsed = urlparse(self.root_url_after_redirect)
-        self.all_ressources_rendered = find_external_ressources(rendered_HTML, root_url_after_redirect_parsed.scheme)
+        self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url_after_redirect, self.all_url_requests)
         self.root_referer = self._find_root_referrer()
 
     def _load_url_entries(self):
@@ -514,15 +519,15 @@ class Har2Tree(object):
             all_url_requests[n.name].append(n)
         return nodes_list, all_url_requests, all_redirects, all_referer, all_iframes
 
-    def _load_iframes(self, iframes, root, scheme):
+    def _load_iframes(self, iframes, root, base_url, all_requests):
         if hasattr(root, 'external_ressources'):
             for external_tag, links in root.external_ressources.items():
                 for link in links:
                     root.add_child(IframeNode(name=link))
         for iframe in iframes:
             child = root.add_child(IframeNode(name=unquote_plus(iframe['requestedUrl'])))
-            child.load_iframe(iframe, scheme=scheme)
-            self._load_iframes(iframe['childFrames'], root=child, scheme=scheme)
+            child.load_iframe(iframe, base_url, all_requests)
+            self._load_iframes(iframe['childFrames'], root=child, base_url=base_url, all_requests=all_requests)
 
     def get_host_node_by_uuid(self, uuid):
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
