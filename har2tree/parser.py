@@ -469,7 +469,10 @@ class Har2Tree(object):
         self.start_time = self.url_tree.start_time
         self.user_agent = self.url_tree.user_agent
 
-        self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url_after_redirect, self.all_url_requests)
+        if self.root_url_after_redirect:
+            self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url_after_redirect, self.all_url_requests)
+        else:
+            self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url, self.all_url_requests)
         self.root_referer = self._find_root_referrer()
 
     def _load_url_entries(self):
