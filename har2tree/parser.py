@@ -135,15 +135,15 @@ def find_external_ressources(html_doc, base_url, all_requests, full_text_search=
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
         if link.get('src'):
             # print('******** src', link.get('src'))
-            to_return[link.name].append(link.get('src'))
+            to_return[link.name].append(unquote_plus(link.get('src')))
 
     for link in soup.find_all(['link']):
         if link.get('href'):
-            to_return[link.name].append(link.get('href'))
+            to_return[link.name].append(unquote_plus(link.get('href')))
 
     for link in soup.find_all(['object']):
         if link.get('data'):
-            to_return[link.name].append(link.get('data'))
+            to_return[link.name].append(unquote_plus(link.get('data')))
 
     # external stuff loaded from css content, because reasons.
     to_return['css'] = [url.decode() for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue())]
