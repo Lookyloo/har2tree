@@ -225,10 +225,15 @@ class HostNode(HarTreeNode):
         self.add_feature('unset_mimetype', 0)
         self.add_feature('unknown_mimetype', 0)
         self.add_feature('iframe', 0)
+        self.add_feature('http_content', False)
+        self.add_feature('https_content', False)
+        self.add_feature('mixed_content', False)
 
     def to_dict(self):
         to_return = super(HostNode, self).to_dict()
         to_return['urls_count'] = len(self.urls)
+        if self.http_content and self.https_content:
+            self.mixed_content = True
         return to_return
 
     def add_url(self, url):
@@ -266,6 +271,11 @@ class HostNode(HarTreeNode):
             self.unknown_mimetype += 1
         if hasattr(url, 'iframe'):
             self.iframe += 1
+
+        if url.name.startswith('http://'):
+            self.http_content = True
+        elif url.name.startswith('https://'):
+            self.https_content = True
 
 
 class URLNode(HarTreeNode):
