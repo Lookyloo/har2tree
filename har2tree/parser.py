@@ -88,7 +88,12 @@ def rebuild_url(base_url, partial, known_urls):
         # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
         try:
             parsed = urlparse(final_url)
-            final_url = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+            if parsed.path:
+                # NOTE: Path('').resolve() => PosixPath('/path/to/current/directory') <= if you run that from your home dir, it is the path to your home dir
+                # FIXME: Path('sdsfs/../dsfsdfs/../..').resolve() => PosixPath('/path/to/current')
+                final_url = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+            else:
+                final_url = parsed._replace(path='/').geturl()
         except Exception:
             logging.info(f'Not a URL: {base_url} - {partial}')
 
