@@ -116,8 +116,11 @@ def url_cleanup(dict_to_clean, base_url, all_requests):
             to_attach = url.strip()
             if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
                 to_attach = to_attach[2:-2]
-            if to_attach.startswith('\'') or to_attach.startswith('"'):
+            if to_attach.startswith("'") or to_attach.startswith('"'):
                 to_attach = to_attach[1:-1]
+            if to_attach.endswith("'") or to_attach.endswith('"'):
+                # A quote at the end of the URL can be selected by the fulltext regex
+                to_attach = to_attach[:-1]
             to_attach = rebuild_url(base_url, to_attach, all_requests)
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
@@ -135,7 +138,8 @@ def find_external_ressources(html_doc, base_url, all_requests, full_text_search=
                  'object': [],
                  'css': [],
                  'full_regex': [],
-                 'javascript': []}
+                 'javascript': [],
+                 'meta_refresh': []}
     soup = BeautifulSoup(html_doc, 'lxml')
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
         if link.get('src'):
@@ -149,6 +153,12 @@ def find_external_ressources(html_doc, base_url, all_requests, full_text_search=
     for link in soup.find_all(['object']):
         if link.get('data'):
             to_return[link.name].append(unquote_plus(link.get('data')))
+
+    # Search for meta refresh redirect madness
+    # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
+    meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
+    if meta_refresh:
+        to_return['meta_refresh'].append(meta_refresh['content'].partition('=')[2])
 
     # external stuff loaded from css content, because reasons.
     to_return['css'] = [url.decode() for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue())]
