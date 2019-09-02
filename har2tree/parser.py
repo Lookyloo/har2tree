@@ -20,6 +20,8 @@ from operator import itemgetter
 from bs4 import BeautifulSoup
 import html
 
+import ipaddress
+
 
 class Har2TreeError(Exception):
     def __init__(self, message):
@@ -303,6 +305,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('start_time')
         self.features_to_skip.add('time')
         self.features_to_skip.add('time_content_received')
+        self.features_to_skip.add('ip_address')
 
     def load_har_entry(self, har_entry, all_requests):
         if not self.name:
@@ -325,9 +328,9 @@ class URLNode(HarTreeNode):
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
         for h in self.request['headers']:
-            if h['name'] == 'Referer':
+            if h['name'].lower() == 'referer':
                 self.add_feature('referer', unquote_plus(h['value']))
-            if h['name'] == 'User-Agent':
+            if h['name'].lower() == 'user-agent':
                 self.add_feature('user_agent', h['value'])
 
         self.add_feature('response', har_entry['response'])
@@ -338,7 +341,10 @@ class URLNode(HarTreeNode):
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
             self.add_feature('empty_response', True)
         else:
-            self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
+            if har_entry['response']['content'].get('encoding') == 'base64':
+                self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
+            else:
+                self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
             self.add_feature('external_ressources', find_external_ressources(self.body, self.name, all_requests))
@@ -376,6 +382,24 @@ class URLNode(HarTreeNode):
         else:
             self.add_feature('unknown_mimetype', True)
             logging.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
+
+        # NOTE: Chrome/Chromium only features
+        if har_entry.get('serverIPAddress'):
+            self.add_feature('ip_address', ipaddress.ip_address(har_entry['serverIPAddress']))
+        if '_initiator' in har_entry:
+            if har_entry['_initiator']['type'] == 'other':
+                pass
+            elif har_entry['_initiator']['type'] == 'parser' and har_entry['_initiator']['url']:
+                self.add_feature('initiator_url', har_entry['_initiator']['url'])
+            elif har_entry['_initiator']['type'] == 'script':
+                if har_entry['_initiator']['stack']['callFrames'] and har_entry['_initiator']['stack']['callFrames'][0]['url']:
+                    self.add_feature('initiator_url', har_entry['_initiator']['stack']['callFrames'][0]['url'])
+            elif har_entry['_initiator']['type'] == 'redirect':
+                # FIXME: Need usecase
+                raise Exception(f'Got a redirect! - {har_entry}')
+            else:
+                # FIXME: Need usecase
+                raise Exception(har_entry)
 
         if har_entry['response']['redirectURL']:
             self.add_feature('redirect', True)
@@ -488,7 +512,7 @@ class Har2Tree(object):
             all_requests = [unquote_plus(url_entry['request']['url']) for url_entry in self.har['log']['entries']]
             self._load_iframes(iframes, root=self.iframe_tree, base_url=iframe_base_url, all_requests=all_requests)
 
-        self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes = self._load_url_entries()
+        self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes, self.all_initiator_url = self._load_url_entries()
 
         self.url_tree = self.nodes_list.pop(0)
         self.start_time = self.url_tree.start_time
@@ -506,6 +530,7 @@ class Har2Tree(object):
         nodes_list = []
         all_redirects = []
         all_referer = defaultdict(list)
+        all_initiator_url = defaultdict(list)
         all_iframes = defaultdict(list)
         all_url_requests = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har['log']['entries']}
 
@@ -514,6 +539,10 @@ class Har2Tree(object):
             n.load_har_entry(url_entry, all_url_requests.keys())
             if hasattr(n, 'redirect_url'):
                 all_redirects.append(n.redirect_url)
+
+            if hasattr(n, 'initiator_url'):
+                # The HAR file was created by chrome/chromium and we got the _initiator key
+                all_initiator_url[n.initiator_url].append(n.name)
 
             if hasattr(n, 'referer'):
                 if n.referer == n.name:
@@ -545,7 +574,7 @@ class Har2Tree(object):
 
             nodes_list.append(n)
             all_url_requests[n.name].append(n)
-        return nodes_list, all_url_requests, all_redirects, all_referer, all_iframes
+        return nodes_list, all_url_requests, all_redirects, all_referer, all_iframes, all_initiator_url
 
     def _load_iframes(self, iframes, root, base_url, all_requests):
         if hasattr(root, 'external_ressources'):
@@ -660,6 +689,16 @@ class Har2Tree(object):
                 [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                 self._make_subtree(unode, matching_urls)
             else:
+                if self.all_initiator_url.get(unode.name):
+                    # The URL (unode.name) is in the list of known urls initiating calls
+                    for u in self.all_initiator_url.get(unode.name):
+                        matching_urls = [url_node for url_node in self.all_url_requests.get(u)
+                                         if url_node in self.nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
+                        [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
+                        self._make_subtree(unode, matching_urls)
+                    if not self.all_initiator_url.get(unode.name):
+                        # remove the initiator url from the list if empty
+                        self.all_initiator_url.pop(unode.name)
                 if self.all_referer.get(unode.name):
                     # The URL (unode.name) is in the list of known referers
                     for u in self.all_referer.get(unode.name):
