@@ -18,7 +18,7 @@ from io import BytesIO
 import hashlib
 from operator import itemgetter
 from bs4 import BeautifulSoup
-import html
+# import html
 
 import ipaddress
 
@@ -33,7 +33,6 @@ def rebuild_url(base_url, partial, known_urls):
     splitted_base_url = urlparse(base_url)
     # Remove all possible quotes
     partial = partial.strip()
-    partial = html.unescape(partial)
     partial = unquote_plus(partial)
     if not partial:
         return ''
@@ -173,6 +172,9 @@ def find_external_ressources(html_doc, base_url, all_requests, full_text_search=
         # Just regex in the whole blob, because we can
         to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
         # print("################ REGEXES ", to_return['full_regex'])
+    # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
+    # So the next line is disabled and will be reenabled if it turns out to be required at a later time.
+    # to_attach = html.unescape(to_attach)
     return url_cleanup(to_return, base_url, all_requests)
 
 # ##################################################################
@@ -390,10 +392,11 @@ class URLNode(HarTreeNode):
             if har_entry['_initiator']['type'] == 'other':
                 pass
             elif har_entry['_initiator']['type'] == 'parser' and har_entry['_initiator']['url']:
-                self.add_feature('initiator_url', har_entry['_initiator']['url'])
+                self.add_feature('initiator_url', unquote_plus(har_entry['_initiator']['url']))
             elif har_entry['_initiator']['type'] == 'script':
-                if har_entry['_initiator']['stack']['callFrames'] and har_entry['_initiator']['stack']['callFrames'][0]['url']:
-                    self.add_feature('initiator_url', har_entry['_initiator']['stack']['callFrames'][0]['url'])
+                url = self._find_initiator_in_stack(har_entry['_initiator']['stack'])
+                if url:
+                    self.add_feature('initiator_url', url)
             elif har_entry['_initiator']['type'] == 'redirect':
                 # FIXME: Need usecase
                 raise Exception(f'Got a redirect! - {har_entry}')
@@ -415,6 +418,14 @@ class URLNode(HarTreeNode):
                 self.add_feature('redirect_url', har_entry['response']['redirectURL'])
                 logging.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
                     original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+
+    def _find_initiator_in_stack(self, stack):
+        # Because everything is terrible, and the call stack can have parents
+        if stack['callFrames']:
+            return unquote_plus(stack['callFrames'][0]['url'])
+        if stack['parent']:
+            return self._find_initiator_in_stack(stack['parent'])
+        return None
 
 
 class CrawledTree(object):
