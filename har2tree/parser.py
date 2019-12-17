@@ -19,17 +19,18 @@ import hashlib
 from operator import itemgetter
 from bs4 import BeautifulSoup
 # import html
+from typing import List
 
 import ipaddress
 
 
 class Har2TreeError(Exception):
-    def __init__(self, message):
+    def __init__(self, message: str):
         super(Har2TreeError, self).__init__(message)
         self.message = message
 
 
-def rebuild_url(base_url, partial, known_urls):
+def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
     splitted_base_url = urlparse(base_url)
     # Remove all possible quotes
     partial = partial.strip()
@@ -106,7 +107,7 @@ def rebuild_url(base_url, partial, known_urls):
 
 
 # Standalone methods to extract and cleanup content from an HTML blob.
-def url_cleanup(dict_to_clean, base_url, all_requests):
+def url_cleanup(dict_to_clean: dict, base_url: str, all_requests: List[str]) -> dict:
     to_return = {}
     for key, urls in dict_to_clean.items():
         to_return[key] = []
@@ -130,7 +131,7 @@ def url_cleanup(dict_to_clean, base_url, all_requests):
     return to_return
 
 
-def find_external_ressources(html_doc, base_url, all_requests, full_text_search=True):
+def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> dict:
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
     to_return = {'img': [], 'script': [], 'video': [], 'audio': [],
@@ -187,7 +188,7 @@ class HarTreeNode(TreeNode):
         self.add_feature('uuid', str(uuid.uuid4()))
         self.features_to_skip = set(['dist', 'support'])
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         to_return = {'uuid': self.uuid, 'children': []}
         for feature in self.features:
             if feature in self.features_to_skip:
@@ -199,7 +200,7 @@ class HarTreeNode(TreeNode):
 
         return to_return
 
-    def to_json(self):
+    def to_json(self) -> str:
         return json.dumps(self.to_dict())
 
 
@@ -210,91 +211,13 @@ class IframeNode(HarTreeNode):
         self.features_to_skip.add('body')
         self.features_to_skip.add('external_ressources')
 
-    def load_iframe(self, iframe, base_url, all_requests):
+    def load_iframe(self, iframe: dict, base_url: str, all_requests: List[str]):
         self.add_feature('body', BytesIO(iframe['html'].encode()))
         self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
         if self.body:
             ext = find_external_ressources(self.body, base_url, all_requests)
             # print('In Iframe Node', ext)
             self.add_feature('external_ressources', ext)
-
-
-class HostNode(HarTreeNode):
-
-    def __init__(self, **kwargs):
-        super(HostNode, self).__init__(**kwargs)
-        # Do not add the URLs in the json dump
-        self.features_to_skip.add('urls')
-
-        self.add_feature('urls', [])
-        self.add_feature('request_cookie', 0)
-        self.add_feature('response_cookie', 0)
-        self.add_feature('js', 0)
-        self.add_feature('redirect', 0)
-        self.add_feature('redirect_to_nothing', 0)
-        self.add_feature('image', 0)
-        self.add_feature('css', 0)
-        self.add_feature('json', 0)
-        self.add_feature('html', 0)
-        self.add_feature('font', 0)
-        self.add_feature('octet_stream', 0)
-        self.add_feature('text', 0)
-        self.add_feature('video', 0)
-        self.add_feature('livestream', 0)
-        self.add_feature('unset_mimetype', 0)
-        self.add_feature('unknown_mimetype', 0)
-        self.add_feature('iframe', 0)
-        self.add_feature('http_content', False)
-        self.add_feature('https_content', False)
-        self.add_feature('mixed_content', False)
-
-    def to_dict(self):
-        to_return = super(HostNode, self).to_dict()
-        to_return['urls_count'] = len(self.urls)
-        if self.http_content and self.https_content:
-            self.mixed_content = True
-        return to_return
-
-    def add_url(self, url):
-        if not self.name:
-            # Only used when initializing the root node
-            self.add_feature('name', url.hostname)
-        self.urls.append(url)
-        if hasattr(url, 'request_cookie'):
-            self.request_cookie += len(url.request_cookie)
-        if hasattr(url, 'response_cookie'):
-            self.response_cookie += len(url.response_cookie)
-        if hasattr(url, 'js'):
-            self.js += 1
-        if hasattr(url, 'redirect'):
-            self.redirect += 1
-        if hasattr(url, 'redirect_to_nothing'):
-            self.redirect_to_nothing += 1
-        if hasattr(url, 'image'):
-            self.image += 1
-        if hasattr(url, 'css'):
-            self.css += 1
-        if hasattr(url, 'json'):
-            self.json += 1
-        if hasattr(url, 'html'):
-            self.html += 1
-        if hasattr(url, 'font'):
-            self.font += 1
-        if hasattr(url, 'octet_stream'):
-            self.octet_stream += 1
-        if hasattr(url, 'text'):
-            self.text += 1
-        if hasattr(url, 'video') or hasattr(url, 'livestream'):
-            self.video += 1
-        if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
-            self.unknown_mimetype += 1
-        if hasattr(url, 'iframe'):
-            self.iframe += 1
-
-        if url.name.startswith('http://'):
-            self.http_content = True
-        elif url.name.startswith('https://'):
-            self.https_content = True
 
 
 class URLNode(HarTreeNode):
@@ -309,7 +232,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def load_har_entry(self, har_entry, all_requests):
+    def load_har_entry(self, har_entry: dict, all_requests: List[str]):
         if not self.name:
             # We're in the actual root node
             self.add_feature('name', unquote_plus(har_entry['request']['url']))  # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
@@ -419,7 +342,7 @@ class URLNode(HarTreeNode):
                 logging.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
                     original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
 
-    def _find_initiator_in_stack(self, stack):
+    def _find_initiator_in_stack(self, stack: dict):
         # Because everything is terrible, and the call stack can have parents
         if stack['callFrames']:
             return unquote_plus(stack['callFrames'][0]['url'])
@@ -428,75 +351,88 @@ class URLNode(HarTreeNode):
         return None
 
 
-class CrawledTree(object):
+class HostNode(HarTreeNode):
 
-    def __init__(self, harfiles):
-        """ Load all the harfiles passed as parameter"""
-        self.hartrees = self.load_all_harfiles(harfiles)
-        if not self.hartrees:
-            raise Har2TreeError('No usable HAR files found.')
-        self.root_hartree = None
+    def __init__(self, **kwargs):
+        super(HostNode, self).__init__(**kwargs)
+        # Do not add the URLs in the json dump
+        self.features_to_skip.add('urls')
 
-    def load_all_harfiles(self, files):
-        """Open all the HAR files"""
-        loaded = []
-        for har in files:
-            # Only using the referrers isn't enough to build the tree (i.e. iframes).
-            # The filename is supposed to be '[id].frames.json'
-            har = Path(har)
-            iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
-            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
-            if iframefile.is_file() and htmlfile.is_file():
-                with open(har, 'r') as f, open(iframefile, 'r') as i, open(htmlfile, 'rb') as h:
-                    har2tree = Har2Tree(json.load(f), json.load(i), BytesIO(h.read()))
-            else:
-                with open(har, 'r') as f:
-                    har2tree = Har2Tree(json.load(f))
-            if not har2tree.has_entries:
-                continue
-            har2tree.make_tree()
-            loaded.append(har2tree)
-        return loaded
+        self.add_feature('urls', [])
+        self.add_feature('request_cookie', 0)
+        self.add_feature('response_cookie', 0)
+        self.add_feature('js', 0)
+        self.add_feature('redirect', 0)
+        self.add_feature('redirect_to_nothing', 0)
+        self.add_feature('image', 0)
+        self.add_feature('css', 0)
+        self.add_feature('json', 0)
+        self.add_feature('html', 0)
+        self.add_feature('font', 0)
+        self.add_feature('octet_stream', 0)
+        self.add_feature('text', 0)
+        self.add_feature('video', 0)
+        self.add_feature('livestream', 0)
+        self.add_feature('unset_mimetype', 0)
+        self.add_feature('unknown_mimetype', 0)
+        self.add_feature('iframe', 0)
+        self.add_feature('http_content', False)
+        self.add_feature('https_content', False)
+        self.add_feature('mixed_content', False)
 
-    def find_parents(self):
-        """Find all the trees where the first entry has a referer.
-        Meaning: This is a sub-tree to attach to some other node.
-        """
-        self.referers = defaultdict(list)
-        for hartree in self.hartrees:
-            if hartree.root_referer:
-                self.referers[hartree.root_referer].append(hartree)
+    def to_dict(self) -> dict:
+        to_return = super(HostNode, self).to_dict()
+        to_return['urls_count'] = len(self.urls)
+        if self.http_content and self.https_content:
+            self.mixed_content = True
+        return to_return
 
-    def join_trees(self, root=None, attach_to=None):
-        if root is None:
-            self.root_hartree = copy.deepcopy(self.hartrees[0])
-            self.start_time = self.root_hartree.start_time
-            self.user_agent = self.root_hartree.user_agent
-            self.root_url = self.root_hartree.root_url
-            root = self.root_hartree
-            attach_to = root.url_tree
-        if root.root_url_after_redirect:
-            # If the first URL is redirected, the referer of the subtree
-            # will be the redirect.
-            sub_trees = self.referers.pop(root.root_url_after_redirect, None)
-        else:
-            sub_trees = self.referers.pop(root.root_url, None)
-        if not sub_trees:
-            # No subtree to attach
-            return
-        for sub_tree in sub_trees:
-            to_attach = copy.deepcopy(sub_tree.url_tree)
-            attach_to.add_child(to_attach)
-            self.join_trees(sub_tree, to_attach)
-        self.root_hartree.make_hostname_tree(self.root_hartree.url_tree, self.root_hartree.hostname_tree)
+    def add_url(self, url: URLNode):
+        if not self.name:
+            # Only used when initializing the root node
+            self.add_feature('name', url.hostname)
+        self.urls.append(url)
+        if hasattr(url, 'request_cookie'):
+            self.request_cookie += len(url.request_cookie)
+        if hasattr(url, 'response_cookie'):
+            self.response_cookie += len(url.response_cookie)
+        if hasattr(url, 'js'):
+            self.js += 1
+        if hasattr(url, 'redirect'):
+            self.redirect += 1
+        if hasattr(url, 'redirect_to_nothing'):
+            self.redirect_to_nothing += 1
+        if hasattr(url, 'image'):
+            self.image += 1
+        if hasattr(url, 'css'):
+            self.css += 1
+        if hasattr(url, 'json'):
+            self.json += 1
+        if hasattr(url, 'html'):
+            self.html += 1
+        if hasattr(url, 'font'):
+            self.font += 1
+        if hasattr(url, 'octet_stream'):
+            self.octet_stream += 1
+        if hasattr(url, 'text'):
+            self.text += 1
+        if hasattr(url, 'video') or hasattr(url, 'livestream'):
+            self.video += 1
+        if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
+            self.unknown_mimetype += 1
+        if hasattr(url, 'iframe'):
+            self.iframe += 1
 
-    def to_json(self):
-        return self.root_hartree.to_json()
+        if url.name.startswith('http://'):
+            self.http_content = True
+        elif url.name.startswith('https://'):
+            self.https_content = True
 
 
 class Har2Tree(object):
 
-    def __init__(self, har, iframes=[], rendered_HTML=BytesIO()):
+    def __init__(self, har: dict, iframes: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
+        """Build the ETE Toolkit tree based on the HAR file, iframes, and HTML content"""
         self.har = har
         self.hostname_tree = HostNode()
         if not self.har['log']['entries']:
@@ -587,7 +523,7 @@ class Har2Tree(object):
             all_url_requests[n.name].append(n)
         return nodes_list, all_url_requests, all_redirects, all_referer, all_iframes, all_initiator_url
 
-    def _load_iframes(self, iframes, root, base_url, all_requests):
+    def _load_iframes(self, iframes: List[dict], root: IframeNode, base_url: str, all_requests: List[str]):
         if hasattr(root, 'external_ressources'):
             for external_tag, links in root.external_ressources.items():
                 for link in links:
@@ -597,13 +533,13 @@ class Har2Tree(object):
             child.load_iframe(iframe, base_url, all_requests)
             self._load_iframes(iframe['childFrames'], root=child, base_url=base_url, all_requests=all_requests)
 
-    def get_host_node_by_uuid(self, uuid):
+    def get_host_node_by_uuid(self, uuid: str) -> HostNode:
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
 
-    def get_url_node_by_uuid(self, uuid):
+    def get_url_node_by_uuid(self, uuid: str) -> URLNode:
         return self.url_tree.search_nodes(uuid=uuid)[0]
 
-    def _find_root_after_redirect(self):
+    def _find_root_after_redirect(self) -> str:
         '''Iterate through the list of entries until there are no redirectURL in
         the response anymore: it is the first URL loading content.
         '''
@@ -631,7 +567,7 @@ class Har2Tree(object):
                 return h['value']
         return None
 
-    def make_hostname_tree(self, root_nodes_url, root_node_hostname):
+    def make_hostname_tree(self, root_nodes_url: List[URLNode], root_node_hostname: HostNode):
         """ Groups all the URLs by domain in the hostname tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
@@ -655,7 +591,7 @@ class Har2Tree(object):
             for child_node_hostname, child_nodes_url in sub_roots.items():
                 self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
-    def make_tree(self):
+    def make_tree(self) -> URLNode:
         self._make_subtree(self.url_tree)
 
         if self.nodes_list:
@@ -680,7 +616,7 @@ class Har2Tree(object):
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
-    def _make_subtree(self, root, nodes_to_attach=None):
+    def _make_subtree(self, root: URLNode, nodes_to_attach: List[URLNode]=None):
         if nodes_to_attach is None:
             # We're in the actual root node
             unodes = [self.url_tree]
@@ -760,3 +696,71 @@ class Har2Tree(object):
                             matching_urls = [url_node for url_node in self.all_url_requests.get(link) if url_node in self.nodes_list]
                             [self.nodes_list.remove(matching_url) for matching_url in matching_urls]
                             self._make_subtree(unode, matching_urls)
+
+
+class CrawledTree(object):
+
+    def __init__(self, harfiles: List[str]):
+        """ Convert a list of HAR files into a ETE Toolkit tree"""
+        self.hartrees = self.load_all_harfiles(harfiles)
+        if not self.hartrees:
+            raise Har2TreeError('No usable HAR files found.')
+        self.root_hartree = None
+
+    def load_all_harfiles(self, files: List[str]) -> List[Har2Tree]:
+        """Open all the HAR files and build the trees"""
+        loaded = []
+        for har in files:
+            # Only using the referrers isn't enough to build the tree (i.e. iframes).
+            # The filename is supposed to be '[id].frames.json'
+            har = Path(har)
+            iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
+            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
+            if iframefile.is_file() and htmlfile.is_file():
+                with har.open() as f, iframefile.open() as i, htmlfile.open('rb') as h:
+                    har2tree = Har2Tree(json.load(f), json.load(i), BytesIO(h.read()))
+            else:
+                with har.open() as f:
+                    har2tree = Har2Tree(json.load(f))
+            if not har2tree.has_entries:
+                continue
+            har2tree.make_tree()
+            loaded.append(har2tree)
+        return loaded
+
+    def find_parents(self):
+        """Find all the trees where the first entry has a referer.
+        Meaning: This is a sub-tree to attach to some other node.
+        """
+        self.referers = defaultdict(list)
+        for hartree in self.hartrees:
+            if hartree.root_referer:
+                self.referers[hartree.root_referer].append(hartree)
+
+    def join_trees(self, root: Har2Tree=None, attach_to: Har2Tree=None):
+        """Connect the trees together if we have more than one HAR file"""
+        if root is None:
+            self.root_hartree = copy.deepcopy(self.hartrees[0])
+            self.start_time = self.root_hartree.start_time
+            self.user_agent = self.root_hartree.user_agent
+            self.root_url = self.root_hartree.root_url
+            root = self.root_hartree
+            attach_to = root.url_tree
+        if root.root_url_after_redirect:
+            # If the first URL is redirected, the referer of the subtree
+            # will be the redirect.
+            sub_trees = self.referers.pop(root.root_url_after_redirect, None)
+        else:
+            sub_trees = self.referers.pop(root.root_url, None)
+        if not sub_trees:
+            # No subtree to attach
+            return
+        for sub_tree in sub_trees:
+            to_attach = copy.deepcopy(sub_tree.url_tree)
+            attach_to.add_child(to_attach)
+            self.join_trees(sub_tree, to_attach)
+        self.root_hartree.make_hostname_tree(self.root_hartree.url_tree, self.root_hartree.hostname_tree)
+
+    def to_json(self):
+        """JSON output for d3js"""
+        return self.root_hartree.to_json()
