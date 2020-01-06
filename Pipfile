@@ -8,6 +8,7 @@ nose = "*"
 coverage = "*"
 coveralls = "*"
 codecov = "*"
+mypy = "*"
 
 [packages]
 har2tree = {editable = true,path = "."}
