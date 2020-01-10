@@ -126,7 +126,7 @@ def url_cleanup(dict_to_clean: dict, base_url: str, all_requests: List[str]) -> 
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
             else:
-                logging.info('{} - not a URL - {}'.format(key, to_attach))
+                logging.info('{key} - not a URL - {to_attach}')
     return to_return
 
 
@@ -195,12 +195,12 @@ class HarTreeNode(TreeNode):
             to_return[feature] = getattr(self, feature)
 
         for child in self.children:
-            to_return['children'].append(child.to_dict())
+            to_return['children'].append(child)
 
         return to_return
 
     def to_json(self) -> str:
-        return json.dumps(self.to_dict())
+        return json.dumps(self.to_dict(), default=harnode_json_default)
 
 
 class IframeNode(HarTreeNode):
@@ -247,7 +247,7 @@ class URLNode(HarTreeNode):
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
         if not self.hostname:
-            logging.warning('Something is broken in that node: {}'.format(har_entry))
+            logging.warning('Something is broken in that node: {har_entry}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
@@ -260,7 +260,34 @@ class URLNode(HarTreeNode):
         self.add_feature('response', har_entry['response'])
 
         self.add_feature('response_cookie', har_entry['response']['cookies'])
+        if self.response_cookie:
+            self.add_feature('set_third_party_cookies', False)
+            # https://developer.mozilla.org/en-US/docs/Web/HTTP/headers/Set-Cookie
+            # Cookie name must not contain "=", so we can use it safely
+            self.add_feature('cookies_received', [])
+            for cookie in self.response_cookie:
+                is_3rd_party = False
+                # If the domain is set, the cookie will be sent in any request to that domain, and any related subdomains
+                # Otherwise, it will only be sent to requests to the exact hostname
+                # There are other limitations, like secure and path, but in our case, we won't care about it for now as we mainly want to track where the cookies are sent
+                if 'domain' in cookie and cookie['domain']:
+                    cookie_domain = cookie['domain']
+                    if cookie_domain[0] == '.':
+                        cookie_domain = cookie_domain[1:]
+                else:
+                    cookie_domain = self.hostname
+                if not self.hostname.endswith(cookie_domain):
+                    self.add_feature('set_third_party_cookies', True)
+                    is_3rd_party = True
+                self.cookies_received.append((cookie_domain, f'{cookie["name"]}={cookie["value"]}', is_3rd_party))
+
         self.add_feature('request_cookie', har_entry['request']['cookies'])
+        if self.request_cookie:
+            # https://developer.mozilla.org/en-US/docs/Web/HTTP/headers/Set-Cookie
+            # Cookie name must not contain "=", so we can use it safely
+            self.add_feature('cookies_sent', {})
+            for cookie in self.request_cookie:
+                self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
 
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
             self.add_feature('empty_response', True)
@@ -460,6 +487,26 @@ class Har2Tree(object):
 
         self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes, self.all_initiator_url = self._load_url_entries()
 
+        # Generate cookies lookup table
+        self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
+        self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
+        for n in self.nodes_list:
+            if hasattr(n, 'cookies_received'):
+                for domain, c_received, is_3rd_party in n.cookies_received:
+                    self.cookies_received[c_received].append((domain, n, is_3rd_party))
+
+        for n in self.nodes_list:
+            if hasattr(n, 'cookies_sent'):
+                for c_sent in n.cookies_sent:
+                    for domain, setter_node, is_3rd_party in self.cookies_received[c_sent]:
+                        if n.hostname.endswith(domain):
+                            # This cookie could have been set by this URL
+                            # FIXME: append a lightweight URL node as dict
+                            n.cookies_sent[c_sent].append({'hostname': setter_node.hostname,
+                                                           'uuid': setter_node.uuid,
+                                                           'name': setter_node.name,
+                                                           '3rd_party': is_3rd_party})
+
         self.url_tree = self.nodes_list.pop(0)
         self.start_time = self.url_tree.start_time
         self.user_agent = self.url_tree.user_agent
@@ -494,7 +541,7 @@ class Har2Tree(object):
                 if n.referer == n.name:
                     # Skip to avoid loops:
                     #   * referer to itself
-                    logging.warning('Referer to itself {}'.format(n.name))
+                    logging.warning(f'Referer to itself {n.name}')
                     continue
                 else:
                     all_referer[n.referer].append(n.name)
@@ -550,7 +597,7 @@ class Har2Tree(object):
                     # internal redirect
                     parsed = urlparse(e['request']['url'])
                     parsed._replace(path=to_return)
-                    to_return = '{}://{}{}'.format(parsed.scheme, parsed.netloc, to_return)
+                    to_return = f'{parsed.scheme}://{parsed.netloc}{to_return}'
             else:
                 break
         return to_return
@@ -577,7 +624,7 @@ class Har2Tree(object):
             sub_roots: Dict[HostNode, List[URLNode]] = defaultdict(list)
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
-                    logging.warning('Fucked up URL: {}'.format(child_node_url))
+                    logging.warning('Fucked up URL: {child_node_url}')
                     continue
                 if child_node_url.hostname in children_hostnames:
                     child_node_hostname = children_hostnames[child_node_url.hostname]
@@ -766,3 +813,8 @@ class CrawledTree(object):
     def to_json(self):
         """JSON output for d3js"""
         return self.root_hartree.to_json()
+
+
+def harnode_json_default(obj: HarTreeNode) -> dict:
+    if isinstance(obj, HarTreeNode):
+        return obj.to_dict()
