@@ -133,6 +133,15 @@ def url_cleanup(dict_to_clean: dict, base_url: str, all_requests: List[str]) -> 
 def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Dict[str, List[str]]:
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
+    # img: https://www.w3schools.com/TAGs/tag_img.asp -> longdesc src srcset
+    # script: https://www.w3schools.com/TAGs/tag_script.asp -> src
+    # video: https://www.w3schools.com/TAGs/tag_video.asp -> poster src
+    # audio: https://www.w3schools.com/TAGs/tag_audio.asp -> src
+    # iframe: https://www.w3schools.com/TAGs/tag_iframe.asp -> src
+    # embed: https://www.w3schools.com/TAGs/tag_embed.asp -> src
+    # source: https://www.w3schools.com/TAGs/tag_source.asp -> src srcset
+    # link: https://www.w3schools.com/TAGs/tag_link.asp -> href
+    # object: https://www.w3schools.com/TAGs/tag_object.asp -> data
     to_return: Dict[str, List[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
                                        'iframe': [], 'embed': [], 'source': [],
                                        'link': [],
@@ -142,17 +151,18 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
                                        'javascript': [],
                                        'meta_refresh': []}
     soup = BeautifulSoup(html_doc, 'lxml')
-    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source']):
-        if link.get('src'):
-            # print('******** src', link.get('src'))
+    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source', 'link', 'object']):
+        if link.get('src'):  # img script video audio iframe embed source
             to_return[link.name].append(unquote_plus(link.get('src')))
-
-    for link in soup.find_all(['link']):
-        if link.get('href'):
+        if link.get('srcset'):  # img source
+            to_return[link.name].append(unquote_plus(link.get('srcset')))
+        if link.get('longdesc'):  # img
+            to_return[link.name].append(unquote_plus(link.get('longdesc')))
+        if link.get('poster'):  # video
+            to_return[link.name].append(unquote_plus(link.get('poster')))
+        if link.get('href'):  # link
             to_return[link.name].append(unquote_plus(link.get('href')))
-
-    for link in soup.find_all(['object']):
-        if link.get('data'):
+        if link.get('data'):  # object
             to_return[link.name].append(unquote_plus(link.get('data')))
 
     # Search for meta refresh redirect madness
@@ -457,7 +467,7 @@ class HostNode(HarTreeNode):
 
 class Har2Tree(object):
 
-    def __init__(self, har: dict, iframes: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
+    def __init__(self, har: dict, iframes: List[dict]=[], cookies: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
         """Build the ETE Toolkit tree based on the HAR file, iframes, and HTML content"""
         self.har = har
         self.hostname_tree = HostNode()
@@ -495,9 +505,19 @@ class Har2Tree(object):
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
+        locally_created = {}
+        for c in cookies:
+            if f'{c["name"]}={c["value"]}' not in self.cookies_received:
+                locally_created[f'{c["name"]}={c["value"]}'] = c
+
+        if locally_created:
+            for l in locally_created.values():
+                print(json.dumps(l, indent=2))
+
         for n in self.nodes_list:
             if hasattr(n, 'cookies_sent'):
                 for c_sent in n.cookies_sent:
+                    locally_created.pop(c_sent, None)
                     for domain, setter_node, is_3rd_party in self.cookies_received[c_sent]:
                         if n.hostname.endswith(domain):
                             # This cookie could have been set by this URL
@@ -506,6 +526,45 @@ class Har2Tree(object):
                                                            'uuid': setter_node.uuid,
                                                            'name': setter_node.name,
                                                            '3rd_party': is_3rd_party})
+
+        if locally_created:
+            for c in locally_created.values():
+                print('##', json.dumps(c, indent=2))
+
+        # Add context if urls are found in external_ressources
+        for n in self.nodes_list:
+            if hasattr(n, 'external_ressources'):
+                for type_ressource, urls in n.external_ressources.items():
+                    for url in urls:
+                        if url not in self.all_url_requests:
+                            continue
+                        for node in self.all_url_requests[url]:
+                            if type_ressource == 'img':
+                                node.add_feature('image', True)
+
+                            if type_ressource == 'script':
+                                node.add_feature('js', True)
+
+                            if type_ressource == 'video':
+                                node.add_feature('video', True)
+
+                            if type_ressource == 'audio':
+                                node.add_feature('audio', True)
+
+                            if type_ressource == 'iframe':
+                                node.add_feature('iframe', True)
+
+                            if type_ressource == 'embed':  # FIXME other icon?
+                                node.add_feature('octet_stream', True)
+
+                            if type_ressource == 'source':  # FIXME: Can be audio, video, or picture
+                                node.add_feature('octet_stream', True)
+
+                            if type_ressource == 'link':  # FIXME: Probably a css?
+                                node.add_feature('css', True)
+
+                            if type_ressource == 'object':  # FIXME: Same as embed, but more things
+                                node.add_feature('octet_stream', True)
 
         self.url_tree = self.nodes_list.pop(0)
         self.start_time = self.url_tree.start_time
@@ -763,14 +822,31 @@ class CrawledTree(object):
             # Only using the referrers isn't enough to build the tree (i.e. iframes).
             # The filename is supposed to be '[id].frames.json'
             har = Path(har_path)
+
             iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
-            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
-            if iframefile.is_file() and htmlfile.is_file():
-                with har.open() as f, iframefile.open() as i, htmlfile.open('rb') as h:
-                    har2tree = Har2Tree(json.load(f), json.load(i), BytesIO(h.read()))
+            if iframefile.is_file():
+                with iframefile.open() as i:
+                    iframes = json.load(i)
             else:
-                with har.open() as f:
-                    har2tree = Har2Tree(json.load(f))
+                iframes = []
+
+            cookiefile = har.parent / '{}.cookies.json'.format(str(har.name).split('.')[0])
+            if cookiefile.is_file():
+                with cookiefile.open() as c:
+                    cookies = json.load(c)
+            else:
+                cookies = []
+
+            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
+            if htmlfile.is_file():
+                with htmlfile.open('rb') as h:
+                    html_content = BytesIO(h.read())
+            else:
+                html_content = BytesIO()
+
+            with har.open() as f:
+                har2tree = Har2Tree(json.load(f), iframes, cookies, html_content)
+
             if not har2tree.has_entries:
                 continue
             har2tree.make_tree()
