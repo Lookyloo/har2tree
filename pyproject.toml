@@ -23,7 +23,7 @@ include = ["har2tree/data/img/*.png"]
 har2tree = 'bin/har2tree'
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 ete3 = "^3.1.1"
 beautifulsoup4 = "^4.8.2"
 lxml = "^4.4.2"
