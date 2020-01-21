@@ -2,7 +2,7 @@
 name = "har2tree"
 version = "0.1.0"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
-authors = ["Raphaël Vinot <raphael@vinot.info>"]
+authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
 repository = "https://github.com/viper-framework/har2tree"
 
