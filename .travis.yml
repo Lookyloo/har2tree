@@ -9,13 +9,13 @@ python:
   - "3.8-dev"
 
 install:
-    - pip install pipenv
-    - pipenv install --dev
+    - pip install poetry
+    - poetry install
 
 script:
-    - pipenv run nosetests --with-coverage --cover-package=har2tree tests/test.py
-    - pipenv run mypy --no-strict-optional .
+    - poetry run nosetests --with-coverage --cover-package=har2tree tests/test.py
+    - poetry run mypy --no-strict-optional .
 
 after_success:
-    - pipenv run codecov
-    - pipenv run coveralls
+    - poetry run codecov
+    - poetry run coveralls
