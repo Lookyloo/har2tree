@@ -807,7 +807,7 @@ class Har2Tree(object):
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: List[str, Path]):
+    def __init__(self, harfiles: List[Union[str, Path]]):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:
@@ -815,13 +815,16 @@ class CrawledTree(object):
         self.find_parents()
         self.join_trees()
 
-    def load_all_harfiles(self, files: List[str]) -> List[Har2Tree]:
+    def load_all_harfiles(self, files: List[Union[str, Path]]) -> List[Har2Tree]:
         """Open all the HAR files and build the trees"""
         loaded = []
         for har_path in files:
             # Only using the referrers isn't enough to build the tree (i.e. iframes).
             # The filename is supposed to be '[id].frames.json'
-            har = Path(har_path)
+            if isinstance(har_path, str):
+                har = Path(har_path)
+            else:
+                har = har_path
 
             iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
             if iframefile.is_file():
