@@ -807,7 +807,7 @@ class Har2Tree(object):
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: List[Union[str, Path]]):
+    def __init__(self, harfiles: Union[List[str], List[Path]]):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:
@@ -815,7 +815,7 @@ class CrawledTree(object):
         self.find_parents()
         self.join_trees()
 
-    def load_all_harfiles(self, files: List[Union[str, Path]]) -> List[Har2Tree]:
+    def load_all_harfiles(self, files: Union[List[str], List[Path]]) -> List[Har2Tree]:
         """Open all the HAR files and build the trees"""
         loaded = []
         for har_path in files:
