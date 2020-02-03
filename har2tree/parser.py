@@ -465,23 +465,87 @@ class HostNode(HarTreeNode):
             self.https_content = True
 
 
-class Har2Tree(object):
+class HarFile():
 
-    def __init__(self, har: dict, iframes: List[dict]=[], cookies: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
-        """Build the ETE Toolkit tree based on the HAR file, iframes, and HTML content"""
-        self.har = har
-        self.hostname_tree = HostNode()
-        if not self.har['log']['entries']:
-            self.has_entries = False
-            return
+    def __init__(self, harfile: Union[str, Path]):
+        if isinstance(harfile, str):
+            self.path = Path(harfile)
         else:
-            self.has_entries = True
+            self.path = harfile
+
+        with self.path.open() as f:
+            self.har = json.load(f)
 
         # Sorting the entries by start time (it isn't the case by default)
         # Reason: A specific URL cannot be loaded by something that hasn't been already started
         self.har['log']['entries'].sort(key=itemgetter('startedDateTime'))
 
-        self.root_url = self.har['log']['entries'][0]['request']['url']
+    @property
+    def initial_title(self) -> str:
+        if self.har['log']['pages'][0]['title']:
+            return self.har['log']['pages'][0]['title']
+        else:
+            return '!! No title found !!'
+
+    @property
+    def initial_start_time(self) -> str:
+        return self.har['log']['pages'][0]['startedDateTime']
+
+    @property
+    def first_url(self) -> str:
+        if self.entries:
+            return self.entries[0]['request']['url']
+        return '-'
+
+    @property
+    def entries(self) -> List[dict]:
+        return self.har['log']['entries']
+
+    @property
+    def root_url(self) -> str:
+        return self.har['log']['entries'][0]['request']['url']
+
+    @property
+    def initial_redirects(self) -> List[str]:
+        '''All the initial redirects from the URL given by the user'''
+        to_return = []
+        for e in self.entries:
+            redir = e['response']['redirectURL']
+            if redir:
+                if redir.startswith('http'):
+                    to_return.append(redir)
+                else:
+                    # internal redirect
+                    parsed = urlparse(e['request']['url'])
+                    parsed._replace(path=redir)
+                    to_return.append(f'{parsed.scheme}://{parsed.netloc}{redir}')
+            else:
+                break
+        return to_return
+
+    @property
+    def root_referrer(self) -> Optional[str]:
+        '''Useful when there are multiple tree to attach together'''
+        first_entry = self.entries[0]
+        for h in first_entry['request']['headers']:
+            if h['name'] == 'Referer':
+                return h['value']
+        return None
+
+
+class Har2Tree(object):
+
+    def __init__(self, har: HarFile, iframes: List[dict]=[], cookies: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
+        """Build the ETE Toolkit tree based on the HAR file, iframes, and HTML content"""
+        self.har = har
+        self.hostname_tree = HostNode()
+        if not self.har.entries:
+            self.has_entries = False
+            return
+        else:
+            self.has_entries = True
+
+        self.root_url = self.har.root_url
         self.root_url_after_redirect = self._find_root_after_redirect()
 
         if self.root_url_after_redirect:
@@ -492,7 +556,7 @@ class Har2Tree(object):
             iframe_base_url = self.root_url
 
         if iframes:
-            all_requests = [unquote_plus(url_entry['request']['url']) for url_entry in self.har['log']['entries']]
+            all_requests = [unquote_plus(url_entry['request']['url']) for url_entry in self.har.entries]
             self._load_iframes(iframes, root=self.iframe_tree, base_url=iframe_base_url, all_requests=all_requests)
 
         self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes, self.all_initiator_url = self._load_url_entries()
@@ -527,9 +591,9 @@ class Har2Tree(object):
                                                            'name': setter_node.name,
                                                            '3rd_party': is_3rd_party})
 
-        if locally_created:
-            for c in locally_created.values():
-                print('##', json.dumps(c, indent=2))
+        # if locally_created:
+        #    for c in locally_created.values():
+        #        print('##', json.dumps(c, indent=2))
 
         # Add context if urls are found in external_ressources
         for n in self.nodes_list:
@@ -574,7 +638,7 @@ class Har2Tree(object):
             self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url_after_redirect, list(self.all_url_requests.keys()))
         else:
             self.all_ressources_rendered = find_external_ressources(rendered_HTML, self.root_url, list(self.all_url_requests.keys()))
-        self.root_referer = self._find_root_referrer()
+        self.root_referer = self.har.root_referrer
 
     def _load_url_entries(self) -> Tuple[List[URLNode], Dict[str, List[URLNode]], List[str], Dict[str, List[str]], Dict[str, List[str]], Dict[str, List[str]]]:
         '''Initialize the list of nodes to attach to the tree (as URLNode),
@@ -584,9 +648,9 @@ class Har2Tree(object):
         all_referer: Dict[str, List[str]] = defaultdict(list)
         all_initiator_url: Dict[str, List[str]] = defaultdict(list)
         all_iframes: Dict[str, List[str]] = defaultdict(list)
-        all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har['log']['entries']}
+        all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
 
-        for url_entry in self.har['log']['entries']:
+        for url_entry in self.har.entries:
             n = URLNode(name=unquote_plus(url_entry['request']['url']))
             n.load_har_entry(url_entry, list(all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
@@ -648,29 +712,13 @@ class Har2Tree(object):
         '''Iterate through the list of entries until there are no redirectURL in
         the response anymore: it is the first URL loading content.
         '''
-        to_return = None
-        for e in self.har['log']['entries']:
-            if e['response']['redirectURL']:
-                to_return = e['response']['redirectURL']
-                if not to_return.startswith('http'):
-                    # internal redirect
-                    parsed = urlparse(e['request']['url'])
-                    parsed._replace(path=to_return)
-                    to_return = f'{parsed.scheme}://{parsed.netloc}{to_return}'
-            else:
-                break
-        return to_return
+        redirects = self.har.initial_redirects
+        if redirects:
+            return redirects[-1]
+        return None
 
     def to_json(self):
         return self.hostname_tree.to_json()
-
-    def _find_root_referrer(self):
-        '''Useful when there are multiple tree to attach together'''
-        first_entry = self.har['log']['entries'][0]
-        for h in first_entry['request']['headers']:
-            if h['name'] == 'Referer':
-                return h['value']
-        return None
 
     def make_hostname_tree(self, root_nodes_url: Union[URLNode, List[URLNode]], root_node_hostname: HostNode):
         """ Groups all the URLs by domain in the hostname tree.
@@ -821,34 +869,30 @@ class CrawledTree(object):
         for har_path in files:
             # Only using the referrers isn't enough to build the tree (i.e. iframes).
             # The filename is supposed to be '[id].frames.json'
-            if isinstance(har_path, str):
-                har = Path(har_path)
-            else:
-                har = har_path
+            har = HarFile(har_path)
 
-            iframefile = har.parent / '{}.frames.json'.format(str(har.name).split('.')[0])
+            iframefile = har.path.parent / '{}.frames.json'.format(str(har.path.name).split('.')[0])
             if iframefile.is_file():
                 with iframefile.open() as i:
                     iframes = json.load(i)
             else:
                 iframes = []
 
-            cookiefile = har.parent / '{}.cookies.json'.format(str(har.name).split('.')[0])
+            cookiefile = har.path.parent / '{}.cookies.json'.format(str(har.path.name).split('.')[0])
             if cookiefile.is_file():
                 with cookiefile.open() as c:
                     cookies = json.load(c)
             else:
                 cookies = []
 
-            htmlfile = har.parent / '{}.html'.format(str(har.name).split('.')[0])
+            htmlfile = har.path.parent / '{}.html'.format(str(har.path.name).split('.')[0])
             if htmlfile.is_file():
                 with htmlfile.open('rb') as h:
                     html_content = BytesIO(h.read())
             else:
                 html_content = BytesIO()
 
-            with har.open() as f:
-                har2tree = Har2Tree(json.load(f), iframes, cookies, html_content)
+            har2tree = Har2Tree(har, iframes, cookies, html_content)
 
             if not har2tree.has_entries:
                 continue
