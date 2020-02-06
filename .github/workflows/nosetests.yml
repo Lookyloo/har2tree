@@ -15,8 +15,8 @@ jobs:
         python-version: 3.7
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip pipenv
-        pipenv install -d
+        python -m pip install --upgrade pip poetry
+        poetry install
     - name: Test with nosetests
       run: |
-        pipenv run nosetests --with-coverage --cover-package=har2tree tests/test.py
+        poetry run nosetests --with-coverage --cover-package=har2tree tests/test.py
