@@ -251,8 +251,12 @@ class URLNode(HarTreeNode):
         # If the URL contains a fragment (i.e. something after a #), it is stripped in the referer.
         # So we need an alternative URL to do a lookup against
         self.add_feature('alternative_url_for_referer', self.name.split('#')[0])
-
-        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%fZ'))  # Instant the request is made
+        
+        # HAR specification indicates that datetime format is ISO8601 without Z. Some HAR contains Z in time format, this permit compatiblity with this type of HAR.
+        if har_entry['startedDateTime'].endswith("Z"):
+            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%fZ'))  # Instant the request is made
+        else:
+            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%f'))  # Instant the request is made
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
