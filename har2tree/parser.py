@@ -255,6 +255,8 @@ class URLNode(HarTreeNode):
 
         # Instant the request is made
         if sys.version_info >= (3, 7):
+            if har_entry['startedDateTime'][-1] == 'Z':
+                har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+00:00')
             self.add_feature('start_time', datetime.fromisoformat(har_entry['startedDateTime']))
         else:
             self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
