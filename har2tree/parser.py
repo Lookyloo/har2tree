@@ -17,6 +17,7 @@ import hashlib
 from operator import itemgetter
 from typing import List, Dict, Optional, Union, Tuple
 import ipaddress
+import sys
 
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
@@ -252,7 +253,12 @@ class URLNode(HarTreeNode):
         # So we need an alternative URL to do a lookup against
         self.add_feature('alternative_url_for_referer', self.name.split('#')[0])
 
-        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%X.%fZ'))  # Instant the request is made
+        # Instant the request is made
+        if sys.version_info >= (3, 7):
+            self.add_feature('start_time', datetime.fromisoformat(har_entry['startedDateTime']))
+        else:
+            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
+
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
