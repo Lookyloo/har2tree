@@ -254,12 +254,15 @@ class URLNode(HarTreeNode):
         self.add_feature('alternative_url_for_referer', self.name.split('#')[0])
 
         # Instant the request is made
-        if har_entry['startedDateTime'][-1] == 'Z':
-            har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+00:00')
-        if sys.version_info >= (3, 7):
-            self.add_feature('start_time', datetime.fromisoformat(har_entry['startedDateTime']))
-        else:
-            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
+        if sys.version_info < (3, 7) and har_entry['startedDateTime'][-1] == 'Z':
+            # Python 3.7:
+            #   * fromisoformat does not like Z at the end of the string, and wants +XX:XX (not +XXXX)
+            #   * strptime %z is cool with Z (=>tzinfo=datetime.timezone.utc) or +XXXX or +XX:XX
+            # Python 3.6:
+            #   * No fromisoformat
+            #   * strptime %z does not like Z at the end of the string, and doesn't like +XX:XX either (wants +XXXX)
+            har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+0000')
+        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
 
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
