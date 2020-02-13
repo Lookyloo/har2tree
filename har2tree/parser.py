@@ -580,9 +580,9 @@ class Har2Tree(object):
             if f'{c["name"]}={c["value"]}' not in self.cookies_received:
                 locally_created[f'{c["name"]}={c["value"]}'] = c
 
-        if locally_created:
-            for l in locally_created.values():
-                print(json.dumps(l, indent=2))
+        # if locally_created:
+        #    for l in locally_created.values():
+        #        print(json.dumps(l, indent=2))
 
         for n in self.nodes_list:
             if hasattr(n, 'cookies_sent'):
