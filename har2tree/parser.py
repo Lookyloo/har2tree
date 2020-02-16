@@ -268,7 +268,7 @@ class URLNode(HarTreeNode):
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
         if not self.hostname:
-            logging.warning('Something is broken in that node: {har_entry}')
+            logging.warning(f'Something is broken in that node: {har_entry}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
