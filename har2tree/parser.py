@@ -580,7 +580,7 @@ class Har2Tree(object):
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
         self.initial_cookies: Dict[str, dict] = {}
-        if hasattr('cookies_sent', self.nodes_list[0]):
+        if hasattr(self.nodes_list[0], 'cookies_sent'):
             self.initial_cookies = {key: cookie for key, cookie in self.nodes_list[0].cookies_sent.items()}
 
         # Dictionary of all the cookies sent during the capture
