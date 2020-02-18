@@ -547,7 +547,12 @@ class HarFile():
 class Har2Tree(object):
 
     def __init__(self, har: HarFile, iframes: List[dict]=[], cookies: List[dict]=[], rendered_HTML: BytesIO=BytesIO()):
-        """Build the ETE Toolkit tree based on the HAR file, iframes, and HTML content"""
+        """Build the ETE Toolkit tree based on the HAR file, iframes, cookies, and HTML content
+        :param har: harfile of a capture
+        :param iframes: List of iframes retourned by splash
+        :param cookies: All the cookies in the cookie jar at the end of a capture.
+        :param rendered_HTML: HTML of the initial page
+        """
         self.har = har
         self.hostname_tree = HostNode()
         if not self.har.entries:
@@ -572,27 +577,40 @@ class Har2Tree(object):
 
         self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_iframes, self.all_initiator_url = self._load_url_entries()
 
-        # Generate cookies lookup table
+        # Generate cookies lookup tables
+        # All the initial cookies sent with the initial request given to splash
+        self.initial_cookies: Dict[str, dict] = {key: cookie for key, cookie in self.nodes_list[0].cookies_sent.items()}
+
+        # Dictionary of all the cookies sent during the capture
         self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
+
+        # Dictionary of all cookies received during the capture
         self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
         for n in self.nodes_list:
             if hasattr(n, 'cookies_received'):
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
-        locally_created = {}
+        # NOTE: locally_created contains all cookies not present in a response, and not passed at the begining of the capture to splash
+        self.locally_created: Dict[str, dict] = {}
         for c in cookies:
-            if f'{c["name"]}={c["value"]}' not in self.cookies_received:
-                locally_created[f'{c["name"]}={c["value"]}'] = c
+            c_identifier = f'{c["name"]}={c["value"]}'
+            if (c_identifier not in self.cookies_received
+                    and c_identifier not in self.initial_cookies):
+                self.locally_created[f'{c["name"]}={c["value"]}'] = c
 
-        # if locally_created:
-        #    for l in locally_created.values():
+        # if self.locally_created:
+        #    for l in self.locally_created.values():
         #        print(json.dumps(l, indent=2))
 
+        # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
+        self.locally_created_not_sent: Dict[str, dict] = self.locally_created.copy()
+        # Cross reference the source of the cookie
         for n in self.nodes_list:
             if hasattr(n, 'cookies_sent'):
                 for c_sent in n.cookies_sent:
-                    locally_created.pop(c_sent, None)
+                    # Remove cookie from list if sent during the capture.
+                    self.locally_created_not_sent.pop(c_sent, None)
                     for domain, setter_node, is_3rd_party in self.cookies_received[c_sent]:
                         if n.hostname.endswith(domain):
                             # This cookie could have been set by this URL
@@ -602,7 +620,7 @@ class Har2Tree(object):
                                                            'name': setter_node.name,
                                                            '3rd_party': is_3rd_party})
 
-        # if locally_created:
+        # if self.locally_created_not_sent:
         #    for c in locally_created.values():
         #        print('##', json.dumps(c, indent=2))
 
