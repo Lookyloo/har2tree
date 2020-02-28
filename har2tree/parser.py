@@ -276,7 +276,7 @@ class URLNode(HarTreeNode):
             logging.warning(f'Something is broken in that node: {har_entry}')
 
         tld = psl.get_tld(self.hostname)
-        if tld in psl.tlds:
+        if tld and tld in psl.tlds:
             self.add_feature('known_tld', tld)
         else:
             print('###### TLD WAT', self.name, tld)
