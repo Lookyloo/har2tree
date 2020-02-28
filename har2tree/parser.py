@@ -19,7 +19,7 @@ from typing import List, Dict, Optional, Union, Tuple
 import ipaddress
 import sys
 
-import publicsuffix2
+import publicsuffix2  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 # import html
@@ -640,6 +640,7 @@ class Har2Tree(object):
                                                            'uuid': setter_node.uuid,
                                                            'name': setter_node.name,
                                                            '3rd_party': is_3rd_party})
+        print(json.dumps(self.locally_created_not_sent, indent=2))
 
         # if self.locally_created_not_sent:
         #    for c in locally_created.values():
