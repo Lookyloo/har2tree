@@ -785,7 +785,7 @@ class Har2Tree(object):
             sub_roots: Dict[HostNode, List[URLNode]] = defaultdict(list)
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
-                    logging.warning('Fucked up URL: {child_node_url}')
+                    logging.warning(f'Fucked up URL: {child_node_url}')
                     continue
                 if child_node_url.hostname in children_hostnames:
                     child_node_hostname = children_hostnames[child_node_url.hostname]
