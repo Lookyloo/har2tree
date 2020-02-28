@@ -19,9 +19,13 @@ from typing import List, Dict, Optional, Union, Tuple
 import ipaddress
 import sys
 
+import publicsuffix2
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 # import html
+
+# Initialize Public Suffix List
+psl = publicsuffix2.PublicSuffixList()
 
 
 class Har2TreeError(Exception):
@@ -267,8 +271,23 @@ class URLNode(HarTreeNode):
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
+
         if not self.hostname:
             logging.warning(f'Something is broken in that node: {har_entry}')
+
+        tld = psl.get_tld(self.hostname)
+        if tld in psl.tlds:
+            self.add_feature('known_tld', tld)
+        else:
+            print('###### TLD WAT', self.name, tld)
+            if tld.isdigit():
+                # IPV4
+                pass
+            elif ':' in tld:
+                # IPV6
+                pass
+            else:
+                self.add_feature('unknown_tld', tld)
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
