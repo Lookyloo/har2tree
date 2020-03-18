@@ -14,7 +14,7 @@ install:
 
 script:
     - poetry run nosetests --with-coverage --cover-package=har2tree tests/test.py
-    - poetry run mypy --no-strict-optional .
+    - poetry run mypy .
 
 after_success:
     - poetry run codecov
