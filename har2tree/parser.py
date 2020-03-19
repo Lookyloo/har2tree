@@ -544,6 +544,12 @@ class HarFile():
     def root_url(self) -> str:
         return self.har['log']['entries'][0]['request']['url']
 
+    def __find_referer(self, har_entry: Dict) -> Optional[str]:
+        for header_entry in har_entry['request']['headers']:
+            if header_entry['name'] == 'Referer':
+                return header_entry['value']
+        return None
+
     @property
     def initial_redirects(self) -> List[str]:
         '''All the initial redirects from the URL given by the user'''
@@ -563,15 +569,24 @@ class HarFile():
                 else:
                     break
         elif self.entries[0]['request']['url'] != self.final_redirect:
+            prior_entry = self.entries[0]
             # First request different of self.final_redirect, there is at least one redirect
             for e in self.entries[1:]:
-                to_return.append(e['request']['url'])
+                # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
+                if (prior_entry['response']['redirectURL'] and e['request']['url'] == prior_entry['response']['redirectURL']):
+                    to_return.append(e['request']['url'])
+                elif (self.__find_referer(e) and (self.__find_referer(e) == prior_entry['response']['url'])):
+                    to_return.append(e['request']['url'])
+                else:
+                    continue
+
                 if e['request']['url'] == self.final_redirect:
                     break
                 elif e['request']['url'].startswith(f'{self.final_redirect}?'):
                     # NOTE: there will be more of these.
-                    # The final URL is striped at the first ?
+                    # The final URL is striped at the first "?" (URL query)
                     break
+                prior_entry = e
         return to_return
 
     @property
@@ -598,18 +613,18 @@ class Har2Tree(object):
         else:
             self.has_entries = True
 
-        self.root_url = self.har.root_url
-
-        self.nodes_list, self.all_url_requests, self.all_redirects, self.all_referer, self.all_initiator_url = self._load_url_entries()
+        self.nodes_list: List[URLNode] = []
+        self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
+        self.all_redirects: List[str] = []
+        self.all_referer: Dict[str, List[str]] = defaultdict(list)
+        self.all_initiator_url: Dict[str, List[str]] = defaultdict(list)
+        self._load_url_entries()
 
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
         self.initial_cookies: Dict[str, dict] = {}
         if hasattr(self.nodes_list[0], 'cookies_sent'):
             self.initial_cookies = {key: cookie for key, cookie in self.nodes_list[0].cookies_sent.items()}
-
-        # Dictionary of all the cookies sent during the capture
-        self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
 
         # Dictionary of all cookies received during the capture
         self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
@@ -688,29 +703,32 @@ class Har2Tree(object):
                                 node.add_feature('octet_stream', True)
 
         self.url_tree = self.nodes_list.pop(0)
-        self.start_time = self.url_tree.start_time
-        self.user_agent = self.url_tree.user_agent
 
-        self.root_referer = self.har.root_referrer
+    @property
+    def root_referer(self) -> Optional[str]:
+        return self.har.root_referrer
 
-    def _load_url_entries(self) -> Tuple[List[URLNode], Dict[str, List[URLNode]], List[str], Dict[str, List[str]], Dict[str, List[str]]]:
+    @property
+    def user_agent(self) -> str:
+        return self.url_tree.start_time
+
+    @property
+    def start_time(self) -> datetime:
+        return self.url_tree.start_time
+
+    def _load_url_entries(self):
         '''Initialize the list of nodes to attach to the tree (as URLNode),
         and create a list of note for each URL we have in the HAR document'''
-        nodes_list: List[URLNode] = []
-        all_redirects: List[str] = []
-        all_referer: Dict[str, List[str]] = defaultdict(list)
-        all_initiator_url: Dict[str, List[str]] = defaultdict(list)
-        all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
 
         for url_entry in self.har.entries:
             n = URLNode(name=unquote_plus(url_entry['request']['url']))
-            n.load_har_entry(url_entry, list(all_url_requests.keys()))
+            n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
-                all_redirects.append(n.redirect_url)
+                self.all_redirects.append(n.redirect_url)
 
             if hasattr(n, 'initiator_url'):
                 # The HAR file was created by chrome/chromium and we got the _initiator key
-                all_initiator_url[n.initiator_url].append(n.name)
+                self.all_initiator_url[n.initiator_url].append(n.name)
 
             if hasattr(n, 'referer'):
                 if n.referer == n.name:
@@ -719,11 +737,10 @@ class Har2Tree(object):
                     logging.warning(f'Referer to itself {n.name}')
                     continue
                 else:
-                    all_referer[n.referer].append(n.name)
+                    self.all_referer[n.referer].append(n.name)
 
-            nodes_list.append(n)
-            all_url_requests[n.name].append(n)
-        return nodes_list, all_url_requests, all_redirects, all_referer, all_initiator_url
+            self.nodes_list.append(n)
+            self.all_url_requests[n.name].append(n)
 
     def get_host_node_by_uuid(self, uuid: str) -> HostNode:
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
@@ -777,7 +794,7 @@ class Har2Tree(object):
             self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.root_after_redirect, list(self.all_url_requests.keys()))
             attach_orphans = self.url_tree.search_nodes(name=self.root_after_redirect)[0]
         else:
-            self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.root_url, list(self.all_url_requests.keys()))
+            self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.har.root_url, list(self.all_url_requests.keys()))
             attach_orphans = self.url_tree
 
         if self.nodes_list:
@@ -872,6 +889,7 @@ class CrawledTree(object):
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:
             raise Har2TreeError('No usable HAR files found.')
+        self.root_hartree = copy.deepcopy(self.hartrees[0])
         self.find_parents()
         self.join_trees()
 
@@ -898,10 +916,6 @@ class CrawledTree(object):
     def join_trees(self, root: Optional[Har2Tree]=None, parent_root: Optional[URLNode]=None):
         """Connect the trees together if we have more than one HAR file"""
         if root is None:
-            self.root_hartree = copy.deepcopy(self.hartrees[0])
-            self.start_time = self.root_hartree.start_time
-            self.user_agent = self.root_hartree.user_agent
-            self.root_url = self.root_hartree.root_url
             root = self.root_hartree
             parent = root.url_tree
         elif parent_root is not None:
@@ -911,7 +925,7 @@ class CrawledTree(object):
             # will be the redirect.
             sub_trees = self.referers.pop(root.root_after_redirect, None)
         else:
-            sub_trees = self.referers.pop(root.root_url, None)
+            sub_trees = self.referers.pop(root.har.root_url, None)
         if not sub_trees:
             # No subtree to attach
             return
@@ -924,6 +938,18 @@ class CrawledTree(object):
     def to_json(self):
         """JSON output for d3js"""
         return self.root_hartree.to_json()
+
+    @property
+    def root_url(self) -> str:
+        return self.root_hartree.har.root_url
+
+    @property
+    def start_time(self) -> datetime:
+        return self.root_hartree.start_time
+
+    @property
+    def user_agent(self) -> str:
+        return self.root_hartree.user_agent
 
 
 def harnode_json_default(obj: HarTreeNode) -> dict:
