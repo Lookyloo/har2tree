@@ -568,6 +568,10 @@ class HarFile():
                 to_return.append(e['request']['url'])
                 if e['request']['url'] == self.final_redirect:
                     break
+                elif e['request']['url'].startswith(f'{self.final_redirect}?'):
+                    # NOTE: there will be more of these.
+                    # The final URL is striped at the first ?
+                    break
         return to_return
 
     @property
