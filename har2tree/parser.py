@@ -573,8 +573,13 @@ class HarFile():
             # First request different of self.final_redirect, there is at least one redirect
             for e in self.entries[1:]:
                 # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
-                if (prior_entry['response']['redirectURL'] and e['request']['url'] == prior_entry['response']['redirectURL']):
-                    to_return.append(e['request']['url'])
+                if (prior_entry['response']['redirectURL']):
+                    # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
+                    full_redirect = rebuild_url(prior_entry['response']['url'], prior_entry['response']['redirectURL'], [e['request']['url']])
+                    if full_redirect == e['request']['url']:
+                        to_return.append(e['request']['url'])
+                    else:
+                        continue
                 elif (self.__find_referer(e) and (self.__find_referer(e) == prior_entry['response']['url'])):
                     to_return.append(e['request']['url'])
                 else:
