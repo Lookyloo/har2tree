@@ -569,29 +569,39 @@ class HarFile():
                 else:
                     break
         elif self.entries[0]['request']['url'] != self.final_redirect:
-            prior_entry = self.entries[0]
             # First request different of self.final_redirect, there is at least one redirect
-            for e in self.entries[1:]:
-                # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
-                if (prior_entry['response']['redirectURL']):
-                    # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
-                    full_redirect = rebuild_url(prior_entry['response']['url'], prior_entry['response']['redirectURL'], [e['request']['url']])
-                    if full_redirect == e['request']['url']:
+            entry_id = 1
+            got_right_path = False
+            while entry_id < len(self.entries) and not got_right_path:
+                to_return = []
+                prior_entry = self.entries[0]
+                for e in self.entries[entry_id:]:
+                    # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
+                    if (prior_entry['response']['redirectURL']):
+                        # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
+                        full_redirect = rebuild_url(prior_entry['response']['url'], prior_entry['response']['redirectURL'], [e['request']['url']])
+                        if full_redirect == e['request']['url']:
+                            to_return.append(e['request']['url'])
+                        else:
+                            continue
+                    elif (self.__find_referer(e) and (self.__find_referer(e) == prior_entry['response']['url'])):
                         to_return.append(e['request']['url'])
                     else:
                         continue
-                elif (self.__find_referer(e) and (self.__find_referer(e) == prior_entry['response']['url'])):
-                    to_return.append(e['request']['url'])
-                else:
-                    continue
 
-                if e['request']['url'] == self.final_redirect:
-                    break
-                elif e['request']['url'].startswith(f'{self.final_redirect}?'):
-                    # NOTE: there will be more of these.
-                    # The final URL is striped at the first "?" (URL query)
-                    break
-                prior_entry = e
+                    if e['request']['url'] == self.final_redirect:
+                        got_right_path = True
+                        break
+                    elif e['request']['url'].startswith(f'{self.final_redirect}?'):
+                        # NOTE: there will be more of these.
+                        # The final URL is striped at the first "?" (URL query)
+                        got_right_path = True
+                        break
+                    prior_entry = e
+                else:
+                    # Entry 1 may not be on the proper path on the tree. In that case, we need to try again
+                    entry_id += 1
+
         return to_return
 
     @property
