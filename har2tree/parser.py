@@ -725,7 +725,7 @@ class Har2Tree(object):
 
     @property
     def user_agent(self) -> str:
-        return self.url_tree.start_time
+        return self.url_tree.user_agent
 
     @property
     def start_time(self) -> datetime:
