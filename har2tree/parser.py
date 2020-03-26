@@ -497,14 +497,15 @@ class HarFile():
         last_redirect_file = self.path.parent / f'{self.path.stem}.last_redirect.txt'
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
-                self.final_redirect: str = _lr.read()
+                self.final_redirect: str = unquote_plus(_lr.read())
             # WARNING: the URL in that file may not be present in the HAR: the query part is stripped by splash
             # Make sure we find it
             for e in self.entries:
-                if e['request']['url'] == self.final_redirect:
+                unquoted_url = unquote_plus(e['request']['url'])
+                if unquoted_url == self.final_redirect:
                     break
-                elif e['request']['url'].startswith(f'{self.final_redirect}?'):
-                    self.final_redirect = e['request']['url']
+                elif unquoted_url.startswith(f'{self.final_redirect}?'):
+                    self.final_redirect = unquoted_url
                     break
             else:
                 logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
