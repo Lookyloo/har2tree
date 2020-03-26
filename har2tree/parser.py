@@ -498,8 +498,18 @@ class HarFile():
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
                 self.final_redirect: str = _lr.read()
+            # WARNING: the URL in that file may not be present in the HAR: the query part is stripped by splash
+            # Make sure we find it
+            for e in self.entries:
+                if e['request']['url'] == self.final_redirect:
+                    break
+                elif e['request']['url'].startswith(f'{self.final_redirect}?'):
+                    self.final_redirect = e['request']['url']
+                    break
+            else:
+                logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
         else:
-            self.final_redirect = ''
+            self.final_redirect = None
 
         cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
         if cookiefile.is_file():
@@ -517,7 +527,10 @@ class HarFile():
 
         # Sorting the entries by start time (it isn't the case by default)
         # Reason: A specific URL cannot be loaded by something that hasn't been already started
-        self.har['log']['entries'].sort(key=itemgetter('startedDateTime'))
+        self.entries.sort(key=itemgetter('startedDateTime'))
+
+        # Set to false if initial_redirects fails to find the chain.
+        self.need_tree_redirects = False
 
     @property
     def initial_title(self) -> str:
@@ -542,7 +555,7 @@ class HarFile():
 
     @property
     def root_url(self) -> str:
-        return self.har['log']['entries'][0]['request']['url']
+        return self.entries[0]['request']['url']
 
     def __find_referer(self, har_entry: Dict) -> Optional[str]:
         for header_entry in har_entry['request']['headers']:
@@ -551,56 +564,42 @@ class HarFile():
         return None
 
     @property
+    def has_initial_redirects(self) -> bool:
+        if self.final_redirect:
+            return self.entries[0]['request']['url'] != self.final_redirect
+        return False
+
+    @property
     def initial_redirects(self) -> List[str]:
         '''All the initial redirects from the URL given by the user'''
         to_return = []
-        if not self.final_redirect:
-            # NOTE: Legacy approach, before we kept the final_redirect
-            for e in self.entries:
-                redir = e['response']['redirectURL']
-                if redir:
-                    if redir.startswith('http'):
-                        to_return.append(redir)
-                    else:
-                        # internal redirect
-                        parsed = urlparse(e['request']['url'])
-                        parsed._replace(path=redir)
-                        to_return.append(f'{parsed.scheme}://{parsed.netloc}{redir}')
-                else:
-                    break
-        elif self.entries[0]['request']['url'] != self.final_redirect:
+        if self.has_initial_redirects:
             # First request different of self.final_redirect, there is at least one redirect
-            entry_id = 1
-            got_right_path = False
-            while entry_id < len(self.entries) and not got_right_path:
-                to_return = []
-                prior_entry = self.entries[0]
-                for e in self.entries[entry_id:]:
-                    # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
-                    if (prior_entry['response']['redirectURL']):
-                        # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
-                        full_redirect = rebuild_url(prior_entry['response']['url'], prior_entry['response']['redirectURL'], [e['request']['url']])
-                        if full_redirect == e['request']['url']:
-                            to_return.append(e['request']['url'])
-                        else:
-                            continue
-                    elif (self.__find_referer(e) and (self.__find_referer(e) == prior_entry['response']['url'])):
+            previous_entry = self.entries[0]
+            for e in self.entries[1:]:
+                # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
+                if (previous_entry['response']['redirectURL']):
+                    # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
+                    full_redirect = rebuild_url(previous_entry['response']['url'],
+                                                previous_entry['response']['redirectURL'], [e['request']['url']])
+                    if full_redirect == e['request']['url']:
                         to_return.append(e['request']['url'])
+                        previous_entry = e
                     else:
                         continue
-
-                    if e['request']['url'] == self.final_redirect:
-                        got_right_path = True
-                        break
-                    elif e['request']['url'].startswith(f'{self.final_redirect}?'):
-                        # NOTE: there will be more of these.
-                        # The final URL is striped at the first "?" (URL query)
-                        got_right_path = True
-                        break
-                    prior_entry = e
+                elif (self.__find_referer(e) and (self.__find_referer(e) == previous_entry['response']['url'])):
+                    to_return.append(e['request']['url'])
+                    previous_entry = e
                 else:
-                    # Entry 1 may not be on the proper path on the tree. In that case, we need to try again
-                    entry_id += 1
+                    continue
+
+                if e['request']['url'] == self.final_redirect:
+                    break
+            else:
+                # Unable to find redirects chain, needs the whole tree
+                to_return = []
+                to_return.append(self.final_redirect)
+                self.need_tree_redirects = True
 
         return to_return
 
@@ -768,9 +767,8 @@ class Har2Tree(object):
         '''Iterate through the list of entries until there are no redirectURL in
         the response anymore: it is the first URL loading content.
         '''
-        redirects = self.har.initial_redirects
-        if redirects:
-            return redirects[-1]
+        if self.har.has_initial_redirects:
+            return self.har.final_redirect
         return None
 
     def to_json(self):
@@ -953,6 +951,17 @@ class CrawledTree(object):
     def to_json(self):
         """JSON output for d3js"""
         return self.root_hartree.to_json()
+
+    @property
+    def redirects(self) -> List[str]:
+        if not self.root_hartree.root_after_redirect:
+            return []
+        redirect_node = self.root_hartree.url_tree.search_nodes(name=self.root_hartree.root_after_redirect)
+        if not redirect_node:
+            raise Exception(f'Unable to find node {self.root_hartree.root_after_redirect}')
+        elif len(redirect_node) > 1:
+            raise Exception(f'Too many nodes found for {self.root_hartree.root_after_redirect}: {redirect_node}')
+        return [a.name for a in reversed(redirect_node[0].get_ancestors())]
 
     @property
     def root_url(self) -> str:
