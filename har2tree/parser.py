@@ -509,7 +509,7 @@ class HarFile():
             else:
                 logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
         else:
-            self.final_redirect = None
+            self.final_redirect = ''
 
         cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
         if cookiefile.is_file():
