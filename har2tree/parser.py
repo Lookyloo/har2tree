@@ -97,15 +97,24 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
             if parsed.path:
                 # NOTE: Path('').resolve() => PosixPath('/path/to/current/directory') <= if you run that from your home dir, it is the path to your home dir
                 # FIXME: Path('sdsfs/../dsfsdfs/../..').resolve() => PosixPath('/path/to/current')
-                final_url = parsed._replace(path=str(Path(parsed.path).resolve())).geturl()
+                resolved_path = str(Path(parsed.path).resolve())
+                final_url = parsed._replace(path=resolved_path).geturl()
+                if final_url not in known_urls and resolved_path[-1] != '/':
+                    # NOTE: the last '/' at the end of the path is stripped by resolve, we try to re-add it
+                    resolved_path += '/'
+                    final_url = parsed._replace(path=resolved_path).geturl()
             else:
                 final_url = parsed._replace(path='/').geturl()
         except Exception:
             logging.info(f'Not a URL: {base_url} - {partial}')
 
-    if final_url not in known_urls and final_url + '/' in known_urls:
-        # last thing I can think of
-        final_url = f'{final_url}/'
+    if final_url not in known_urls and splitted_base_url.fragment:
+        # On a redirect, if the initial has a fragment, it is appended to the dest URL
+        try:
+            parsed = urlparse(final_url)
+            final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
+        except Exception:
+            logging.info(f'Not a URL: {base_url} - {partial}')
 
     return final_url
 
@@ -233,7 +242,8 @@ class URLNode(HarTreeNode):
     def load_har_entry(self, har_entry: dict, all_requests: List[str]):
         if not self.name:
             # We're in the actual root node
-            self.add_feature('name', unquote_plus(har_entry['request']['url']))  # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
+            # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
+            self.add_feature('name', unquote_plus(har_entry['request']['url']))
 
         self.add_feature('url_split', urlparse(self.name))
 
@@ -630,6 +640,7 @@ class Har2Tree(object):
 
         self.nodes_list: List[URLNode] = []
         self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
+
         self.all_redirects: List[str] = []
         self.all_referer: Dict[str, List[str]] = defaultdict(list)
         self.all_initiator_url: Dict[str, List[str]] = defaultdict(list)
@@ -806,7 +817,12 @@ class Har2Tree(object):
         # At this point, we know the actual last URL.
         if self.root_after_redirect:
             self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.root_after_redirect, list(self.all_url_requests.keys()))
-            attach_orphans = self.url_tree.search_nodes(name=self.root_after_redirect)[0]
+            if self.url_tree.search_nodes(name=self.root_after_redirect):
+                # The root after redirect is in the tree (expected)
+                attach_orphans = self.url_tree.search_nodes(name=self.root_after_redirect)[0]
+            else:
+                logging.warning("Root after redirect couldn't be attached, falling back. That should never happen and is probably a bug in har2tree.")
+                attach_orphans = self.url_tree
         else:
             self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.har.root_url, list(self.all_url_requests.keys()))
             attach_orphans = self.url_tree
