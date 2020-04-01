@@ -508,17 +508,7 @@ class HarFile():
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
                 self.final_redirect: str = unquote_plus(_lr.read())
-            # WARNING: the URL in that file may not be present in the HAR: the query part is stripped by splash
-            # Make sure we find it
-            for e in self.entries:
-                unquoted_url = unquote_plus(e['request']['url'])
-                if unquoted_url == self.final_redirect:
-                    break
-                elif unquoted_url.startswith(f'{self.final_redirect}?'):
-                    self.final_redirect = unquoted_url
-                    break
-            else:
-                logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
+            self._search_final_redirect()
         else:
             self.final_redirect = ''
 
@@ -542,6 +532,29 @@ class HarFile():
 
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
+
+    def _search_final_redirect(self):
+        for e in self.entries:
+            unquoted_url = unquote_plus(e['request']['url'])
+            if unquoted_url == self.final_redirect:
+                break
+            elif unquoted_url.startswith(f'{self.final_redirect}?'):
+                # WARNING: the URL in that file may not be present in the HAR: the query part is stripped by splash
+                self.final_redirect = unquoted_url
+                break
+        else:
+            # Update 2020-04-01: .. but the fragment is not striped so self.final_redirect may not be found
+            # Unless we find the entry in the har, we need to search again without the fragment
+            if '#' in self.final_redirect:
+                self.final_redirect = self.final_redirect.split('#', 1)[0]
+                self._search_final_redirect()
+            elif '?' in self.final_redirect:
+                # At this point, we're trying things. The final URL returned by splash may have been changed
+                # in JavaScript and never appear in the HAR. Let's try to find the closest one with the same path
+                self.final_redirect = self.final_redirect.split('?', 1)[0]
+                self._search_final_redirect()
+            else:
+                logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
 
     @property
     def initial_title(self) -> str:
