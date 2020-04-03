@@ -951,7 +951,7 @@ class CrawledTree(object):
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:
             raise Har2TreeError('No usable HAR files found.')
-        self.root_hartree = copy.deepcopy(self.hartrees[0])
+        self.root_hartree = self.hartrees.pop(0)
         self.find_parents()
         self.join_trees()
 
