@@ -9,7 +9,6 @@ import uuid
 from urllib.parse import urlparse, unquote_plus
 from base64 import b64decode
 from collections import defaultdict
-import logging
 import re
 import os
 from io import BytesIO
@@ -22,10 +21,21 @@ import sys
 import publicsuffix2  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
+import logging
 # import html
+
+logger = logging.getLogger(__name__)
 
 # Initialize Public Suffix List
 psl = publicsuffix2.PublicSuffixList()
+
+
+class Har2TreeLogAdapter(logging.LoggerAdapter):
+    """
+    Prepend log entry with the UUID of the capture
+    """
+    def process(self, msg, kwargs):
+        return '[%s] %s' % (self.extra['uuid'], msg), kwargs
 
 
 class Har2TreeError(Exception):
@@ -49,7 +59,7 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
         # URL without scheme => takes the scheme from the caller
         final_url = f'{splitted_base_url.scheme}:{partial}'
         if final_url not in known_urls:
-            logging.info(f'URL without scheme: {base_url} - {partial} - {final_url}')
+            logger.debug(f'URL without scheme: {base_url} - {partial} - {final_url}')
     elif partial.startswith('/') or partial[0] not in [';', '?', '#']:
         # We have a path
         if partial[0] != '/':
@@ -66,22 +76,22 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
             final_url = f'{splitted_base_url.scheme}://{splitted_base_url.netloc}{partial}'
         if final_url not in known_urls:
             # There is something weird, to investigate
-            logging.info(f'URL without netloc: {base_url} - {partial} - {final_url}')
+            logger.debug(f'URL without netloc: {base_url} - {partial} - {final_url}')
     elif partial.startswith(';'):
         # URL starts at the parameters
         final_url = '{}{}'.format(base_url.split(';')[0], partial)
         if final_url not in known_urls:
-            logging.info(f'URL with only parameter: {base_url} - {partial} - {final_url}')
+            logger.debug(f'URL with only parameter: {base_url} - {partial} - {final_url}')
     elif partial.startswith('?'):
         # URL starts at the query
         final_url = '{}{}'.format(base_url.split('?')[0], partial)
         if final_url not in known_urls:
-            logging.info(f'URL with only query: {base_url} - {partial} - {final_url}')
+            logger.debug(f'URL with only query: {base_url} - {partial} - {final_url}')
     elif partial.startswith('#'):
         # URL starts at the fragment
         final_url = '{}{}'.format(base_url.split('#')[0], partial)
         if final_url not in known_urls:
-            logging.info(f'URL with only fragment: {base_url} - {partial} - {final_url}')
+            logger.debug(f'URL with only fragment: {base_url} - {partial} - {final_url}')
 
     if final_url not in known_urls:
         # sometimes, the port is in the redirect, and striped later on...
@@ -106,7 +116,7 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
             else:
                 final_url = parsed._replace(path='/').geturl()
         except Exception:
-            logging.info(f'Not a URL: {base_url} - {partial}')
+            logger.debug(f'Not a URL: {base_url} - {partial}')
 
     if final_url not in known_urls and splitted_base_url.fragment:
         # On a redirect, if the initial has a fragment, it is appended to the dest URL
@@ -114,7 +124,7 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
             parsed = urlparse(final_url)
             final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
         except Exception:
-            logging.info(f'Not a URL: {base_url} - {partial}')
+            logger.debug(f'Not a URL: {base_url} - {partial}')
 
     return final_url
 
@@ -140,7 +150,7 @@ def url_cleanup(dict_to_clean: dict, base_url: str, all_requests: List[str]) -> 
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
             else:
-                logging.info('{key} - not a URL - {to_attach}')
+                logger.debug('{key} - not a URL - {to_attach}')
     return to_return
 
 
@@ -208,6 +218,7 @@ class HarTreeNode(TreeNode):
 
     def __init__(self, **kwargs):
         super(HarTreeNode, self).__init__(**kwargs)
+        self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.add_feature('uuid', str(uuid.uuid4()))
         self.features_to_skip = set(['dist', 'support'])
 
@@ -267,14 +278,14 @@ class URLNode(HarTreeNode):
         self.add_feature('hostname', urlparse(self.name).hostname)
 
         if not self.hostname:
-            logging.warning(f'Something is broken in that node: {har_entry}')
+            self.logger.warning(f'Something is broken in that node: {har_entry}')
 
         tld = psl.get_tld(self.hostname)
         if tld:
             if tld in psl.tlds:
                 self.add_feature('known_tld', tld)
             else:
-                print('###### TLD WAT', self.name, tld)
+                self.logger.warning(f'###### TLD WAT {self.name} {tld}')
                 if tld.isdigit():
                     # IPV4
                     pass
@@ -284,7 +295,7 @@ class URLNode(HarTreeNode):
                 else:
                     self.add_feature('unknown_tld', tld)
         else:
-            print('###### No TLD/domain broken', self.name)
+            self.logger.warning(f'###### No TLD/domain broken {self.name}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
@@ -369,7 +380,7 @@ class URLNode(HarTreeNode):
             self.add_feature('unset_mimetype', True)
         else:
             self.add_feature('unknown_mimetype', True)
-            logging.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
+            self.logger.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
 
         # NOTE: Chrome/Chromium only features
         if har_entry.get('serverIPAddress'):
@@ -402,7 +413,7 @@ class URLNode(HarTreeNode):
                 # ..... Or not. Unable to find a URL for this redirect
                 self.add_feature('redirect_to_nothing', True)
                 self.add_feature('redirect_url', har_entry['response']['redirectURL'])
-                logging.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
+                self.logger.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
                     original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
 
     def _find_initiator_in_stack(self, stack: dict):
@@ -494,7 +505,9 @@ class HostNode(HarTreeNode):
 
 class HarFile():
 
-    def __init__(self, harfile: Union[str, Path]):
+    def __init__(self, harfile: Union[str, Path], capture_uuid: Optional[str]=None):
+        logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
+        self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         if isinstance(harfile, str):
             self.path: Path = Path(harfile)
         else:
@@ -554,7 +567,7 @@ class HarFile():
                 self.final_redirect = self.final_redirect.split('?', 1)[0]
                 self._search_final_redirect()
             else:
-                logging.warning(f'Unable to find the final redirect: {self.final_redirect}')
+                self.logger.warning(f'Unable to find the final redirect: {self.final_redirect}')
 
     @property
     def initial_title(self) -> str:
@@ -639,11 +652,13 @@ class HarFile():
 
 class Har2Tree(object):
 
-    def __init__(self, har_path: Union[str, Path]):
+    def __init__(self, har_path: Union[str, Path], capture_uuid: Optional[str]=None):
         """Build the ETE Toolkit tree based on the HAR file, cookies, and HTML content
         :param har: harfile of a capture
         """
-        self.har = HarFile(har_path)
+        logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
+        self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
+        self.har = HarFile(har_path, capture_uuid)
         self.hostname_tree = HostNode()
         if not self.har.entries:
             self.has_entries = False
@@ -700,7 +715,8 @@ class Har2Tree(object):
                                                            'uuid': setter_node.uuid,
                                                            'name': setter_node.name,
                                                            '3rd_party': is_3rd_party})
-        print('Cookies locally created & never sent', json.dumps(self.locally_created_not_sent, indent=2))
+        if self.locally_created_not_sent:
+            self.logger.info(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
 
         # if self.locally_created_not_sent:
         #    for c in locally_created.values():
@@ -773,7 +789,7 @@ class Har2Tree(object):
                 if n.referer == n.name:
                     # Skip to avoid loops:
                     #   * referer to itself
-                    logging.warning(f'Referer to itself {n.name}')
+                    self.logger.warning(f'Referer to itself {n.name}')
                     continue
                 else:
                     self.all_referer[n.referer].append(n.name)
@@ -810,7 +826,7 @@ class Har2Tree(object):
             sub_roots: Dict[HostNode, List[URLNode]] = defaultdict(list)
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
-                    logging.warning(f'Fucked up URL: {child_node_url}')
+                    self.logger.warning(f'Fucked up URL: {child_node_url}')
                     continue
                 if child_node_url.hostname in children_hostnames:
                     child_node_hostname = children_hostnames[child_node_url.hostname]
@@ -834,7 +850,7 @@ class Har2Tree(object):
                 # The root after redirect is in the tree (expected)
                 attach_orphans = self.url_tree.search_nodes(name=self.root_after_redirect)[0]
             else:
-                logging.warning("Root after redirect couldn't be attached, falling back. That should never happen and is probably a bug in har2tree.")
+                self.logger.warning("Root after redirect couldn't be attached, falling back. That should never happen and might a bug in har2tree.")
                 attach_orphans = self.url_tree
         else:
             self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.har.root_url, list(self.all_url_requests.keys()))
@@ -852,7 +868,7 @@ class Har2Tree(object):
                         break
                 else:
                     # Dirty attach everything else
-                    print('Remaining URL:', node.name)
+                    self.logger.info(f'Remaining URL: {node.name}')
                     self._make_subtree(orphan, [node])
             if orphan.children:
                 attach_orphans.add_child(orphan)
@@ -927,8 +943,11 @@ class Har2Tree(object):
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: Union[List[str], List[Path]]):
+    def __init__(self, harfiles: Union[List[str], List[Path]], uuid: Optional[str]=None):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
+        self.uuid = uuid
+        logger = logging.getLogger(__name__)
+        self.logger = Har2TreeLogAdapter(logger, {'uuid': uuid})
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:
             raise Har2TreeError('No usable HAR files found.')
@@ -940,7 +959,7 @@ class CrawledTree(object):
         """Open all the HAR files and build the trees"""
         loaded = []
         for har_path in files:
-            har2tree = Har2Tree(har_path)
+            har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
             if not har2tree.has_entries:
                 continue
             har2tree.make_tree()
@@ -988,9 +1007,10 @@ class CrawledTree(object):
             return []
         redirect_node = self.root_hartree.url_tree.search_nodes(name=self.root_hartree.root_after_redirect)
         if not redirect_node:
-            raise Exception(f'Unable to find node {self.root_hartree.root_after_redirect}')
+            self.logger.warning(f'Unable to find node {self.root_hartree.root_after_redirect}')
+            return []
         elif len(redirect_node) > 1:
-            logging.warning(f'Too many nodes found for {self.root_hartree.root_after_redirect}: {redirect_node}')
+            self.logger.warning(f'Too many nodes found for {self.root_hartree.root_after_redirect}: {redirect_node}')
         return [a.name for a in reversed(redirect_node[0].get_ancestors())]
 
     @property
