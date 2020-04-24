@@ -548,7 +548,8 @@ class HarFile():
         # Used to find the root entry of a page in the capture
         self.pages_start_times = {page['startedDateTime']: page for page in self.har['log']['pages']}
         # The first entry has a different start time as the one from the list, add that
-        self.pages_start_times[self.har['log']['entries'][0]['startedDateTime']] = self.har['log']['pages'][0]
+        if self.entries:
+            self.pages_start_times[self.initial_start_time] = self.har['log']['pages'][0]
 
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
@@ -585,7 +586,9 @@ class HarFile():
 
     @property
     def initial_start_time(self) -> str:
-        return self.har['log']['pages'][0]['startedDateTime']
+        if self.entries:
+            return self.entries[0]['startedDateTime']
+        return '-'
 
     @property
     def first_url(self) -> str:
@@ -795,19 +798,19 @@ class Har2Tree(object):
                 # The HAR file was created by chrome/chromium and we got the _initiator key
                 self.all_initiator_url[n.initiator_url].append(n.name)
 
+            if (url_entry['startedDateTime'] in self.har.pages_start_times
+                    and self.har.pages_start_times[url_entry['startedDateTime']]['id'] == n.pageref):
+                # This node is the root entry of a page. Can be used as a fallback when we build the tree
+                self.pages_root[n.pageref] = n.uuid
+
             if hasattr(n, 'referer'):
                 if n.referer == n.name:
                     # Skip to avoid loops:
                     #   * referer to itself
                     self.logger.warning(f'Referer to itself {n.name}')
-                    continue
+                    # continue
                 else:
                     self.all_referer[n.referer].append(n.name)
-
-            if (url_entry['startedDateTime'] in self.har.pages_start_times
-                    and self.har.pages_start_times[url_entry['startedDateTime']]['id'] == n.pageref):
-                # This node is the root entry of a page. Can be used as a fallback when we build the tree
-                self.pages_root[n.pageref] = n.uuid
 
             self.nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
