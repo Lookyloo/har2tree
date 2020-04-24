@@ -273,6 +273,8 @@ class URLNode(HarTreeNode):
             har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+0000')
         self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
 
+        self.add_feature('pageref', har_entry['pageref'])
+
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
         self.add_feature('hostname', urlparse(self.name).hostname)
@@ -285,7 +287,6 @@ class URLNode(HarTreeNode):
             if tld in psl.tlds:
                 self.add_feature('known_tld', tld)
             else:
-                self.logger.warning(f'###### TLD WAT {self.name} {tld}')
                 if tld.isdigit():
                     # IPV4
                     pass
@@ -293,6 +294,7 @@ class URLNode(HarTreeNode):
                     # IPV6
                     pass
                 else:
+                    self.logger.warning(f'###### TLD WAT {self.name} {tld}')
                     self.add_feature('unknown_tld', tld)
         else:
             self.logger.warning(f'###### No TLD/domain broken {self.name}')
@@ -543,6 +545,11 @@ class HarFile():
         # Reason: A specific URL cannot be loaded by something that hasn't been already started
         self.entries.sort(key=itemgetter('startedDateTime'))
 
+        # Used to find the root entry of a page in the capture
+        self.pages_start_times = {page['startedDateTime']: page for page in self.har['log']['pages']}
+        # The first entry has a different start time as the one from the list, add that
+        self.pages_start_times[self.har['log']['entries'][0]['startedDateTime']] = self.har['log']['pages'][0]
+
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
 
@@ -669,6 +676,9 @@ class Har2Tree(object):
         self.nodes_list: List[URLNode] = []
         self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
 
+        # Format: pageref: node UUID
+        self.pages_root: Dict[str, str] = {}
+
         self.all_redirects: List[str] = []
         self.all_referer: Dict[str, List[str]] = defaultdict(list)
         self.all_initiator_url: Dict[str, List[str]] = defaultdict(list)
@@ -794,6 +804,11 @@ class Har2Tree(object):
                 else:
                     self.all_referer[n.referer].append(n.name)
 
+            if (url_entry['startedDateTime'] in self.har.pages_start_times
+                    and self.har.pages_start_times[url_entry['startedDateTime']]['id'] == n.pageref):
+                # This node is the root entry of a page. Can be used as a fallback when we build the tree
+                self.pages_root[n.pageref] = n.uuid
+
             self.nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
 
@@ -842,36 +857,23 @@ class Har2Tree(object):
 
     def make_tree(self) -> URLNode:
         self._make_subtree(self.url_tree)
-
-        # At this point, we know the actual last URL.
-        if self.root_after_redirect:
-            self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.root_after_redirect, list(self.all_url_requests.keys()))
-            if self.url_tree.search_nodes(name=self.root_after_redirect):
-                # The root after redirect is in the tree (expected)
-                attach_orphans = self.url_tree.search_nodes(name=self.root_after_redirect)[0]
-            else:
-                self.logger.warning("Root after redirect couldn't be attached, falling back. That should never happen and might a bug in har2tree.")
-                attach_orphans = self.url_tree
-        else:
-            self.all_ressources_rendered = find_external_ressources(self.har.html_content, self.har.root_url, list(self.all_url_requests.keys()))
-            attach_orphans = self.url_tree
-
         if self.nodes_list:
-            orphan = URLNode(name='orphan urls')
-            orphan.add_feature('hostname', 'orphan.url')
+            # We were not able to attach a few things.
             while self.nodes_list:
                 node = self.nodes_list.pop(0)
-                for key, values in self.all_ressources_rendered.items():
-                    if node.name in values:
-                        node.add_feature('dynamic', True)
-                        self._make_subtree(attach_orphans, [node])
-                        break
+                if self.pages_root[node.pageref] != node.uuid:
+                    # This node is not a page root, we can attach it \o/
+                    page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
+                    self._make_subtree(page_root_node, [node])
                 else:
-                    # Dirty attach everything else
-                    self.logger.info(f'Remaining URL: {node.name}')
-                    self._make_subtree(orphan, [node])
-            if orphan.children:
-                attach_orphans.add_child(orphan)
+                    # No luck, let's attach it to the prior page in the list
+                    page_before = self.har.har['log']['pages'][0]
+                    for page in self.har.har['log']['pages'][1:]:
+                        if page['id'] == node.pageref:
+                            break
+                        page_before = page
+                    page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
+                    self._make_subtree(page_root_node, [node])
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
