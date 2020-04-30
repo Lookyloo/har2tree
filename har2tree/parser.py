@@ -808,12 +808,21 @@ class Har2Tree(object):
                     # Skip to avoid loops:
                     #   * referer to itself
                     self.logger.warning(f'Referer to itself {n.name}')
-                    # continue
                 else:
                     self.all_referer[n.referer].append(n.name)
 
             self.nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
+
+        # So, sometimes, the startedDateTime in the page list is fucked up
+        # Ex: start time of page 3 == start time of page 1. This is wrong, but it happens
+        # Solution: if we miss an entry in self.pages_root, we put the first node with that page ref.
+        for _, details in self.har.pages_start_times.items():
+            if details['id'] not in self.pages_root:
+                for node in self.nodes_list:
+                    if node.pageref == details['id']:
+                        self.pages_root[node.pageref] = node.uuid
+                        break
 
     def get_host_node_by_uuid(self, uuid: str) -> HostNode:
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
