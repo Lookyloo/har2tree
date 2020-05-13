@@ -14,7 +14,7 @@ import os
 from io import BytesIO
 import hashlib
 from operator import itemgetter
-from typing import List, Dict, Optional, Union, Tuple
+from typing import List, Dict, Optional, Union, Tuple, Set
 import ipaddress
 import sys
 
@@ -435,8 +435,6 @@ class HostNode(HarTreeNode):
         self.features_to_skip.add('urls')
 
         self.add_feature('urls', [])
-        self.add_feature('request_cookie', 0)
-        self.add_feature('response_cookie', 0)
         self.add_feature('js', 0)
         self.add_feature('redirect', 0)
         self.add_feature('redirect_to_nothing', 0)
@@ -454,24 +452,52 @@ class HostNode(HarTreeNode):
         self.add_feature('iframe', 0)
         self.add_feature('http_content', False)
         self.add_feature('https_content', False)
-        self.add_feature('mixed_content', False)
+        self.cookies_sent: Set[str] = set()
+        self.cookies_received: Set[Tuple[str, str, bool]] = set()
 
     def to_dict(self) -> dict:
         to_return = super(HostNode, self).to_dict()
-        to_return['urls_count'] = len(self.urls)
-        if self.http_content and self.https_content:
-            self.mixed_content = True
+        to_return['urls_count'] = self.urls_count
+        to_return['request_cookie'] = self.request_cookie
+        to_return['response_cookie'] = self.response_cookie
+        to_return['third_party_cookies_received'] = self.third_party_cookies_received
+        to_return['mixed_content'] = self.mixed_content
         return to_return
+
+    @property
+    def mixed_content(self) -> bool:
+        if self.http_content and self.https_content:
+            return True
+        return False
+
+    @property
+    def urls_count(self) -> int:
+        return len(self.urls)
+
+    @property
+    def request_cookie(self) -> int:
+        return len(self.cookies_sent)
+
+    @property
+    def response_cookie(self) -> int:
+        return len(self.cookies_received)
+
+    @property
+    def third_party_cookies_received(self) -> int:
+        return sum(third for _, _, third in self.cookies_received if third)
 
     def add_url(self, url: URLNode):
         if not self.name:
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
         self.urls.append(url)
-        if hasattr(url, 'request_cookie'):
-            self.request_cookie += len(url.request_cookie)
-        if hasattr(url, 'response_cookie'):
-            self.response_cookie += len(url.response_cookie)
+        if hasattr(url, 'cookies_sent'):
+            # Keep a set of cookies sent: different URLs will send the same cookie
+            self.cookies_sent.update(set(url.cookies_sent.keys()))
+        if hasattr(url, 'cookies_received'):
+            # Keep a set of cookies received: different URLs will receive the same cookie
+            self.cookies_received.update({(domain, cookie, is_3rd_party)
+                                          for domain, cookie, is_3rd_party in url.cookies_received})
         if hasattr(url, 'js'):
             self.js += 1
         if hasattr(url, 'redirect'):
@@ -576,6 +602,10 @@ class HarFile():
                 self._search_final_redirect()
             else:
                 self.logger.warning(f'Unable to find the final redirect: {self.final_redirect}')
+
+    @property
+    def number_entries(self) -> int:
+        return len(self.entries)
 
     @property
     def initial_title(self) -> str:
@@ -771,6 +801,22 @@ class Har2Tree(object):
                                 node.add_feature('octet_stream', True)
 
         self.url_tree = self.nodes_list.pop(0)
+
+    @property
+    def stats(self) -> Dict:
+        to_return: Dict = {'total_hostnames': 0}
+        to_return['total_urls'] = sum(1 for _ in self.url_tree.traverse())
+
+        all_cookies_sent: Set[str] = set()
+        all_cookies_received: Set[Tuple[str, str, bool]] = set()
+        for host_node in self.hostname_tree.traverse():
+            to_return['total_hostnames'] += 1
+            all_cookies_sent.update(host_node.cookies_sent)
+            all_cookies_received.update(host_node.cookies_received)
+
+        to_return['total_cookies_sent'] = len(all_cookies_sent)
+        to_return['total_cookies_received'] = len(all_cookies_received)
+        return to_return
 
     @property
     def root_referer(self) -> Optional[str]:
