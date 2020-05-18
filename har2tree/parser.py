@@ -14,7 +14,7 @@ import os
 from io import BytesIO
 import hashlib
 from operator import itemgetter
-from typing import List, Dict, Optional, Union, Tuple, Set
+from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping
 import ipaddress
 import sys
 
@@ -34,7 +34,7 @@ class Har2TreeLogAdapter(logging.LoggerAdapter):
     """
     Prepend log entry with the UUID of the capture
     """
-    def process(self, msg, kwargs):
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
         return '[%s] %s' % (self.extra['uuid'], msg), kwargs
 
 
@@ -130,7 +130,7 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
 
 
 # Standalone methods to extract and cleanup content from an HTML blob.
-def url_cleanup(dict_to_clean: dict, base_url: str, all_requests: List[str]) -> Dict[str, List[str]]:
+def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_requests: List[str]) -> Dict[str, List[str]]:
     to_return: Dict[str, List[str]] = {}
     for key, urls in dict_to_clean.items():
         to_return[key] = []
@@ -216,13 +216,13 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
 class HarTreeNode(TreeNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         super(HarTreeNode, self).__init__(**kwargs)
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.add_feature('uuid', str(uuid.uuid4()))
         self.features_to_skip = set(['dist', 'support'])
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> MutableMapping[str, Any]:
         to_return = {'uuid': self.uuid, 'children': []}
         for feature in self.features:
             if feature in self.features_to_skip:
@@ -240,7 +240,7 @@ class HarTreeNode(TreeNode):
 
 class URLNode(HarTreeNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         super(URLNode, self).__init__(**kwargs)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
@@ -250,7 +250,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def load_har_entry(self, har_entry: dict, all_requests: List[str]):
+    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
         if not self.name:
             # We're in the actual root node
             # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
@@ -418,7 +418,7 @@ class URLNode(HarTreeNode):
                 self.logger.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
                     original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
 
-    def _find_initiator_in_stack(self, stack: dict):
+    def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> Optional[str]:
         # Because everything is terrible, and the call stack can have parents
         if stack['callFrames']:
             return unquote_plus(stack['callFrames'][0]['url'])
@@ -429,7 +429,7 @@ class URLNode(HarTreeNode):
 
 class HostNode(HarTreeNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         super(HostNode, self).__init__(**kwargs)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
@@ -455,7 +455,7 @@ class HostNode(HarTreeNode):
         self.cookies_sent: Set[str] = set()
         self.cookies_received: Set[Tuple[str, str, bool]] = set()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> MutableMapping[str, Any]:
         to_return = super(HostNode, self).to_dict()
         to_return['urls_count'] = self.urls_count
         to_return['request_cookie'] = self.request_cookie
@@ -486,7 +486,7 @@ class HostNode(HarTreeNode):
     def third_party_cookies_received(self) -> int:
         return sum(third for _, _, third in self.cookies_received if third)
 
-    def add_url(self, url: URLNode):
+    def add_url(self, url: URLNode) -> None:
         if not self.name:
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
@@ -542,7 +542,7 @@ class HarFile():
             self.path = harfile
 
         with self.path.open() as f:
-            self.har: dict = json.load(f)
+            self.har: Dict[str, Any] = json.load(f)
 
         # I mean it, that's the last URL the splash browser was on
         last_redirect_file = self.path.parent / f'{self.path.stem}.last_redirect.txt'
@@ -556,7 +556,7 @@ class HarFile():
         cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
         if cookiefile.is_file():
             with cookiefile.open() as c:
-                self.cookies: List[dict] = json.load(c)
+                self.cookies: List[Dict[str, Any]] = json.load(c)
         else:
             self.cookies = []
 
@@ -580,7 +580,7 @@ class HarFile():
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
 
-    def _search_final_redirect(self):
+    def _search_final_redirect(self) -> None:
         for e in self.entries:
             unquoted_url = unquote_plus(e['request']['url'])
             if unquoted_url == self.final_redirect:
@@ -627,14 +627,14 @@ class HarFile():
         return '-'
 
     @property
-    def entries(self) -> List[dict]:
+    def entries(self) -> List[Dict[str, Any]]:
         return self.har['log']['entries']
 
     @property
     def root_url(self) -> str:
         return self.entries[0]['request']['url']
 
-    def __find_referer(self, har_entry: Dict) -> Optional[str]:
+    def __find_referer(self, har_entry: Dict[str, Any]) -> Optional[str]:
         for header_entry in har_entry['request']['headers']:
             if header_entry['name'] == 'Referer':
                 return header_entry['value']
@@ -719,7 +719,7 @@ class Har2Tree(object):
 
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
-        self.initial_cookies: Dict[str, dict] = {}
+        self.initial_cookies: Dict[str, Dict[str, Any]] = {}
         if hasattr(self.nodes_list[0], 'cookies_sent'):
             self.initial_cookies = {key: cookie for key, cookie in self.nodes_list[0].cookies_sent.items()}
 
@@ -731,7 +731,7 @@ class Har2Tree(object):
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
         # NOTE: locally_created contains all cookies not present in a response, and not passed at the begining of the capture to splash
-        self.locally_created: Dict[str, dict] = {}
+        self.locally_created: Dict[str, Dict[str, Any]] = {}
         for c in self.har.cookies:
             c_identifier = f'{c["name"]}={c["value"]}'
             if (c_identifier not in self.cookies_received
@@ -743,7 +743,7 @@ class Har2Tree(object):
         #        print(json.dumps(l, indent=2))
 
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
-        self.locally_created_not_sent: Dict[str, dict] = self.locally_created.copy()
+        self.locally_created_not_sent: Dict[str, Dict[str, Any]] = self.locally_created.copy()
         # Cross reference the source of the cookie
         for n in self.nodes_list:
             if hasattr(n, 'cookies_sent'):
@@ -803,8 +803,8 @@ class Har2Tree(object):
         self.url_tree = self.nodes_list.pop(0)
 
     @property
-    def stats(self) -> Dict:
-        to_return: Dict = {'total_hostnames': 0}
+    def stats(self) -> Dict[str, Any]:
+        to_return: Dict[str, Any] = {'total_hostnames': 0}
         to_return['total_urls'] = sum(1 for _ in self.url_tree.traverse())
 
         all_cookies_sent: Set[str] = set()
@@ -830,7 +830,7 @@ class Har2Tree(object):
     def start_time(self) -> datetime:
         return self.url_tree.start_time
 
-    def _load_url_entries(self):
+    def _load_url_entries(self) -> None:
         '''Initialize the list of nodes to attach to the tree (as URLNode),
         and create a list of note for each URL we have in the HAR document'''
 
@@ -885,10 +885,10 @@ class Har2Tree(object):
             return self.har.final_redirect
         return None
 
-    def to_json(self):
+    def to_json(self) -> str:
         return self.hostname_tree.to_json()
 
-    def make_hostname_tree(self, root_nodes_url: Union[URLNode, List[URLNode]], root_node_hostname: HostNode):
+    def make_hostname_tree(self, root_nodes_url: Union[URLNode, List[URLNode]], root_node_hostname: HostNode) -> None:
         """ Groups all the URLs by domain in the hostname tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
@@ -938,7 +938,7 @@ class Har2Tree(object):
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
-    def _make_subtree(self, root: URLNode, nodes_to_attach: List[URLNode]=None):
+    def _make_subtree(self, root: URLNode, nodes_to_attach: List[URLNode]=None) -> None:
         matching_urls: List[URLNode]
         if nodes_to_attach is None:
             # We're in the actual root node
@@ -1026,7 +1026,7 @@ class CrawledTree(object):
             loaded.append(har2tree)
         return loaded
 
-    def find_parents(self):
+    def find_parents(self) -> None:
         """Find all the trees where the first entry has a referer.
         Meaning: This is a sub-tree to attach to some other node.
         """
@@ -1035,7 +1035,7 @@ class CrawledTree(object):
             if hartree.root_referer:
                 self.referers[hartree.root_referer].append(hartree)
 
-    def join_trees(self, root: Optional[Har2Tree]=None, parent_root: Optional[URLNode]=None):
+    def join_trees(self, root: Optional[Har2Tree]=None, parent_root: Optional[URLNode]=None) -> None:
         """Connect the trees together if we have more than one HAR file"""
         if root is None:
             root = self.root_hartree
@@ -1057,7 +1057,7 @@ class CrawledTree(object):
             self.join_trees(sub_tree, to_attach)
         self.root_hartree.make_hostname_tree(self.root_hartree.url_tree, self.root_hartree.hostname_tree)
 
-    def to_json(self):
+    def to_json(self) -> str:
         """JSON output for d3js"""
         return self.root_hartree.to_json()
 
@@ -1086,6 +1086,6 @@ class CrawledTree(object):
         return self.root_hartree.user_agent
 
 
-def harnode_json_default(obj: HarTreeNode) -> dict:
+def harnode_json_default(obj: HarTreeNode) -> MutableMapping[str, Any]:
     if isinstance(obj, HarTreeNode):
         return obj.to_dict()
