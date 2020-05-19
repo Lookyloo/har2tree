@@ -335,6 +335,9 @@ class URLNode(HarTreeNode):
         if self.request_cookie:
             # https://developer.mozilla.org/en-US/docs/Web/HTTP/headers/Set-Cookie
             # Cookie name must not contain "=", so we can use it safely
+            # The content of this feature is initialized in Har2Tree.__init__
+            # And it contains a reference to the URL Node the cookies comes from initially
+            # (the cookie was in the response of that request)
             self.add_feature('cookies_sent', {})
             for cookie in self.request_cookie:
                 self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
@@ -572,10 +575,13 @@ class HarFile():
         self.entries.sort(key=itemgetter('startedDateTime'))
 
         # Used to find the root entry of a page in the capture
-        self.pages_start_times = {page['startedDateTime']: page for page in self.har['log']['pages']}
+        # NOTE 2020-05-19: Turns out multiple pages can have the exact same timestamp...
+        self.pages_start_times: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for page in self.har['log']['pages']:
+            self.pages_start_times[page['startedDateTime']].append(page)
         # The first entry has a different start time as the one from the list, add that
         if self.entries:
-            self.pages_start_times[self.initial_start_time] = self.har['log']['pages'][0]
+            self.pages_start_times[self.initial_start_time].append(self.har['log']['pages'][0])
 
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
@@ -844,10 +850,12 @@ class Har2Tree(object):
                 # The HAR file was created by chrome/chromium and we got the _initiator key
                 self.all_initiator_url[n.initiator_url].append(n.name)
 
-            if (url_entry['startedDateTime'] in self.har.pages_start_times
-                    and self.har.pages_start_times[url_entry['startedDateTime']]['id'] == n.pageref):
-                # This node is the root entry of a page. Can be used as a fallback when we build the tree
-                self.pages_root[n.pageref] = n.uuid
+            if url_entry['startedDateTime'] in self.har.pages_start_times:
+                for page in self.har.pages_start_times[url_entry['startedDateTime']]:
+                    if page['id'] == n.pageref:
+                        # This node is the root entry of a page. Can be used as a fallback when we build the tree
+                        self.pages_root[n.pageref] = n.uuid
+                        break
 
             if hasattr(n, 'referer'):
                 if n.referer == n.name:
@@ -863,12 +871,13 @@ class Har2Tree(object):
         # So, sometimes, the startedDateTime in the page list is fucked up
         # Ex: start time of page 3 == start time of page 1. This is wrong, but it happens
         # Solution: if we miss an entry in self.pages_root, we put the first node with that page ref.
-        for _, details in self.har.pages_start_times.items():
-            if details['id'] not in self.pages_root:
-                for node in self.nodes_list:
-                    if node.pageref == details['id']:
-                        self.pages_root[node.pageref] = node.uuid
-                        break
+        for _, pages in self.har.pages_start_times.items():
+            for page in pages:
+                if page['id'] not in self.pages_root:
+                    for node in self.nodes_list:
+                        if node.pageref == page['id']:
+                            self.pages_root[node.pageref] = node.uuid
+                            break
 
     def get_host_node_by_uuid(self, uuid: str) -> HostNode:
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
