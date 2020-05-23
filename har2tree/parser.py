@@ -311,6 +311,7 @@ class URLNode(HarTreeNode):
             # If the content is empty, we don't care
             if self.request['postData']['text']:
                 # We have a POST request, the data can be base64 encoded or urlencoded
+                posted_data: Union[str, bytes]
                 if 'encoding' in self.request['postData']:
                     if self.request['postData']['encoding'] == 'base64':
                         posted_data = b64decode(self.request['postData']['text'])
@@ -326,7 +327,7 @@ class URLNode(HarTreeNode):
                             try:
                                 posted_data = posted_data.decode()
                             except Exception:
-                                self.logger.warning(f'Expected urlencoded, got garbage: {posted_data}')
+                                self.logger.warning(f'Expected urlencoded, got garbage: {posted_data!r}')
                         if isinstance(posted_data, str):
                             posted_data = unquote_plus(posted_data)
                     elif self.request['postData']['mimeType'].startswith('text'):
