@@ -307,6 +307,48 @@ class URLNode(HarTreeNode):
             if h['name'].lower() == 'user-agent':
                 self.add_feature('user_agent', h['value'])
 
+        if 'method' in self.request and self.request['method'] == 'POST':
+            # If the content is empty, we don't care
+            if self.request['postData']['text']:
+                # We have a POST request, the data can be base64 encoded or urlencoded
+                if 'encoding' in self.request['postData']:
+                    if self.request['postData']['encoding'] == 'base64':
+                        posted_data = b64decode(self.request['postData']['text'])
+                    else:
+                        self.logger.warning(f'Unexpected encoding: {self.request["postData"]["encoding"]}')
+                else:
+                    posted_data = self.request['postData']['text']
+
+                if 'mimeType' in self.request['postData']:
+                    if self.request['postData']['mimeType'].startswith('application/x-www-form-urlencoded'):
+                        # 100% sure there will be websites where decode will fail
+                        if isinstance(posted_data, bytes):
+                            try:
+                                posted_data = posted_data.decode()
+                            except Exception:
+                                self.logger.warning(f'Expected urlencoded, got garbage: {posted_data}')
+                        if isinstance(posted_data, str):
+                            posted_data = unquote_plus(posted_data)
+                    elif self.request['postData']['mimeType'].startswith('text'):
+                        # We got text, keep what we already have
+                        pass
+                    else:
+                        self.logger.warning(f'Unexpected mime type: {self.request["postData"]["mimeType"]}')
+
+                # The data may be json, try to load it
+                try:
+                    posted_data = json.loads(posted_data)
+                except Exception:
+                    pass
+
+                if isinstance(posted_data, bytes):
+                    # Try to decode it as utf-8
+                    try:
+                        posted_data = posted_data.decode('utf-8')
+                    except Exception:
+                        pass
+                self.add_feature('posted_data', posted_data)
+
         self.add_feature('response', har_entry['response'])
 
         self.add_feature('response_cookie', har_entry['response']['cookies'])
@@ -345,6 +387,7 @@ class URLNode(HarTreeNode):
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
             self.add_feature('empty_response', True)
         else:
+            self.add_feature('empty_response', False)
             if har_entry['response']['content'].get('encoding') == 'base64':
                 self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
             else:
@@ -359,33 +402,34 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('filename', 'file.bin')
 
-        if ('javascript' in har_entry['response']['content']['mimeType']
-                or 'ecmascript' in har_entry['response']['content']['mimeType']):
-            self.add_feature('js', True)
-        elif har_entry['response']['content']['mimeType'].startswith('image'):
-            self.add_feature('image', True)
-        elif har_entry['response']['content']['mimeType'].startswith('text/css'):
-            self.add_feature('css', True)
-        elif 'json' in har_entry['response']['content']['mimeType']:
-            self.add_feature('json', True)
-        elif har_entry['response']['content']['mimeType'].startswith('text/html'):
-            self.add_feature('html', True)
-        elif 'font' in har_entry['response']['content']['mimeType']:
-            self.add_feature('font', True)
-        elif 'octet-stream' in har_entry['response']['content']['mimeType']:
-            self.add_feature('octet_stream', True)
-        elif ('text/plain' in har_entry['response']['content']['mimeType']
-                or 'xml' in har_entry['response']['content']['mimeType']):
-            self.add_feature('text', True)
-        elif 'video' in har_entry['response']['content']['mimeType']:
-            self.add_feature('video', True)
-        elif 'mpegurl' in har_entry['response']['content']['mimeType'].lower():
-            self.add_feature('livestream', True)
-        elif not har_entry['response']['content']['mimeType']:
-            self.add_feature('unset_mimetype', True)
-        else:
-            self.add_feature('unknown_mimetype', True)
-            self.logger.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
+            # If the content of the response is empty, skip.
+            if ('javascript' in har_entry['response']['content']['mimeType']
+                    or 'ecmascript' in har_entry['response']['content']['mimeType']):
+                self.add_feature('js', True)
+            elif har_entry['response']['content']['mimeType'].startswith('image'):
+                self.add_feature('image', True)
+            elif har_entry['response']['content']['mimeType'].startswith('text/css'):
+                self.add_feature('css', True)
+            elif 'json' in har_entry['response']['content']['mimeType']:
+                self.add_feature('json', True)
+            elif har_entry['response']['content']['mimeType'].startswith('text/html'):
+                self.add_feature('html', True)
+            elif 'font' in har_entry['response']['content']['mimeType']:
+                self.add_feature('font', True)
+            elif 'octet-stream' in har_entry['response']['content']['mimeType']:
+                self.add_feature('octet_stream', True)
+            elif ('text/plain' in har_entry['response']['content']['mimeType']
+                    or 'xml' in har_entry['response']['content']['mimeType']):
+                self.add_feature('text', True)
+            elif 'video' in har_entry['response']['content']['mimeType']:
+                self.add_feature('video', True)
+            elif 'mpegurl' in har_entry['response']['content']['mimeType'].lower():
+                self.add_feature('livestream', True)
+            elif not har_entry['response']['content']['mimeType']:
+                self.add_feature('unset_mimetype', True)
+            else:
+                self.add_feature('unknown_mimetype', True)
+                self.logger.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
 
         # NOTE: Chrome/Chromium only features
         if har_entry.get('serverIPAddress'):
@@ -779,6 +823,9 @@ class Har2Tree(object):
                         if url not in self.all_url_requests:
                             continue
                         for node in self.all_url_requests[url]:
+                            if node.empty_response:
+                                # If the body of the response was empty, skip.
+                                continue
                             if type_ressource == 'img':
                                 node.add_feature('image', True)
 
