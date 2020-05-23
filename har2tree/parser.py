@@ -307,7 +307,7 @@ class URLNode(HarTreeNode):
             if h['name'].lower() == 'user-agent':
                 self.add_feature('user_agent', h['value'])
 
-        if 'method' in self.request and self.request['method'] == 'POST':
+        if 'method' in self.request and self.request['method'] == 'POST' and 'postData' in self.request:
             # If the content is empty, we don't care
             if self.request['postData']['text']:
                 # We have a POST request, the data can be base64 encoded or urlencoded
@@ -581,9 +581,10 @@ class HostNode(HarTreeNode):
 
 class HarFile():
 
-    def __init__(self, harfile: Union[str, Path], capture_uuid: Optional[str]=None):
+    def __init__(self, harfile: Union[str, Path], capture_uuid: str):
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
-        self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
+        self.capture_uuid: str = capture_uuid
+        self.logger = Har2TreeLogAdapter(logger, {'uuid': self.capture_uuid})
         if isinstance(harfile, str):
             self.path: Path = Path(harfile)
         else:
@@ -740,10 +741,13 @@ class HarFile():
                 return h['value']
         return None
 
+    def __repr__(self) -> str:
+        return f'HarFile({self.path}, {self.capture_uuid})'
+
 
 class Har2Tree(object):
 
-    def __init__(self, har_path: Union[str, Path], capture_uuid: Optional[str]=None):
+    def __init__(self, har_path: Union[str, Path], capture_uuid: str):
         """Build the ETE Toolkit tree based on the HAR file, cookies, and HTML content
         :param har: harfile of a capture
         """
@@ -1057,10 +1061,13 @@ class Har2Tree(object):
                             self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
                             self._make_subtree(unode, matching_urls)
 
+    def __repr__(self) -> str:
+        return f'Har2Tree({self.har.path}, {self.har.capture_uuid})'
+
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: Union[List[str], List[Path]], uuid: Optional[str]=None):
+    def __init__(self, harfiles: Union[List[str], List[Path]], uuid: str):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.uuid = uuid
         logger = logging.getLogger(__name__)
