@@ -990,7 +990,11 @@ class Har2Tree(object):
                     for page in self.har.har['log']['pages'][1:]:
                         if page['id'] == node.pageref:
                             break
-                        page_before = page
+                        # Sometimes, the page listed in the list of pages is not related to
+                        # any of the entries. Go figure what happened.
+                        # If that's the case, we cannot use it as a reference
+                        if page['id'] in self.pages_root:
+                            page_before = page
                     page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
                     self._make_subtree(page_root_node, [node])
 
