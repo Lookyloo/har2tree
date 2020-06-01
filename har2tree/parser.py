@@ -386,6 +386,7 @@ class URLNode(HarTreeNode):
                 self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
 
         if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
+            # If the content of the response is empty, skip.
             self.add_feature('empty_response', True)
         else:
             self.add_feature('empty_response', False)
@@ -403,7 +404,24 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('filename', 'file.bin')
 
-            # If the content of the response is empty, skip.
+            # Common JS redirect we can catch easily
+            # NOTE: maybe make it a function.
+            js_redirects = ['window.location.href', 'window.location', 'top.location']
+            for js_redirect in js_redirects:
+                url = re.findall(f'{js_redirect}.*"(.*)".*'.encode(), self.body.getvalue())
+                if url:
+                    # TODO: new type, redirect_js or something like that
+                    redirect_url = rebuild_url(self.name, url[0].decode(), all_requests)
+                    if redirect_url in all_requests:
+                        self.add_feature('redirect', True)
+                        self.add_feature('redirect_url', redirect_url)
+
+            if 'meta_refresh' in self.external_ressources and self.external_ressources.get('meta_refresh'):
+                if self.external_ressources['meta_refresh'][0] in all_requests:
+                    # TODO: new type, redirect_html or something like that
+                    self.add_feature('redirect', True)
+                    self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
+
             if ('javascript' in har_entry['response']['content']['mimeType']
                     or 'ecmascript' in har_entry['response']['content']['mimeType']):
                 self.add_feature('js', True)
