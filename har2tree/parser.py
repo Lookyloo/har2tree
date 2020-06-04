@@ -557,6 +557,10 @@ class HostNode(HarTreeNode):
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
         self.urls.append(url)
+
+        # Add to URLNode a reference to the HostNode UUID
+        url.add_feature('hostnode_uuid', self.uuid)
+
         if hasattr(url, 'cookies_sent'):
             # Keep a set of cookies sent: different URLs will send the same cookie
             self.cookies_sent.update(set(url.cookies_sent.keys()))
@@ -803,6 +807,13 @@ class Har2Tree(object):
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
+        # Dictionary of all cookies sent during the capture
+        self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
+        for n in self.nodes_list:
+            if hasattr(n, 'cookies_sent'):
+                for c_sent in n.cookies_sent.keys():
+                    self.cookies_sent[c_sent].append(n)
+
         # NOTE: locally_created contains all cookies not present in a response, and not passed at the begining of the capture to splash
         self.locally_created: Dict[str, Dict[str, Any]] = {}
         for c in self.har.cookies:
@@ -824,12 +835,12 @@ class Har2Tree(object):
                     # Remove cookie from list if sent during the capture.
                     self.locally_created_not_sent.pop(c_sent, None)
                     for domain, setter_node, is_3rd_party in self.cookies_received[c_sent]:
-                        if n.hostname.endswith(domain):
+                        # Make sure the cookie wasn't set by an other response from an other domain,
+                        # and only add the entry in the list if the query setting the cookie started before the
+                        # current one
+                        if n.hostname.endswith(domain) and setter_node.start_time < n.start_time:
                             # This cookie could have been set by this URL
-                            # FIXME: append a lightweight URL node as dict
-                            n.cookies_sent[c_sent].append({'hostname': setter_node.hostname,
-                                                           'uuid': setter_node.uuid,
-                                                           'name': setter_node.name,
+                            n.cookies_sent[c_sent].append({'setter': setter_node,
                                                            '3rd_party': is_3rd_party})
         if self.locally_created_not_sent:
             self.logger.info(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
