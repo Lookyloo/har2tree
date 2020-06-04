@@ -459,9 +459,9 @@ class URLNode(HarTreeNode):
             elif har_entry['_initiator']['type'] == 'parser' and har_entry['_initiator']['url']:
                 self.add_feature('initiator_url', unquote_plus(har_entry['_initiator']['url']))
             elif har_entry['_initiator']['type'] == 'script':
-                url = self._find_initiator_in_stack(har_entry['_initiator']['stack'])
-                if url:
-                    self.add_feature('initiator_url', url)
+                url_stack = self._find_initiator_in_stack(har_entry['_initiator']['stack'])
+                if url_stack:
+                    self.add_feature('initiator_url', url_stack)
             elif har_entry['_initiator']['type'] == 'redirect':
                 # FIXME: Need usecase
                 raise Exception(f'Got a redirect! - {har_entry}')
