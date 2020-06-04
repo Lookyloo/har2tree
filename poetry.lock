@@ -52,7 +52,7 @@ description = "Hosted coverage reports for GitHub, Bitbucket and Gitlab"
 name = "codecov"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "2.1.3"
+version = "2.1.4"
 
 [package.dependencies]
 coverage = "*"
@@ -379,7 +379,7 @@ description = "Measures the displayed width of unicode strings in a terminal"
 name = "wcwidth"
 optional = false
 python-versions = "*"
-version = "0.2.2"
+version = "0.2.3"
 
 [metadata]
 content-hash = "5f728af0516755236f6b358bad4caf7605b9d77501300c9002986173b1d07451"
@@ -408,8 +408,9 @@ chardet = [
     {file = "chardet-3.0.4.tar.gz", hash = "sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae"},
 ]
 codecov = [
-    {file = "codecov-2.1.3-py2.7.egg", hash = "sha256:e20e9fd7e530da14a22245862beb43a9fce9a6b998d9bf196c44d0207817b236"},
-    {file = "codecov-2.1.3.tar.gz", hash = "sha256:2ebd639d8f621aabcce399e475b0302e436cb7e00e7724d1b2224bbf3f215a0c"},
+    {file = "codecov-2.1.4-py2.py3-none-any.whl", hash = "sha256:7378c4bec1809dde64031bf7d76c95266b0e6d60cfcd1d6a16ce96bfb6360ac3"},
+    {file = "codecov-2.1.4-py3.8.egg", hash = "sha256:24c24a7c8d1231b83729c7a2a33655ce472a3ba05e0111d52701e3e3075657c9"},
+    {file = "codecov-2.1.4.tar.gz", hash = "sha256:bf30a41f65e747b159e2a749d1f9c92042d358bba0905fd94d3def3a368e592c"},
 ]
 colorama = [
     {file = "colorama-0.4.3-py2.py3-none-any.whl", hash = "sha256:7d73d2a99753107a36ac6b455ee49046802e59d9d076ef8e47b61499fa29afff"},
@@ -609,6 +610,6 @@ urllib3 = [
     {file = "urllib3-1.25.9.tar.gz", hash = "sha256:3018294ebefce6572a474f0604c2021e33b3fd8006ecd11d62107a5d2a963527"},
 ]
 wcwidth = [
-    {file = "wcwidth-0.2.2-py2.py3-none-any.whl", hash = "sha256:b651b6b081476420e4e9ae61239ac4c1b49d0c5ace42b2e81dc2ff49ed50c566"},
-    {file = "wcwidth-0.2.2.tar.gz", hash = "sha256:3de2e41158cb650b91f9654cbf9a3e053cee0719c9df4ddc11e4b568669e9829"},
+    {file = "wcwidth-0.2.3-py2.py3-none-any.whl", hash = "sha256:980fbf4f3c196c0f329cdcd1e84c554d6a211f18e252e525a0cf4223154a41d6"},
+    {file = "wcwidth-0.2.3.tar.gz", hash = "sha256:edbc2b718b4db6cdf393eefe3a420183947d6aa312505ce6754516f458ff8830"},
 ]
