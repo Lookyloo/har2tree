@@ -40,11 +40,19 @@ class Har2TreeLogAdapter(logging.LoggerAdapter):
 
 class Har2TreeError(Exception):
     def __init__(self, message: str):
+        """
+        Har2Tree Exception
+        """
         super(Har2TreeError, self).__init__(message)
         self.message = message
 
 
 def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
+    """
+    The last part of a URL can be reconnected to its base in plenty different ways.
+    This method aims to do that in a generic manner.
+    As we know the list of possible URLs in the capture, we check for a match against that list.
+    """
     splitted_base_url = urlparse(base_url)
     # Remove all possible quotes
     partial = partial.strip()
@@ -61,7 +69,7 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
         if final_url not in known_urls:
             logger.debug(f'URL without scheme: {base_url} - {partial} - {final_url}')
     elif partial.startswith('/') or partial[0] not in [';', '?', '#']:
-        # We have a path
+        # We have a path, but not necessarily a complete one (see below)
         if partial[0] != '/':
             # Yeah, that happens, and the browser appends the path in redirect_url to the current path
             if base_url[-1] == '/':
@@ -73,53 +81,58 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
                 last_slash = base_url.rfind('/') + 1
                 final_url = f'{base_url[:last_slash]}{partial}'
         else:
+            # Just slap the partial right after the netloc (and the nto hostname, because we could have a port.
             final_url = f'{splitted_base_url.scheme}://{splitted_base_url.netloc}{partial}'
         if final_url not in known_urls:
-            # There is something weird, to investigate
             logger.debug(f'URL without netloc: {base_url} - {partial} - {final_url}')
     elif partial.startswith(';'):
-        # URL starts at the parameters
+        # partial starts with a parameter. Replace the existing ones in base_url with partial
         final_url = '{}{}'.format(base_url.split(';')[0], partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only parameter: {base_url} - {partial} - {final_url}')
     elif partial.startswith('?'):
-        # URL starts at the query
+        # partial starts with a query. Replace the existing ones in base_url with partial
         final_url = '{}{}'.format(base_url.split('?')[0], partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only query: {base_url} - {partial} - {final_url}')
     elif partial.startswith('#'):
-        # URL starts at the fragment
+        # partial starts with a fragment. Replace the existing ones in base_url with partial
         final_url = '{}{}'.format(base_url.split('#')[0], partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only fragment: {base_url} - {partial} - {final_url}')
+    else:
+        # The 2nd elif should catch all the other cases
+        logger.debug(f'That should never happen: {base_url} - {partial}')
 
     if final_url not in known_urls:
-        # sometimes, the port is in the redirect, and striped later on...
-        if final_url.startswith('https://') and ':443' in final_url:
-            final_url = final_url.replace(':443', '')
-        if final_url.startswith('http://') and ':80' in final_url:
-            final_url = final_url.replace(':80', '')
+        # sometimes, the port is in the partial, but striped in the list of known urls.
+        final_parsed = urlparse(final_url)
+        if final_url.startswith('https://') and final_parsed.netloc.endswith(':443'):
+            final_url = final_url.replace(':443', '', 1)
+        if final_url.startswith('http://') and final_parsed.netloc.endswith(':80'):
+            final_url = final_url.replace(':80', '', 1)
 
     if final_url not in known_urls:
         # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
         try:
             parsed = urlparse(final_url)
             if parsed.path:
-                # NOTE: Path('').resolve() => PosixPath('/path/to/current/directory') <= if you run that from your home dir, it is the path to your home dir
-                # FIXME: Path('sdsfs/../dsfsdfs/../..').resolve() => PosixPath('/path/to/current')
-                resolved_path = str(Path(parsed.path).resolve())
+                # NOTE Path('<complex path>').resolve() can return a path on the local system, and follow the symlinks. We don't want that.
+                # That's the reason we use os.path.normpath
+                resolved_path = os.path.normpath(parsed.path)
                 final_url = parsed._replace(path=resolved_path).geturl()
                 if final_url not in known_urls and resolved_path[-1] != '/':
-                    # NOTE: the last '/' at the end of the path is stripped by resolve, we try to re-add it
+                    # NOTE: the last '/' at the end of the path is stripped by normpath, we try to re-add it
                     resolved_path += '/'
                     final_url = parsed._replace(path=resolved_path).geturl()
             else:
+                # No path, just make it a /
                 final_url = parsed._replace(path='/').geturl()
         except Exception:
             logger.debug(f'Not a URL: {base_url} - {partial}')
 
     if final_url not in known_urls and splitted_base_url.fragment:
-        # On a redirect, if the initial has a fragment, it is appended to the dest URL
+        # On a redirect, if the initial URL has a fragment, it is appended to the destination URL
         try:
             parsed = urlparse(final_url)
             final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
@@ -129,8 +142,10 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
     return final_url
 
 
-# Standalone methods to extract and cleanup content from an HTML blob.
 def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_requests: List[str]) -> Dict[str, List[str]]:
+    """
+    Standalone methods to cleanup URLs extracted from an HTML blob.
+    """
     to_return: Dict[str, List[str]] = {}
     for key, urls in dict_to_clean.items():
         to_return[key] = []
@@ -155,6 +170,7 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
 
 
 def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Dict[str, List[str]]:
+    """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
     # img: https://www.w3schools.com/TAGs/tag_img.asp -> longdesc src srcset
@@ -207,8 +223,6 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
         # print("################ REGEXES ", to_return['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
-    # So the next line is disabled and will be reenabled if it turns out to be required at a later time.
-    # to_attach = html.unescape(to_attach)
     return url_cleanup(to_return, base_url, all_requests)
 
 # ##################################################################
@@ -217,12 +231,15 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 class HarTreeNode(TreeNode):
 
     def __init__(self, **kwargs: Any):
+        """Node dumpable in json to display with d3js"""
         super(HarTreeNode, self).__init__(**kwargs)
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.add_feature('uuid', str(uuid.uuid4()))
         self.features_to_skip = set(['dist', 'support'])
 
     def to_dict(self) -> MutableMapping[str, Any]:
+        """Make a dict that can then be dumped in json.
+        """
         to_return = {'uuid': self.uuid, 'children': []}
         for feature in self.features:
             if feature in self.features_to_skip:
@@ -235,12 +252,14 @@ class HarTreeNode(TreeNode):
         return to_return
 
     def to_json(self) -> str:
+        """Make d3js compatible json"""
         return json.dumps(self.to_dict(), default=harnode_json_default)
 
 
 class URLNode(HarTreeNode):
 
     def __init__(self, **kwargs: Any):
+        """Node of the URL Tree"""
         super(URLNode, self).__init__(**kwargs)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
@@ -251,6 +270,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('ip_address')
 
     def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
+        """Load one entry of the HAR file, initialize most of the features of the node"""
         if not self.name:
             # We're in the actual root node
             # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
@@ -496,6 +516,7 @@ class URLNode(HarTreeNode):
 class HostNode(HarTreeNode):
 
     def __init__(self, **kwargs: Any):
+        """Node of the Hostname Tree"""
         super(HostNode, self).__init__(**kwargs)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
@@ -522,6 +543,7 @@ class HostNode(HarTreeNode):
         self.cookies_received: Set[Tuple[str, str, bool]] = set()
 
     def to_dict(self) -> MutableMapping[str, Any]:
+        """Make a dictionary that is json dumpable for d3js"""
         to_return = super(HostNode, self).to_dict()
         to_return['urls_count'] = self.urls_count
         to_return['request_cookie'] = self.request_cookie
@@ -532,27 +554,33 @@ class HostNode(HarTreeNode):
 
     @property
     def mixed_content(self) -> bool:
+        """Is there http and https URL Nodes"""
         if self.http_content and self.https_content:
             return True
         return False
 
     @property
     def urls_count(self) -> int:
+        """Number of URLs"""
         return len(self.urls)
 
     @property
     def request_cookie(self) -> int:
+        """Number of unique cookies sent in the requests of all the URL nodes"""
         return len(self.cookies_sent)
 
     @property
     def response_cookie(self) -> int:
+        """Number of unique cookies received in the responses of all the URL nodes"""
         return len(self.cookies_received)
 
     @property
     def third_party_cookies_received(self) -> int:
+        """Number of unique 3rd party cookies received in the responses of all the URL nodes"""
         return sum(third for _, _, third in self.cookies_received if third)
 
     def add_url(self, url: URLNode) -> None:
+        """Add a URL node to the Host node, initialize/update the features"""
         if not self.name:
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
