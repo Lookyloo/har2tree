@@ -4,7 +4,7 @@ version = "1.0"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
-repository = "https://github.com/viper-framework/har2tree"
+repository = "https://github.com/Lookyloo/har2tree"
 
 readme = "README.md"
 
@@ -18,11 +18,6 @@ classifiers = [
 	'Topic :: Security',
 	'Topic :: Internet'
 ]
-
-include = ["har2tree/data/img/*.png"]
-
-[tool.poetry.scripts]
-har2tree = 'bin/har2tree'
 
 [tool.poetry.dependencies]
 python = "^3.6"
