@@ -20,3 +20,4 @@ jobs:
     - name: Test with nosetests
       run: |
         poetry run nosetests --with-coverage --cover-package=har2tree tests/test.py
+        poetry run mypy .
