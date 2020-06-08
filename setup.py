@@ -9,10 +9,9 @@ setup(
     author='Raphaël Vinot',
     author_email='raphael.vinot@circl.lu',
     maintainer='Raphaël Vinot',
-    url='https://github.com/viper-framework/har2tree',
+    url='https://github.com/Lookyloo/har2tree',
     description='HAR to ETE tree.',
     packages=['har2tree'],
-    scripts=['bin/har2tree'],
     classifiers=[
         'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX :: Linux',
@@ -24,7 +23,5 @@ setup(
         'Topic :: Internet',
     ],
     test_suite="tests",
-    include_package_data=True,
-    package_data={'har2tree': ['data/img/*.png']},
     install_requires=['ete3', 'six', 'beautifulsoup4', 'lxml']
 )
