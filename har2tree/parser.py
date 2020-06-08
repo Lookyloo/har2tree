@@ -111,11 +111,14 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
 
     if final_url not in known_urls:
         # sometimes, the port is in the partial, but striped in the list of known urls.
-        final_parsed = urlparse(final_url)
-        if final_url.startswith('https://') and final_parsed.netloc.endswith(':443'):
-            final_url = final_url.replace(':443', '', 1)
-        if final_url.startswith('http://') and final_parsed.netloc.endswith(':80'):
-            final_url = final_url.replace(':80', '', 1)
+        try:
+            final_parsed = urlparse(final_url)
+            if final_url.startswith('https://') and final_parsed.netloc.endswith(':443'):
+                final_url = final_url.replace(':443', '', 1)
+            if final_url.startswith('http://') and final_parsed.netloc.endswith(':80'):
+                final_url = final_url.replace(':80', '', 1)
+        except Exception:
+            logger.debug(f'Not a URL: {base_url} - {partial}')
 
     if final_url not in known_urls:
         # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
