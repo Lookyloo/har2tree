@@ -47,6 +47,11 @@ class Har2TreeError(Exception):
         self.message = message
 
 
+def harnode_json_default(obj: 'HarTreeNode') -> MutableMapping[str, Any]:
+    if isinstance(obj, HarTreeNode):
+        return obj.to_dict()
+
+
 def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
     """
     The last part of a URL can be reconnected to its base in plenty different ways.
@@ -632,6 +637,7 @@ class HostNode(HarTreeNode):
 class HarFile():
 
     def __init__(self, harfile: Union[str, Path], capture_uuid: str):
+        """Overview of the HAR file itself"""
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.capture_uuid: str = capture_uuid
         self.logger = Har2TreeLogAdapter(logger, {'uuid': self.capture_uuid})
@@ -683,6 +689,7 @@ class HarFile():
         self.need_tree_redirects = False
 
     def _search_final_redirect(self) -> None:
+        """Try to find the final path to the final redirect without building the tree"""
         for e in self.entries:
             unquoted_url = unquote_plus(e['request']['url'])
             if unquoted_url == self.final_redirect:
@@ -707,10 +714,12 @@ class HarFile():
 
     @property
     def number_entries(self) -> int:
+        """Number of entries in the HAR file"""
         return len(self.entries)
 
     @property
     def initial_title(self) -> str:
+        """Title of the first page in the capture"""
         if self.har['log']['pages'][0]['title']:
             return self.har['log']['pages'][0]['title']
         else:
@@ -718,25 +727,23 @@ class HarFile():
 
     @property
     def initial_start_time(self) -> str:
+        """Start time of the capture (UTC)"""
         if self.entries:
             return self.entries[0]['startedDateTime']
         return '-'
 
     @property
-    def first_url(self) -> str:
-        if self.entries:
-            return self.entries[0]['request']['url']
-        return '-'
-
-    @property
     def entries(self) -> List[Dict[str, Any]]:
+        """List of all the entries in the capture"""
         return self.har['log']['entries']
 
     @property
     def root_url(self) -> str:
+        """First URL of the capture"""
         return self.entries[0]['request']['url']
 
     def __find_referer(self, har_entry: Dict[str, Any]) -> Optional[str]:
+        """Return the referer of the entry, if it exists."""
         for header_entry in har_entry['request']['headers']:
             if header_entry['name'] == 'Referer':
                 return header_entry['value']
@@ -744,13 +751,14 @@ class HarFile():
 
     @property
     def has_initial_redirects(self) -> bool:
+        """True is the capture has redirects"""
         if self.final_redirect:
             return self.entries[0]['request']['url'] != self.final_redirect
         return False
 
     @property
     def initial_redirects(self) -> List[str]:
-        '''All the initial redirects from the URL given by the user'''
+        '''All the initial redirects from the URL given by the user (if they can be found without building the tree)'''
         to_return = []
         if self.has_initial_redirects:
             # First request different of self.final_redirect, there is at least one redirect
@@ -784,12 +792,8 @@ class HarFile():
 
     @property
     def root_referrer(self) -> Optional[str]:
-        '''Useful when there are multiple tree to attach together'''
-        first_entry = self.entries[0]
-        for h in first_entry['request']['headers']:
-            if h['name'] == 'Referer':
-                return h['value']
-        return None
+        '''Get the referer if the first entry. Only relevant when there are multiple tree to attach together'''
+        return self.__find_referer(self.entries[0])
 
     def __repr__(self) -> str:
         return f'HarFile({self.path}, {self.capture_uuid})'
@@ -919,6 +923,7 @@ class Har2Tree(object):
 
     @property
     def stats(self) -> Dict[str, Any]:
+        """Statistics about the capture"""
         to_return: Dict[str, Any] = {'total_hostnames': 0}
         to_return['total_urls'] = sum(1 for _ in self.url_tree.traverse())
 
@@ -935,14 +940,17 @@ class Har2Tree(object):
 
     @property
     def root_referer(self) -> Optional[str]:
+        '''Referer if the first entry. Only relevant when there are multiple tree to attach together'''
         return self.har.root_referrer
 
     @property
     def user_agent(self) -> str:
+        """User agent used for the capture"""
         return self.url_tree.user_agent
 
     @property
     def start_time(self) -> datetime:
+        """Start time of the capture"""
         return self.url_tree.start_time
 
     def _load_url_entries(self) -> None:
@@ -989,9 +997,11 @@ class Har2Tree(object):
                             break
 
     def get_host_node_by_uuid(self, uuid: str) -> HostNode:
+        """Returns the node with this UUID from the HostNode tree"""
         return self.hostname_tree.search_nodes(uuid=uuid)[0]
 
     def get_url_node_by_uuid(self, uuid: str) -> URLNode:
+        """Returns the node with this UUID from the URLNode tree"""
         return self.url_tree.search_nodes(uuid=uuid)[0]
 
     @property
@@ -1004,10 +1014,11 @@ class Har2Tree(object):
         return None
 
     def to_json(self) -> str:
+        """Dump the whole HostNode tree to json (for d3js)"""
         return self.hostname_tree.to_json()
 
     def make_hostname_tree(self, root_nodes_url: Union[URLNode, List[URLNode]], root_node_hostname: HostNode) -> None:
-        """ Groups all the URLs by domain in the hostname tree.
+        """ Groups all the URLs by domain in the HostNode tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
         if not isinstance(root_nodes_url, list):
@@ -1032,6 +1043,7 @@ class Har2Tree(object):
                 self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
     def make_tree(self) -> URLNode:
+        """Build URL and Host trees"""
         self._make_subtree(self.url_tree)
         if self.nodes_list:
             # We were not able to attach a few things.
@@ -1061,6 +1073,7 @@ class Har2Tree(object):
         return self.url_tree
 
     def _make_subtree(self, root: URLNode, nodes_to_attach: List[URLNode]=None) -> None:
+        """Recursive method building each level of the tree"""
         matching_urls: List[URLNode]
         if nodes_to_attach is None:
             # We're in the actual root node
@@ -1188,6 +1201,7 @@ class CrawledTree(object):
 
     @property
     def redirects(self) -> List[str]:
+        """List of redirects for this capture"""
         if not self.root_hartree.root_after_redirect:
             return []
         redirect_node = self.root_hartree.url_tree.search_nodes(name=self.root_hartree.root_after_redirect)
@@ -1200,17 +1214,15 @@ class CrawledTree(object):
 
     @property
     def root_url(self) -> str:
+        """First URL of the capture"""
         return self.root_hartree.har.root_url
 
     @property
     def start_time(self) -> datetime:
+        """Start time of the capture"""
         return self.root_hartree.start_time
 
     @property
     def user_agent(self) -> str:
+        """User agent used for the capture"""
         return self.root_hartree.user_agent
-
-
-def harnode_json_default(obj: HarTreeNode) -> MutableMapping[str, Any]:
-    if isinstance(obj, HarTreeNode):
-        return obj.to_dict()
