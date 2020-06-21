@@ -1039,6 +1039,7 @@ class Har2Tree(object):
                     child_node_hostname = root_node_hostname.add_child(HostNode(name=child_node_url.hostname))
                     children_hostnames[child_node_url.hostname] = child_node_hostname
                 child_node_hostname.add_url(child_node_url)
+                child_node_url.add_feature('hostnode_uuid', child_node_hostname.uuid)
 
                 if not child_node_url.is_leaf():
                     sub_roots[child_node_hostname].append(child_node_url)
