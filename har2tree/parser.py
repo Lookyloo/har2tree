@@ -814,11 +814,6 @@ class Har2Tree(object):
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.har = HarFile(har_path, capture_uuid)
         self.hostname_tree = HostNode()
-        if not self.har.entries:
-            self.has_entries = False
-            return
-        else:
-            self.has_entries = True
 
         self.nodes_list: List[URLNode] = []
         self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
@@ -1163,8 +1158,9 @@ class CrawledTree(object):
         """Open all the HAR files and build the trees"""
         loaded = []
         for har_path in files:
-            har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
-            if not har2tree.has_entries:
+            try:
+                har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
+            except Har2TreeError:
                 continue
             har2tree.make_tree()
             loaded.append(har2tree)
