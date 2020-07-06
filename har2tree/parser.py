@@ -738,6 +738,8 @@ class HarFile():
     @property
     def entries(self) -> List[Dict[str, Any]]:
         """List of all the entries in the capture"""
+        if not self.har['log']['entries']:
+            raise Har2TreeError('Empty HAR file (no entries), invalid capture.')
         return self.har['log']['entries']
 
     @property
