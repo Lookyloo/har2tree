@@ -19,7 +19,7 @@ import ipaddress
 import sys
 
 import publicsuffix2  # type: ignore
-import w3lib  # type: ignore
+from w3lib.url import parse_data_uri  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 import logging
@@ -219,7 +219,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
         if uri:
             if uri.startswith('data:'):
-                parsed_data_uri = w3lib.url.parse_data_uri(uri)
+                parsed_data_uri = parse_data_uri(uri)
                 blob = BytesIO(parsed_data_uri.data)
                 b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
                 embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
@@ -236,7 +236,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue()):
         url = url.decode()
         if url.startswith('data:'):
-            parsed_data_uri = w3lib.url.parse_data_uri(url)
+            parsed_data_uri = parse_data_uri(url)
             blob = BytesIO(parsed_data_uri.data)
             b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
             embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
