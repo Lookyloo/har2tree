@@ -19,6 +19,7 @@ import ipaddress
 import sys
 
 import publicsuffix2  # type: ignore
+import w3lib  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 import logging
@@ -159,7 +160,6 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
         to_return[key] = []
         for url in urls:
             if url.startswith('data'):
-                # print(html_doc.getvalue())
                 continue
             to_attach = url.strip()
             if to_attach.startswith("\\'") or to_attach.startswith('\\"'):
@@ -177,7 +177,7 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
     return to_return
 
 
-def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Dict[str, List[str]]:
+def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
@@ -190,48 +190,69 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # source: https://www.w3schools.com/TAGs/tag_source.asp -> src srcset
     # link: https://www.w3schools.com/TAGs/tag_link.asp -> href
     # object: https://www.w3schools.com/TAGs/tag_object.asp -> data
-    to_return: Dict[str, List[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
-                                       'iframe': [], 'embed': [], 'source': [],
-                                       'link': [],
-                                       'object': [],
-                                       'css': [],
-                                       'full_regex': [],
-                                       'javascript': [],
-                                       'meta_refresh': []}
+    external_ressources: Dict[str, List[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
+                                                 'iframe': [], 'embed': [], 'source': [],
+                                                 'link': [],
+                                                 'object': [],
+                                                 'css': [],
+                                                 'full_regex': [],
+                                                 'javascript': [],
+                                                 'meta_refresh': []}
+
+    embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
+
     soup = BeautifulSoup(html_doc, 'lxml')
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source', 'link', 'object']):
+        uri = None
         if link.get('src'):  # img script video audio iframe embed source
-            to_return[link.name].append(unquote_plus(link.get('src')))
+            uri = link.get('src')
         if link.get('srcset'):  # img source
-            to_return[link.name].append(unquote_plus(link.get('srcset')))
+            uri = link.get('srcset')
         if link.get('longdesc'):  # img
-            to_return[link.name].append(unquote_plus(link.get('longdesc')))
+            uri = link.get('longdesc')
         if link.get('poster'):  # video
-            to_return[link.name].append(unquote_plus(link.get('poster')))
+            uri = link.get('poster')
         if link.get('href'):  # link
-            to_return[link.name].append(unquote_plus(link.get('href')))
+            uri = link.get('href')
         if link.get('data'):  # object
-            to_return[link.name].append(unquote_plus(link.get('data')))
+            uri = link.get('data')
+
+        if uri:
+            if uri.startswith('data:'):
+                parsed_data_uri = w3lib.url.parse_data_uri(uri)
+                blob = BytesIO(parsed_data_uri.data)
+                b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+            else:
+                external_ressources[link.name].append(unquote_plus(uri))
 
     # Search for meta refresh redirect madness
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
     meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
     if meta_refresh:
-        to_return['meta_refresh'].append(meta_refresh['content'].partition('=')[2])
+        external_ressources['meta_refresh'].append(meta_refresh['content'].partition('=')[2])
 
     # external stuff loaded from css content, because reasons.
-    to_return['css'] = [url.decode() for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue())]
+    for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue()):
+        url = url.decode()
+        if url.startswith('data:'):
+            parsed_data_uri = w3lib.url.parse_data_uri(url)
+            blob = BytesIO(parsed_data_uri.data)
+            b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+            embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+        else:
+            external_ressources['css'].append(url)
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    to_return['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+    external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
 
     if full_text_search:
         # Just regex in the whole blob, because we can
-        to_return['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
-        # print("################ REGEXES ", to_return['full_regex'])
+        external_ressources['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+        # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
-    return url_cleanup(to_return, base_url, all_requests)
+    return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
 
 # ##################################################################
 
@@ -424,7 +445,9 @@ class URLNode(HarTreeNode):
                 self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
-            self.add_feature('external_ressources', find_external_ressources(self.body, self.name, all_requests))
+            external_ressources, embedded_ressources = find_external_ressources(self.body, self.name, all_requests)
+            self.add_feature('external_ressources', external_ressources)
+            self.add_feature('embedded_ressources', embedded_ressources)
             parsed_response_url = urlparse(self.name)
             filename = os.path.basename(parsed_response_url.path)
             if filename:
