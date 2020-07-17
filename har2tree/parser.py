@@ -18,7 +18,7 @@ from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any,
 import ipaddress
 import sys
 
-import publicsuffix2  # type: ignore
+from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
 from w3lib.url import parse_data_uri  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
@@ -28,7 +28,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Initialize Public Suffix List
-psl = publicsuffix2.PublicSuffixList()
+try:
+    psl_file = fetch()
+    psl = PublicSuffixList(psl_file=psl_file)
+except Exception:
+    psl = PublicSuffixList()
 
 
 class Har2TreeLogAdapter(logging.LoggerAdapter):
@@ -219,10 +223,13 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
         if uri:
             if uri.startswith('data:'):
-                parsed_data_uri = parse_data_uri(uri)
-                blob = BytesIO(parsed_data_uri.data)
-                b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+                try:
+                    parsed_data_uri = parse_data_uri(uri)
+                    blob = BytesIO(parsed_data_uri.data)
+                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                    embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+                except Exception as e:
+                    logger.warning(e)
             else:
                 external_ressources[link.name].append(unquote_plus(uri))
 
@@ -236,10 +243,13 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue()):
         url = url.decode()
         if url.startswith('data:'):
-            parsed_data_uri = parse_data_uri(url)
-            blob = BytesIO(parsed_data_uri.data)
-            b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-            embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+            try:
+                parsed_data_uri = parse_data_uri(url)
+                blob = BytesIO(parsed_data_uri.data)
+                b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+            except Exception as e:
+                logger.warning(e)
         else:
             external_ressources['css'].append(url)
 
@@ -936,8 +946,9 @@ class Har2Tree(object):
                             if type_ressource == 'source':  # FIXME: Can be audio, video, or picture
                                 node.add_feature('octet_stream', True)
 
-                            if type_ressource == 'link':  # FIXME: Probably a css?
-                                node.add_feature('css', True)
+                            # NOTE: the URL is probably not a CSS
+                            # if type_ressource == 'link':  # FIXME: Probably a css?
+                            #    node.add_feature('css', True)
 
                             if type_ressource == 'object':  # FIXME: Same as embed, but more things
                                 node.add_feature('octet_stream', True)
