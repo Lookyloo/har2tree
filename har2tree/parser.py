@@ -228,8 +228,8 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
                     blob = BytesIO(parsed_data_uri.data)
                     b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
                     embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
-                except Exception as e:
-                    logger.warning(e)
+                except ValueError as e:
+                    logger.warning(e, uri)
             else:
                 external_ressources[link.name].append(unquote_plus(uri))
 
@@ -248,8 +248,8 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
                 blob = BytesIO(parsed_data_uri.data)
                 b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
                 embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
-            except Exception as e:
-                logger.warning(e)
+            except ValueError as e:
+                logger.warning(e, url)
         else:
             external_ressources['css'].append(url)
 
@@ -370,14 +370,15 @@ class URLNode(HarTreeNode):
             # If the content is empty, we don't care
             if self.request['postData']['text']:
                 # We have a POST request, the data can be base64 encoded or urlencoded
-                posted_data: Union[str, bytes]
+                posted_data: Union[str, bytes] = self.request['postData']['text']
                 if 'encoding' in self.request['postData']:
                     if self.request['postData']['encoding'] == 'base64':
-                        posted_data = b64decode(self.request['postData']['text'])
+                        if len(posted_data) % 4:
+                            # a this point, we have a string for sure
+                            posted_data += '==='  # type: ignore
+                        posted_data = b64decode(posted_data)
                     else:
                         self.logger.warning(f'Unexpected encoding: {self.request["postData"]["encoding"]}')
-                else:
-                    posted_data = self.request['postData']['text']
 
                 if 'mimeType' in self.request['postData']:
                     if self.request['postData']['mimeType'].startswith('application/x-www-form-urlencoded'):
@@ -389,10 +390,29 @@ class URLNode(HarTreeNode):
                                 self.logger.warning(f'Expected urlencoded, got garbage: {posted_data!r}')
                         if isinstance(posted_data, str):
                             posted_data = unquote_plus(posted_data)
+                    elif self.request['postData']['mimeType'].startswith('application/json') or self.request['postData']['mimeType'].startswith('application/csp-report'):
+                        try:
+                            posted_data = json.loads(posted_data)
+                        except Exception:
+                            self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data!r}")
+
+                    elif self.request['postData']['mimeType'].startswith('multipart/form-data'):
+                        # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
+                        pass
+                    elif self.request['postData']['mimeType'].startswith('application/x-protobuffer'):
+                        # FIXME If possible, decode?
+                        pass
                     elif self.request['postData']['mimeType'].startswith('text'):
                         # We got text, keep what we already have
                         pass
+                    elif self.request['postData']['mimeType'] == '?':
+                        # Just skip it, no need to go in the warnings
+                        pass
+                    elif self.request['postData']['mimeType'] == 'application/octet-stream':
+                        # Should flag it.
+                        pass
                     else:
+                        # Weird stuff: Image/GIF application/unknown application/grpc-web+proto
                         self.logger.warning(f'Unexpected mime type: {self.request["postData"]["mimeType"]}')
 
                 # The data may be json, try to load it
@@ -503,8 +523,15 @@ class URLNode(HarTreeNode):
                 self.add_feature('text', True)
             elif 'video' in har_entry['response']['content']['mimeType']:
                 self.add_feature('video', True)
+            elif 'audio' in har_entry['response']['content']['mimeType']:
+                self.add_feature('audio', True)
             elif 'mpegurl' in har_entry['response']['content']['mimeType'].lower():
                 self.add_feature('livestream', True)
+            elif ('application/x-shockwave-flash' in har_entry['response']['content']['mimeType']
+                    or 'application/x-shockware-flash' in har_entry['response']['content']['mimeType']):  # Yes, shockwaRe
+                self.add_feature('flash', True)
+            elif 'application/pdf' in har_entry['response']['content']['mimeType']:
+                self.add_feature('pdf', True)
             elif not har_entry['response']['content']['mimeType']:
                 self.add_feature('unset_mimetype', True)
             else:
@@ -573,8 +600,8 @@ class HostNode(HarTreeNode):
         self.add_feature('font', 0)
         self.add_feature('octet_stream', 0)
         self.add_feature('text', 0)
+        self.add_feature('pdf', 0)
         self.add_feature('video', 0)
-        self.add_feature('livestream', 0)
         self.add_feature('unset_mimetype', 0)
         self.add_feature('unknown_mimetype', 0)
         self.add_feature('iframe', 0)
@@ -657,7 +684,9 @@ class HostNode(HarTreeNode):
             self.octet_stream += 1
         if hasattr(url, 'text'):
             self.text += 1
-        if hasattr(url, 'video') or hasattr(url, 'livestream'):
+        if hasattr(url, 'pdf'):
+            self.pdf += 1  # FIXME: need icon
+        if hasattr(url, 'video') or hasattr(url, 'livestream') or hasattr(url, 'audio') or hasattr(url, 'flash'):
             self.video += 1
         if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
             self.unknown_mimetype += 1
@@ -908,7 +937,7 @@ class Har2Tree(object):
                             n.cookies_sent[c_sent].append({'setter': setter_node,
                                                            '3rd_party': is_3rd_party})
         if self.locally_created_not_sent:
-            self.logger.info(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
+            self.logger.debug(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
 
         # if self.locally_created_not_sent:
         #    for c in locally_created.values():
