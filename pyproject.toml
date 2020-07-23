@@ -26,7 +26,6 @@ beautifulsoup4 = "^4.8.2"
 lxml = "^4.4.2"
 six = "^1.14.0"
 publicsuffix2 = "^2.20191221"
-w3lib = "^1.22.0"
 
 [tool.poetry.dev-dependencies]
 coverage = "^5.0.3"

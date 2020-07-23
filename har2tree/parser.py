@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import uuid
 from urllib.parse import urlparse, unquote_plus
 from base64 import b64decode
+import binascii
 from collections import defaultdict
 import re
 import os
@@ -19,7 +20,6 @@ import ipaddress
 import sys
 
 from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
-from w3lib.url import parse_data_uri  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 import logging
@@ -55,6 +55,42 @@ class Har2TreeError(Exception):
 def harnode_json_default(obj: 'HarTreeNode') -> MutableMapping[str, Any]:
     if isinstance(obj, HarTreeNode):
         return obj.to_dict()
+
+
+def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
+    if not uri.startswith('data:'):
+        return None
+    uri = uri[5:]
+    if ';base64' in uri:
+        mime, b64data = uri.split(';base64', 1)
+        if b64data[0] != ',':
+            return None
+        b64data = b64data[1:]
+        if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
+            return None
+        if len(b64data) % 4:
+            # Note: Too many = isn't a problem.
+            b64data += "==="
+        try:
+            data = b64decode(b64data)
+        except binascii.Error:
+            # Incorrect padding
+            return None
+    else:
+        if ',' not in uri:
+            return None
+        mime, d = uri.split(',', 1)
+        data = d.encode()
+
+    if mime:
+        if ';' in mime:
+            mime, mimeparams = mime.split(';', 1)
+        else:
+            mimeparams = ''
+    else:
+        mime = '[No mimetype given]'
+        mimeparams = ''
+    return mime, mimeparams, data
 
 
 def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
@@ -224,10 +260,12 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         if uri:
             if uri.startswith('data:'):
                 try:
-                    parsed_data_uri = parse_data_uri(uri)
-                    blob = BytesIO(parsed_data_uri.data)
-                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                    embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+                    parsed_uri = parse_data_uri(uri)
+                    if parsed_uri:
+                        mime, mimeparams, data = parsed_uri
+                        blob = BytesIO(data)
+                        b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                        embedded_ressources[mime].append((b_hash, blob))
                 except ValueError as e:
                     logger.warning(e, uri)
             else:
@@ -244,10 +282,12 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         url = url.decode()
         if url.startswith('data:'):
             try:
-                parsed_data_uri = parse_data_uri(url)
-                blob = BytesIO(parsed_data_uri.data)
-                b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                embedded_ressources[parsed_data_uri.media_type].append((b_hash, blob))
+                parsed_uri = parse_data_uri(url)
+                if parsed_uri:
+                    mime, mimeparams, data = parsed_uri
+                    blob = BytesIO(data)
+                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                    embedded_ressources[mime].append((b_hash, blob))
             except ValueError as e:
                 logger.warning(e, url)
         else:
@@ -512,14 +552,15 @@ class URLNode(HarTreeNode):
                 self.add_feature('css', True)
             elif 'json' in har_entry['response']['content']['mimeType']:
                 self.add_feature('json', True)
-            elif har_entry['response']['content']['mimeType'].startswith('text/html'):
+            elif 'html' in har_entry['response']['content']['mimeType']:
                 self.add_feature('html', True)
             elif 'font' in har_entry['response']['content']['mimeType']:
                 self.add_feature('font', True)
             elif 'octet-stream' in har_entry['response']['content']['mimeType']:
                 self.add_feature('octet_stream', True)
             elif ('text/plain' in har_entry['response']['content']['mimeType']
-                    or 'xml' in har_entry['response']['content']['mimeType']):
+                    or 'xml' in har_entry['response']['content']['mimeType']
+                    or 'application/x-www-form-urlencoded' in har_entry['response']['content']['mimeType']):
                 self.add_feature('text', True)
             elif 'video' in har_entry['response']['content']['mimeType']:
                 self.add_feature('video', True)
