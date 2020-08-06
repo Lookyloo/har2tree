@@ -31,7 +31,7 @@ publicsuffix2 = "^2.20191221"
 coverage = "^5.0.3"
 coveralls = "^2.1.1"
 codecov = "^2.0.15"
-mypy = "^0.761"
+mypy = "^0.782"
 nose = "^1.3.7"
 ipython = "^7.12.0"
 
