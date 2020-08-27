@@ -18,12 +18,12 @@ from operator import itemgetter
 from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping
 import ipaddress
 import sys
+import logging
 
 from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
-import logging
-# import html
+import filetype  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -514,7 +514,11 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
-            self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
+            if har_entry['response']['content']['mimeType']:
+                self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
+            else:
+                kind = filetype.guess(self.body.getvalue())
+                self.add_feature('mimetype', kind.mime)
             external_ressources, embedded_ressources = find_external_ressources(self.body, self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
@@ -543,41 +547,39 @@ class URLNode(HarTreeNode):
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
 
-            if ('javascript' in har_entry['response']['content']['mimeType']
-                    or 'ecmascript' in har_entry['response']['content']['mimeType']):
+            if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype:
                 self.add_feature('js', True)
-            elif har_entry['response']['content']['mimeType'].startswith('image'):
+            elif self.mimetype.startswith('image'):
                 self.add_feature('image', True)
-            elif har_entry['response']['content']['mimeType'].startswith('text/css'):
+            elif self.mimetype.startswith('text/css'):
                 self.add_feature('css', True)
-            elif 'json' in har_entry['response']['content']['mimeType']:
+            elif 'json' in self.mimetype:
                 self.add_feature('json', True)
-            elif 'html' in har_entry['response']['content']['mimeType']:
+            elif 'html' in self.mimetype:
                 self.add_feature('html', True)
-            elif 'font' in har_entry['response']['content']['mimeType']:
+            elif 'font' in self.mimetype:
                 self.add_feature('font', True)
-            elif 'octet-stream' in har_entry['response']['content']['mimeType']:
+            elif 'octet-stream' in self.mimetype:
                 self.add_feature('octet_stream', True)
-            elif ('text/plain' in har_entry['response']['content']['mimeType']
-                    or 'xml' in har_entry['response']['content']['mimeType']
-                    or 'application/x-www-form-urlencoded' in har_entry['response']['content']['mimeType']):
+            elif ('text/plain' in self.mimetype or 'xml' in self.mimetype
+                    or 'application/x-www-form-urlencoded' in self.mimetype):
                 self.add_feature('text', True)
-            elif 'video' in har_entry['response']['content']['mimeType']:
+            elif 'video' in self.mimetype:
                 self.add_feature('video', True)
-            elif 'audio' in har_entry['response']['content']['mimeType']:
+            elif 'audio' in self.mimetype:
                 self.add_feature('audio', True)
-            elif 'mpegurl' in har_entry['response']['content']['mimeType'].lower():
+            elif 'mpegurl' in self.mimetype.lower():
                 self.add_feature('livestream', True)
-            elif ('application/x-shockwave-flash' in har_entry['response']['content']['mimeType']
-                    or 'application/x-shockware-flash' in har_entry['response']['content']['mimeType']):  # Yes, shockwaRe
+            elif ('application/x-shockwave-flash' in self.mimetype
+                    or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
                 self.add_feature('flash', True)
-            elif 'application/pdf' in har_entry['response']['content']['mimeType']:
+            elif 'application/pdf' in self.mimetype:
                 self.add_feature('pdf', True)
-            elif not har_entry['response']['content']['mimeType']:
+            elif not self.mimetype:
                 self.add_feature('unset_mimetype', True)
             else:
                 self.add_feature('unknown_mimetype', True)
-                self.logger.warning('Unknown mimetype: {}'.format(har_entry['response']['content']['mimeType']))
+                self.logger.warning('Unknown mimetype: {}'.format(self.mimetype))
 
         # NOTE: Chrome/Chromium only features
         if har_entry.get('serverIPAddress'):
@@ -620,6 +622,16 @@ class URLNode(HarTreeNode):
         if stack['parent']:
             return self._find_initiator_in_stack(stack['parent'])
         return None
+
+    @property
+    def resources_hashes(self) -> Set[str]:
+        all_ressources_hashes = set()
+        if 'body_hash' in self.features:
+            all_ressources_hashes.add(self.body_hash)
+            if 'embedded_ressources' in self.features:
+                for mimetype, blobs in self.embedded_ressources.items():
+                    all_ressources_hashes.update([h for h, b in blobs])
+        return all_ressources_hashes
 
 
 class HostNode(HarTreeNode):
