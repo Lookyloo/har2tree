@@ -376,7 +376,7 @@ class URLNode(HarTreeNode):
 
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
-        self.add_feature('hostname', urlparse(self.name).hostname)
+        self.add_feature('hostname', self.url_split.hostname)
 
         if not self.hostname:
             self.logger.warning(f'Something is broken in that node: {har_entry}')
@@ -518,12 +518,15 @@ class URLNode(HarTreeNode):
                 self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
             else:
                 kind = filetype.guess(self.body.getvalue())
-                self.add_feature('mimetype', kind.mime)
+                if kind:
+                    self.add_feature('mimetype', kind.mime)
+                else:
+                    self.add_feature('mimetype', '')
+
             external_ressources, embedded_ressources = find_external_ressources(self.body, self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
-            parsed_response_url = urlparse(self.name)
-            filename = os.path.basename(parsed_response_url.path)
+            filename = Path(self.url_split.path).name
             if filename:
                 self.add_feature('filename', filename)
             else:
