@@ -6,7 +6,7 @@ import json
 import copy
 from datetime import datetime, timedelta
 import uuid
-from urllib.parse import urlparse, unquote_plus
+from urllib.parse import urlparse, unquote_plus, unquote_to_bytes
 from base64 import b64decode
 import binascii
 from collections import defaultdict
@@ -296,6 +296,17 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # Javascript changing the current page
     # I never found a website where it matched anything useful
     external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+    # Just in case, there is sometimes an unescape call is JS code
+    for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc.getvalue()):
+        unescaped = unquote_to_bytes(to_unescape)
+        kind = filetype.guess(unescaped)
+        if kind:
+            mimetype = kind.mime
+        else:
+            mimetype = ''
+        blob = BytesIO(unescaped)
+        b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+        embedded_ressources[mimetype].append((b_hash, blob))
 
     if full_text_search:
         # Just regex in the whole blob, because we can
