@@ -15,7 +15,7 @@ import os
 from io import BytesIO
 import hashlib
 from operator import itemgetter
-from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping
+from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping, Iterator
 import ipaddress
 import sys
 import logging
@@ -65,7 +65,7 @@ def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
         mime, b64data = uri.split(';base64', 1)
         if b64data[0] != ',':
             return None
-        b64data = b64data[1:]
+        b64data = b64data[1:].strip()
         if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
             return None
         if len(b64data) % 4:
@@ -359,7 +359,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
+    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str], rendered_html: Optional[BytesIO]=None) -> None:
         """Load one entry of the HAR file, initialize most of the features of the node"""
         if not self.name:
             # We're in the actual root node
@@ -367,6 +367,9 @@ class URLNode(HarTreeNode):
             self.add_feature('name', unquote_plus(har_entry['request']['url']))
 
         self.add_feature('url_split', urlparse(self.name))
+
+        if rendered_html:
+            self.add_feature('rendered_html', rendered_html)
 
         # If the URL contains a fragment (i.e. something after a #), it is stripped in the referer.
         # So we need an alternative URL to do a lookup against
@@ -535,6 +538,15 @@ class URLNode(HarTreeNode):
                     self.add_feature('mimetype', '')
 
             external_ressources, embedded_ressources = find_external_ressources(self.body, self.name, all_requests)
+            if 'rendered_html' in self.features:
+                rendered_external, rendered_embedded = find_external_ressources(self.rendered_html, self.name, all_requests)
+                # for the external ressources, the keys are always the same
+                external_ressources = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in external_ressources.items()}
+
+                # for the embedded ressources, the keys are the mimetypes, they may not overlap
+                mimetypes = list(embedded_ressources.keys()) + list(rendered_embedded.keys())
+                embedded_ressources = {mimetype: embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
+
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
             filename = Path(self.url_split.path).name
@@ -768,15 +780,12 @@ class HostNode(HarTreeNode):
 
 class HarFile():
 
-    def __init__(self, harfile: Union[str, Path], capture_uuid: str):
+    def __init__(self, harfile: Path, capture_uuid: str):
         """Overview of the HAR file itself"""
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.capture_uuid: str = capture_uuid
         self.logger = Har2TreeLogAdapter(logger, {'uuid': self.capture_uuid})
-        if isinstance(harfile, str):
-            self.path: Path = Path(harfile)
-        else:
-            self.path = harfile
+        self.path = harfile
 
         with self.path.open() as f:
             self.har: Dict[str, Any] = json.load(f)
@@ -935,13 +944,19 @@ class HarFile():
 
 class Har2Tree(object):
 
-    def __init__(self, har_path: Union[str, Path], capture_uuid: str):
+    def __init__(self, har_path: Path, html_path: Optional[Path], capture_uuid: str):
         """Build the ETE Toolkit tree based on the HAR file, cookies, and HTML content
         :param har: harfile of a capture
         """
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.har = HarFile(har_path, capture_uuid)
+        self.rendered_html: Optional[BytesIO]
+        if html_path and html_path.exists():
+            with html_path.open('rb') as f:
+                self.rendered_html = BytesIO(f.read())
+        else:
+            self.rendered_html = None
         self.hostname_tree = HostNode()
 
         self.nodes_list: List[URLNode] = []
@@ -983,10 +998,6 @@ class Har2Tree(object):
                     and c_identifier not in self.initial_cookies):
                 self.locally_created[f'{c["name"]}={c["value"]}'] = c
 
-        # if self.locally_created:
-        #    for l in self.locally_created.values():
-        #        print(json.dumps(l, indent=2))
-
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
         self.locally_created_not_sent: Dict[str, Dict[str, Any]] = self.locally_created.copy()
         # Cross reference the source of the cookie
@@ -1005,10 +1016,6 @@ class Har2Tree(object):
                                                            '3rd_party': is_3rd_party})
         if self.locally_created_not_sent:
             self.logger.debug(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
-
-        # if self.locally_created_not_sent:
-        #    for c in locally_created.values():
-        #        print('##', json.dumps(c, indent=2))
 
         # Add context if urls are found in external_ressources
         for n in self.nodes_list:
@@ -1089,7 +1096,10 @@ class Har2Tree(object):
 
         for url_entry in self.har.entries:
             n = URLNode(name=unquote_plus(url_entry['request']['url']))
-            n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
+            if self.rendered_html and n.name == self.har.final_redirect:
+                n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.rendered_html)
+            else:
+                n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
                 self.all_redirects.append(n.redirect_url)
 
@@ -1272,7 +1282,7 @@ class Har2Tree(object):
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: Union[List[str], List[Path]], uuid: str):
+    def __init__(self, harfiles: Iterator[Tuple[Path, Optional[Path]]], uuid: str):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.uuid = uuid
         logger = logging.getLogger(__name__)
@@ -1284,12 +1294,12 @@ class CrawledTree(object):
         self.find_parents()
         self.join_trees()
 
-    def load_all_harfiles(self, files: Union[List[str], List[Path]]) -> List[Har2Tree]:
+    def load_all_harfiles(self, files: List[Tuple[Path, Optional[Path]]]) -> List[Har2Tree]:
         """Open all the HAR files and build the trees"""
         loaded = []
-        for har_path in files:
+        for har_path, html_path in files:
             try:
-                har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
+                har2tree = Har2Tree(har_path, html_path, capture_uuid=self.uuid)
             except Har2TreeError:
                 continue
             har2tree.make_tree()
