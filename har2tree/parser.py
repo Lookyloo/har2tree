@@ -1294,7 +1294,7 @@ class CrawledTree(object):
         self.find_parents()
         self.join_trees()
 
-    def load_all_harfiles(self, files: List[Tuple[Path, Optional[Path]]]) -> List[Har2Tree]:
+    def load_all_harfiles(self, files: Iterator[Tuple[Path, Optional[Path]]]) -> List[Har2Tree]:
         """Open all the HAR files and build the trees"""
         loaded = []
         for har_path, html_path in files:

@@ -8,7 +8,7 @@ import os
 import uuid
 from itertools import zip_longest
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Iterator
 
 
 class TestBasic(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestBasic(unittest.TestCase):
         test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'data' / 'lalibre'
         har_to_process = sorted(test_dir.glob('*.har'))
         html_to_process = sorted(test_dir.glob('*.html'))
-        to_process: List[Tuple[Path, Optional[Path]]] = zip_longest(har_to_process, html_to_process)  # type: ignore
+        to_process: Iterator[Tuple[Path, Optional[Path]]] = zip_longest(har_to_process, html_to_process)
         crawled_tree = CrawledTree(to_process, str(uuid.uuid4()))
         crawled_tree.to_json()
 
@@ -25,7 +25,7 @@ class TestBasic(unittest.TestCase):
         test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'data' / 'wired'
         har_to_process = sorted(test_dir.glob('*.har'))
         html_to_process = sorted(test_dir.glob('*.html'))
-        to_process: List[Tuple[Path, Optional[Path]]] = zip_longest(har_to_process, html_to_process)  # type: ignore
+        to_process: Iterator[Tuple[Path, Optional[Path]]] = zip_longest(har_to_process, html_to_process)
         crawled_tree = CrawledTree(to_process, str(uuid.uuid4()))
         crawled_tree.to_json()
 
