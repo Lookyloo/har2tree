@@ -15,7 +15,7 @@ import os
 from io import BytesIO
 import hashlib
 from operator import itemgetter
-from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping, Iterator
+from typing import List, Dict, Optional, Union, Tuple, Set, MutableMapping, Any, Mapping, Iterable
 import ipaddress
 import sys
 import logging
@@ -241,7 +241,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
     embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
 
-    soup = BeautifulSoup(html_doc, 'lxml')
+    soup = BeautifulSoup(html_doc.getvalue(), 'lxml')
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source', 'link', 'object']):
         uri = None
         if link.get('src'):  # img script video audio iframe embed source
@@ -807,11 +807,12 @@ class HarFile():
             self.cookies = []
 
         htmlfile = self.path.parent / f'{self.path.stem}.html'
+        self.html_content: Optional[BytesIO]
         if htmlfile.is_file():
             with htmlfile.open('rb') as _h:
-                self.html_content: BytesIO = BytesIO(_h.read())
+                self.html_content = BytesIO(_h.read())
         else:
-            self.html_content = BytesIO()
+            self.html_content = None
 
         # Sorting the entries by start time (it isn't the case by default)
         # Reason: A specific URL cannot be loaded by something that hasn't been already started
@@ -944,19 +945,13 @@ class HarFile():
 
 class Har2Tree(object):
 
-    def __init__(self, har_path: Path, html_path: Optional[Path], capture_uuid: str):
+    def __init__(self, har_path: Path, capture_uuid: str):
         """Build the ETE Toolkit tree based on the HAR file, cookies, and HTML content
         :param har: harfile of a capture
         """
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.har = HarFile(har_path, capture_uuid)
-        self.rendered_html: Optional[BytesIO]
-        if html_path and html_path.exists():
-            with html_path.open('rb') as f:
-                self.rendered_html = BytesIO(f.read())
-        else:
-            self.rendered_html = None
         self.hostname_tree = HostNode()
 
         self.nodes_list: List[URLNode] = []
@@ -1096,8 +1091,8 @@ class Har2Tree(object):
 
         for url_entry in self.har.entries:
             n = URLNode(name=unquote_plus(url_entry['request']['url']))
-            if self.rendered_html and n.name == self.har.final_redirect:
-                n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.rendered_html)
+            if self.har.html_content and n.name == self.har.final_redirect:
+                n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.har.html_content)
             else:
                 n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
@@ -1282,7 +1277,7 @@ class Har2Tree(object):
 
 class CrawledTree(object):
 
-    def __init__(self, harfiles: Iterator[Tuple[Path, Optional[Path]]], uuid: str):
+    def __init__(self, harfiles: Iterable[Path], uuid: str):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.uuid = uuid
         logger = logging.getLogger(__name__)
@@ -1294,12 +1289,12 @@ class CrawledTree(object):
         self.find_parents()
         self.join_trees()
 
-    def load_all_harfiles(self, files: Iterator[Tuple[Path, Optional[Path]]]) -> List[Har2Tree]:
+    def load_all_harfiles(self, files: Iterable[Path]) -> List[Har2Tree]:
         """Open all the HAR files and build the trees"""
         loaded = []
-        for har_path, html_path in files:
+        for har_path in files:
             try:
-                har2tree = Har2Tree(har_path, html_path, capture_uuid=self.uuid)
+                har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
             except Har2TreeError:
                 continue
             har2tree.make_tree()
