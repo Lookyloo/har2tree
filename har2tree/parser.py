@@ -209,7 +209,13 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
             if to_attach.endswith("'") or to_attach.endswith('"'):
                 # A quote at the end of the URL can be selected by the fulltext regex
                 to_attach = to_attach[:-1]
+
             to_attach = rebuild_url(base_url, to_attach, all_requests)
+
+            if to_attach == base_url:
+                # Ignore what is basically a loop.
+                continue
+
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
             else:
@@ -256,20 +262,21 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
             uri = link.get('href')
         if link.get('data'):  # object
             uri = link.get('data')
+        if not uri:
+            continue
 
-        if uri:
-            if uri.startswith('data:'):
-                try:
-                    parsed_uri = parse_data_uri(uri)
-                    if parsed_uri:
-                        mime, mimeparams, data = parsed_uri
-                        blob = BytesIO(data)
-                        b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                        embedded_ressources[mime].append((b_hash, blob))
-                except ValueError as e:
-                    logger.warning(e, uri)
-            else:
-                external_ressources[link.name].append(unquote_plus(uri))
+        if uri.startswith('data:'):
+            try:
+                parsed_uri = parse_data_uri(uri)
+                if parsed_uri:
+                    mime, mimeparams, data = parsed_uri
+                    blob = BytesIO(data)
+                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+                    embedded_ressources[mime].append((b_hash, blob))
+            except ValueError as e:
+                logger.warning(e, uri)
+        else:
+            external_ressources[link.name].append(unquote_plus(uri))
 
     # Search for meta refresh redirect madness
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
@@ -296,7 +303,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # Javascript changing the current page
     # I never found a website where it matched anything useful
     external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
-    # Just in case, there is sometimes an unescape call is JS code
+    # Just in case, there is sometimes an unescape call in JS code
     for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc.getvalue()):
         unescaped = unquote_to_bytes(to_unescape)
         kind = filetype.guess(unescaped)
@@ -1219,6 +1226,8 @@ class Har2Tree(object):
             for unode in nodes_to_attach:
                 unodes.append(root.add_child(unode))
         for unode in unodes:
+            # NOTE: as we're calling the method recursively, a node containing URLs in its external_ressources will attach
+            # the the subnodes to itself, even if the subnodes have a different referer. It will often be correct, but not always.
             if hasattr(unode, 'redirect') and not hasattr(unode, 'redirect_to_nothing'):
                 # If the subnode has a redirect URL set, we get all the requests matching this URL
                 # One may think the entry related to this redirect URL has a referer to the parent. One would be wrong.
