@@ -918,7 +918,8 @@ class HarFile():
                 # Lightweight way to hopefully skip the other URLs loaded in parallel with the redirect
                 if (previous_entry['response']['redirectURL']):
                     # <insert flip a table GIF>, yes, rebuilding a redirectURL is *fun*
-                    full_redirect = rebuild_url(previous_entry['response']['url'],
+                    # NOTE: Google HAR file doesn't have an 'url' key in the 'response' bloc.
+                    full_redirect = rebuild_url(previous_entry['request']['url'],
                                                 previous_entry['response']['redirectURL'], [e['request']['url']])
                     if full_redirect == e['request']['url']:
                         to_return.append(e['request']['url'])
