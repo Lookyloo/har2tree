@@ -1189,27 +1189,40 @@ class Har2Tree(object):
     def make_tree(self) -> URLNode:
         """Build URL and Host trees"""
         self._make_subtree(self.url_tree)
-        if self.nodes_list:
-            # We were not able to attach a few things.
-            while self.nodes_list:
-                node = self.nodes_list.pop(0)
-                if self.pages_root[node.pageref] != node.uuid:
-                    # This node is not a page root, we can attach it \o/
-                    page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
-                    self._make_subtree(page_root_node, [node])
-                else:
-                    # No luck, let's attach it to the prior page in the list
-                    page_before = self.har.har['log']['pages'][0]
-                    for page in self.har.har['log']['pages'][1:]:
-                        if page['id'] == node.pageref:
-                            break
-                        # Sometimes, the page listed in the list of pages is not related to
-                        # any of the entries. Go figure what happened.
-                        # If that's the case, we cannot use it as a reference
-                        if page['id'] in self.pages_root:
-                            page_before = page
-                    page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
-                    self._make_subtree(page_root_node, [node])
+        while self.nodes_list:
+            # We were not able to attach a few things using the referers, redirects, or grepping on the page.
+            # The remaining nodes are things we cannot attach for sure, so we try a few things, knowing it won't be perfect.
+            node = self.nodes_list.pop(0)
+            # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
+            # IF we have more than one page in the list
+            # AND the orphan node's pageref points to an other page than the first one <= FIXME not enabled yet
+            # AND we already have a node in the tree with this pageref
+            # => attach to that node.
+            if len(self.har.har['log']['pages']) > 1 and node.pageref != self.har.har['log']['pages'][0] and self.pages_root[node.pageref] != node.uuid:
+                # In that case, we check if there is already a page with the pageref of the orphan node,
+                # and attach the node to that. NOTE: we can only do that if thre is already a node withi this pageref in the tree.
+                # This node is not a page root, we can attach it \o/
+                page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
+                self._make_subtree(page_root_node, [node])
+            elif self.url_tree.search_nodes(name=self.root_after_redirect):
+                # Generally, when we have a bunch of redirects, they do not branch out before the final landing page
+                # *but* it is not always the case: some intermediary redirects will have calls to 3rd party pages.
+                # Hopefully, this last case was taken care of in the branch above.
+                # In this branch, we get the landing page after the redirects (if any), and attach the node to it.
+                self._make_subtree(self.url_tree.search_nodes(name=self.root_after_redirect)[0], [node])
+            else:
+                # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
+                page_before = self.har.har['log']['pages'][0]
+                for page in self.har.har['log']['pages'][1:]:
+                    if page['id'] == node.pageref:
+                        break
+                    # Sometimes, the page listed in the list of pages is not related to
+                    # any of the entries. Go figure what happened.
+                    # If that's the case, we cannot use it as a reference
+                    if page['id'] in self.pages_root:
+                        page_before = page
+                page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
+                self._make_subtree(page_root_node, [node])
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
@@ -1239,47 +1252,48 @@ class Har2Tree(object):
                 matching_urls = [url_node for url_node in self.all_url_requests[unode.redirect_url] if url_node in self.nodes_list]
                 self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
                 self._make_subtree(unode, matching_urls)
-            else:
-                if self.all_initiator_url.get(unode.name):
-                    # The URL (unode.name) is in the list of known urls initiating calls
-                    for u in self.all_initiator_url[unode.name]:
-                        matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                         if url_node in self.nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
-                        self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
-                        self._make_subtree(unode, matching_urls)
-                    if not self.all_initiator_url.get(unode.name):
-                        # remove the initiator url from the list if empty
-                        self.all_initiator_url.pop(unode.name)
-                if self.all_referer.get(unode.name):
-                    # The URL (unode.name) is in the list of known referers
-                    for u in self.all_referer[unode.name]:
-                        matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                         if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
-                        self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
-                        self._make_subtree(unode, matching_urls)
-                    if not self.all_referer.get(unode.name):
-                        # remove the referer from the list if empty
-                        self.all_referer.pop(unode.name)
-                if self.all_referer.get(unode.alternative_url_for_referer):
-                    # The URL (unode.name) stripped at the first `#` is in the list of known referers
-                    for u in self.all_referer[unode.alternative_url_for_referer]:
-                        matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                         if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
-                        self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
-                        self._make_subtree(unode, matching_urls)
+
+            # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
+            if self.all_initiator_url.get(unode.name):
+                # The URL (unode.name) is in the list of known urls initiating calls
+                for u in self.all_initiator_url[unode.name]:
+                    matching_urls = [url_node for url_node in self.all_url_requests[u]
+                                     if url_node in self.nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
+                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                    self._make_subtree(unode, matching_urls)
+                if not self.all_initiator_url.get(unode.name):
+                    # remove the initiator url from the list if empty
+                    self.all_initiator_url.pop(unode.name)
+            if self.all_referer.get(unode.name):
+                # The URL (unode.name) is in the list of known referers
+                for u in self.all_referer[unode.name]:
+                    matching_urls = [url_node for url_node in self.all_url_requests[u]
+                                     if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
+                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                    self._make_subtree(unode, matching_urls)
+                if not self.all_referer.get(unode.name):
                     # remove the referer from the list if empty
-                    if not self.all_referer.get(unode.alternative_url_for_referer):
-                        self.all_referer.pop(unode.alternative_url_for_referer)
-                if hasattr(unode, 'external_ressources'):
-                    # the url loads external things, and some of them have no referer....
-                    for external_tag, links in unode.external_ressources.items():
-                        for link in links:
-                            if link not in self.all_url_requests:
-                                # We have a lot of false positives
-                                continue
-                            matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self.nodes_list]
-                            self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
-                            self._make_subtree(unode, matching_urls)
+                    self.all_referer.pop(unode.name)
+            if self.all_referer.get(unode.alternative_url_for_referer):
+                # The URL (unode.name) stripped at the first `#` is in the list of known referers
+                for u in self.all_referer[unode.alternative_url_for_referer]:
+                    matching_urls = [url_node for url_node in self.all_url_requests[u]
+                                     if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
+                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                    self._make_subtree(unode, matching_urls)
+                # remove the referer from the list if empty
+                if not self.all_referer.get(unode.alternative_url_for_referer):
+                    self.all_referer.pop(unode.alternative_url_for_referer)
+            if hasattr(unode, 'external_ressources'):
+                # the url loads external things, and some of them have no referer....
+                for external_tag, links in unode.external_ressources.items():
+                    for link in links:
+                        if link not in self.all_url_requests:
+                            # We have a lot of false positives
+                            continue
+                        matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self.nodes_list]
+                        self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                        self._make_subtree(unode, matching_urls)
 
     def __repr__(self) -> str:
         return f'Har2Tree({self.har.path}, {self.har.capture_uuid})'
