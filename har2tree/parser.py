@@ -71,7 +71,7 @@ def __load_debug_files() -> None:
 
 def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., None]:
     @wraps(method)
-    def _impl(self: Any, node: URLNode, dev_debug: bool) -> None:
+    def _impl(self: Any, node: URLNode, dev_debug: bool=False) -> None:
         if dev_debug_mode:
             __load_debug_files()
             if dev_debug_url and node.name == dev_debug_url:
