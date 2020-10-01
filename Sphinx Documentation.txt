@@ -1,0 +1,232 @@
+SPHINX (Intro)
+
+
+Sphinx is a documentation generator or a tool that translates a set of plain text source files into various output formats, automatically producing cross-references, indices, etc. That is, if you have a directory containing a bunch of reStructuredText or Markdown documents, Sphinx can generate a series of HTML files, a PDF file (via LaTeX), man pages and much more.
+
+Sphinx focuses on documentation, in particular handwritten documentation, however, Sphinx can also be used to generate blogs, homepages and even books. Much of Sphinx’s power comes from the richness of its default plain-text markup format, reStructuredText, along with it’s significant extensibility capabilities.
+
+The goal of this document is to give you a quick taste of what Sphinx is and how you might use it. When you’re done here, you can check out the installation guide followed by the intro to the default markup format used by Sphinx,
+
+
+INSTALLATION
+
+
+Linux
+Debian/Ubuntu
+Install either python3-sphinx using apt-get:
+
+$ apt-get install python3-sphinx
+If it not already present, this will install Python for you.
+
+RHEL, CentOS
+Install python-sphinx using yum:
+
+$ yum install python-sphinx
+If it not already present, this will install Python for you.
+
+Other distributions
+Most Linux distributions have Sphinx in their package repositories. Usually the package is called python3-sphinx, python-sphinx or sphinx. Be aware that there are at least two other packages with sphinx in their name: a speech recognition toolkit (CMU Sphinx) and a full-text search database (Sphinx search).
+
+macOS
+Sphinx can be installed using Homebrew, MacPorts, or as part of a Python distribution such as Anaconda.
+
+Homebrew
+$ brew install sphinx-doc
+For more information, refer to the package overview.
+
+MacPorts
+Install either python3x-sphinx using port:
+
+$ sudo port install py38-sphinx
+To set up the executable paths, use the port select command:
+
+$ sudo port select --set python python38
+$ sudo port select --set sphinx py38-sphinx
+For more information, refer to the package overview.
+
+Anaconda
+$ conda install sphinx
+Windows
+Todo
+
+Could we start packaging this?
+
+Most Windows users do not have Python installed by default, so we begin with the installation of Python itself. To check if you already have Python installed, open the Command Prompt (⊞Win-r and type cmd). Once the command prompt is open, type python --version and press Enter. If Python is installed, you will see the version of Python printed to the screen. If you do not have Python installed, refer to the Hitchhikers Guide to Python’s Python on Windows installation guides. You must install Python 3.
+
+Once Python is installed, you can install Sphinx using pip. Refer to the pip installation instructions below for more information.
+
+Installation from PyPI
+Sphinx packages are published on the Python Package Index. The preferred tool for installing packages from PyPI is pip. This tool is provided with all modern versions of Python.
+
+On Linux or MacOS, you should open your terminal and run the following command.
+
+$ pip install -U sphinx
+On Windows, you should open Command Prompt (⊞Win-r and type cmd) and run the same command.
+
+C:\> pip install -U sphinx
+After installation, type sphinx-build --version on the command prompt. If everything worked fine, you will see the version number for the Sphinx package you just installed.
+
+Installation from PyPI also allows you to install the latest development release. You will not generally need (or want) to do this, but it can be useful if you see a possible bug in the latest stable release. To do this, use the --pre flag.
+
+$ pip install -U --pre sphinx
+Docker
+Docker images for Sphinx are published on the Docker Hub. There are two kind of images:
+
+sphinxdoc/sphinx
+
+sphinxdoc/sphinx-latexpdf
+
+Former one is used for standard usage of Sphinx, and latter one is mainly used for PDF builds using LaTeX. Please choose one for your purpose.
+
+Note
+
+sphinxdoc/sphinx-latexpdf contains TeXLive packages. So the image is very large (over 2GB!).
+
+Hint
+
+When using docker images, please use docker run command to invoke sphinx commands. For example, you can use following command to create a Sphinx project:
+
+$ docker run -it --rm -v /path/to/document:/docs sphinxdoc/sphinx sphinx-quickstart
+And you can following command this to build HTML document:
+
+$ docker run --rm -v /path/to/document:/docs sphinxdoc/sphinx make html
+For more details, please read README file of docker images.
+
+
+Installation from source
+
+
+You can install Sphinx directly from a clone of the Git repository. This can be done either by cloning the repo and installing from the local clone, on simply installing directly via git.
+
+$ git clone https://github.com/sphinx-doc/sphinx
+$ cd sphinx
+$ pip install .
+$ pip install git+https://github.com/sphinx-doc/sphinx
+You can also download a snapshot of the Git repo in either tar.gz or zip format. Once downloaded and extracted, these can be installed with pip as above.
+
+
+Setting up the documentation sources
+
+
+The root directory of a Sphinx collection of plain-text document sources is called the source directory. This directory also contains the Sphinx configuration file conf.py, where you can configure all aspects of how Sphinx reads your sources and builds your documentation. 1
+
+Sphinx comes with a script called sphinx-quickstart that sets up a source directory and creates a default conf.py with the most useful configuration values from a few questions it asks you. To use this, run:
+
+$ sphinx-quickstart
+
+Let’s assume you’ve run sphinx-quickstart. It created a source directory with conf.py and a master document, index.rst. The main function of the master document is to serve as a welcome page, and to contain the root of the “table of contents tree” (or toctree). This is one of the main things that Sphinx adds to reStructuredText, a way to connect multiple files to a single hierarchy of documents.
+The toctree directive initially is empty, and looks like so:
+
+.. toctree::
+   :maxdepth: 2
+
+You add documents listing them in the content of the directive:
+
+.. toctree::
+   :maxdepth: 2
+
+   usage/installation
+   usage/quickstart
+   ...
+This is exactly how the toctree for this documentation looks. The documents to include are given as document names, which in short means that you leave off the file name extension and use forward slashes (/) as directory separators.
+
+
+Adding content
+
+
+In Sphinx source files, you can use most features of standard reStructuredText. There are also several features added by Sphinx. For example, you can add cross-file references in a portable way (which works for all output types) using the ref role.
+
+For an example, if you are viewing the HTML version, you can look at the source for this document – use the “Show Source” link in the sidebar.
+
+
+Running the build
+
+
+Now that you have added some files and content, let’s make a first build of the docs. A build is started with the sphinx-build program:
+
+$ sphinx-build -b html sourcedir builddir
+where sourcedir is the source directory, and builddir is the directory in which you want to place the built documentation. The -b option selects a builder; in this example Sphinx will build HTML files.
+
+However, sphinx-quickstart script creates a Makefile and a make.bat which make life even easier for you. These can be executed by running make with the name of the builder. For example.
+
+$ make html
+This will build HTML docs in the build directory you chose. Execute make without an argument to see which targets are available.
+
+How do I generate PDF documents?
+
+make latexpdf runs the LaTeX builder and readily invokes the pdfTeX toolchain for you.
+
+
+Documenting objects
+
+
+One of Sphinx’s main objectives is easy documentation of objects (in a very general sense) in any domain. A domain is a collection of object types that belong together, complete with markup to create and reference descriptions of these objects.
+
+The most prominent domain is the Python domain. For example, to document Python’s built-in function enumerate(), you would add this to one of your source files.
+
+.. py:function:: enumerate(sequence[, start=0])
+
+   Return an iterator that yields tuples of an index and an item of the
+   *sequence*. (And so on.)
+This is rendered like this:
+
+enumerate(sequence[, start=0])
+Return an iterator that yields tuples of an index and an item of the sequence. (And so on.)
+
+The argument of the directive is the signature of the object you describe, the content is the documentation for it. Multiple signatures can be given, each in its own line.
+
+The Python domain also happens to be the default domain, so you don’t need to prefix the markup with the domain name.
+
+.. function:: enumerate(sequence[, start=0])
+
+   ...
+does the same job if you keep the default setting for the default domain.
+
+There are several more directives for documenting other types of Python objects, for example py:class or py:method. There is also a cross-referencing role for each of these object types. This markup will create a link to the documentation of enumerate().
+
+The :py:func:`enumerate` function can be used for ...
+
+Again, the py: can be left out if the Python domain is the default one. It doesn’t matter which file contains the actual documentation for enumerate(); Sphinx will find it and create a link to it.
+
+Each domain will have special rules for how the signatures can look like, and make the formatted output look pretty, or add specific features like links to parameter types, e.g. in the C/C++ domains.
+
+
+Basic configuration
+
+
+Earlier we mentioned that the conf.py file controls how Sphinx processes your documents. In that file, which is executed as a Python source file, you assign configuration values. For advanced users: since it is executed by Sphinx, you can do non-trivial tasks in it, like extending sys.path or importing a module to find out the version you are documenting.
+
+The config values that you probably want to change are already put into the conf.py by sphinx-quickstart and initially commented out (with standard Python syntax: a # comments the rest of the line). To change the default value, remove the hash sign and modify the value. To customize a config value that is not automatically added by sphinx-quickstart, just add an additional assignment.
+
+Keep in mind that the file uses Python syntax for strings, numbers, lists and so on. The file is saved in UTF-8 by default, as indicated by the encoding declaration in the first line.
+
+
+Autodoc
+
+
+When documenting Python code, it is common to put a lot of documentation in the source files, in documentation strings. Sphinx supports the inclusion of docstrings from your modules with an extension (an extension is a Python module that provides additional features for Sphinx projects) called autodoc.
+
+In order to use autodoc, you need to activate it in conf.py by putting the string 'sphinx.ext.autodoc' into the list assigned to the extensions config value:
+
+extensions = ['sphinx.ext.autodoc']
+Then, you have a few additional directives at your disposal. For example, to document the function io.open(), reading its signature and docstring from the source file, you’d write this:
+
+.. autofunction:: io.open
+You can also document whole classes or even modules automatically, using member options for the auto directives, like
+
+.. automodule:: io
+   :members:
+autodoc needs to import your modules in order to extract the docstrings. Therefore, you must add the appropriate path to sys.path in your conf.py.
+
+
+Intersphinx
+
+
+Many Sphinx documents including the Python documentation are published on the Internet. When you want to make links to such documents from your documentation, you can do it with sphinx.ext.intersphinx.
+
+In order to use intersphinx, you need to activate it in conf.py by putting the string 'sphinx.ext.intersphinx' into the extensions list and set up the intersphinx_mapping config value.
+
+For example, to link to io.open() in the Python library manual, you need to setup your intersphinx_mapping like:
+
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
+And now, you can write a cross-reference like :py:func:`io.open`. Any cross-reference that has no matching target in the current documentation set, will be looked up in the documentation sets configured in intersphinx_mapping (this needs access to the URL in order to download the list of valid targets). Intersphinx also works for some other domain’s roles including :ref:, however it doesn’t work for :doc: as that is non-domain role.
