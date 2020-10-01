@@ -1229,7 +1229,7 @@ class Har2Tree(object):
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         return self.url_tree
 
-    def _make_subtree(self, root: URLNode, nodes_to_attach: List[URLNode]=None) -> None:
+    def _make_subtree(self, root: URLNode, nodes_to_attach: Optional[List[URLNode]]=None) -> None:
         """Recursive method building each level of the tree"""
         matching_urls: List[URLNode]
         if nodes_to_attach is None:
