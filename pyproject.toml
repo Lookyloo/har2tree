@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "har2tree"
-version = "1.2.6"
+version = "1.2.7"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
