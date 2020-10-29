@@ -466,22 +466,11 @@ class URLNode(HarTreeNode):
         if not self.hostname:
             self.logger.warning(f'Something is broken in that node: {har_entry}')
 
-        tld = psl.get_tld(self.hostname)
+        tld = psl.get_tld(self.hostname, strict=True)
         if tld:
-            if tld in psl.tlds:
-                self.add_feature('known_tld', tld)
-            else:
-                if tld.isdigit():
-                    # IPV4
-                    pass
-                elif ':' in tld:
-                    # IPV6
-                    pass
-                else:
-                    self.logger.warning(f'###### TLD WAT {self.name} {tld}')
-                    self.add_feature('unknown_tld', tld)
+            self.add_feature('known_tld', tld)
         else:
-            self.logger.warning(f'###### No TLD/domain broken {self.name}')
+            self.logger.info(f'###### No TLD/domain broken {self.name}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
