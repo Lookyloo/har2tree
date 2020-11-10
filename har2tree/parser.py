@@ -466,11 +466,19 @@ class URLNode(HarTreeNode):
         if not self.hostname:
             self.logger.warning(f'Something is broken in that node: {har_entry}')
 
-        tld = psl.get_tld(self.hostname, strict=True)
-        if tld:
-            self.add_feature('known_tld', tld)
-        else:
-            self.logger.info(f'###### No TLD/domain broken {self.name}')
+        try:
+            ipaddress.ip_address(self.hostname)
+            self.add_feature('hostname_is_ip', True)
+        except ValueError:
+            # Not an IP
+            pass
+
+        if not hasattr(self, 'hostname_is_ip'):
+            tld = psl.get_tld(self.hostname, strict=True)
+            if tld:
+                self.add_feature('known_tld', tld)
+            else:
+                self.logger.info(f'###### No TLD/domain broken {self.name}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
