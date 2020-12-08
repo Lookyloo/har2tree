@@ -1217,6 +1217,13 @@ class Har2Tree(object):
             return self.har.final_redirect
         return None
 
+    @property
+    def rendered_node(self) -> URLNode:
+        node = self.url_tree.search_nodes(name=self.har.final_redirect)
+        if node:
+            return node[0]
+        raise Har2TreeError('Unable to find the rendered node.')
+
     def to_json(self) -> str:
         """Dump the whole HostNode tree to json (for d3js)"""
         return self.hostname_tree.to_json()
