@@ -754,6 +754,7 @@ class HostNode(HarTreeNode):
         self.add_feature('iframe', 0)
         self.add_feature('http_content', False)
         self.add_feature('https_content', False)
+        self.add_feature('contains_rendered_urlnode', False)
         self.cookies_sent: Set[str] = set()
         self.cookies_received: Set[Tuple[str, str, bool]] = set()
 
@@ -803,6 +804,9 @@ class HostNode(HarTreeNode):
 
         # Add to URLNode a reference to the HostNode UUID
         url.add_feature('hostnode_uuid', self.uuid)
+
+        if hasattr(url, 'rendered_html'):
+            self.contains_rendered_urlnode = True
 
         if hasattr(url, 'cookies_sent'):
             # Keep a set of cookies sent: different URLs will send the same cookie
