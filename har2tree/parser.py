@@ -6,7 +6,7 @@ import json
 import copy
 from datetime import datetime, timedelta
 import uuid
-from urllib.parse import urlparse, unquote_plus, unquote_to_bytes
+from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 from base64 import b64decode
 import binascii
 from collections import defaultdict
@@ -25,6 +25,8 @@ from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
 from ete3 import TreeNode  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
 import filetype  # type: ignore
+from w3lib.html import strip_html5_whitespace  # type: ignore
+from w3lib.url import canonicalize_url, safe_url_string  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -726,6 +728,29 @@ class URLNode(HarTreeNode):
                 for mimetype, blobs in self.embedded_ressources.items():
                     all_ressources_hashes.update([h for h, b in blobs])
         return all_ressources_hashes
+
+    @property
+    def urls_in_rendered_page(self) -> List[str]:
+        if not self.rendered_html:
+            raise Har2TreeError('Not the node of a page rendered, invalid request.')
+        urls: Set[str] = set()
+        soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
+        for a_tag in soup.find_all(["a", "area"]):
+            href = a_tag.attrs.get("href")
+            if not href:
+                continue
+
+            href = strip_html5_whitespace(href)
+            href = safe_url_string(href)
+
+            href = urljoin(self.name, href)
+
+            href = canonicalize_url(href, keep_fragments=True)
+            parsed = urlparse(href)
+            if not parsed.netloc:
+                continue
+            urls.add(href)
+        return sorted(urls)
 
 
 class HostNode(HarTreeNode):
