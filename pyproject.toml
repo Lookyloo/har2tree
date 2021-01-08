@@ -28,6 +28,7 @@ six = "^1.15.0"
 publicsuffix2 = "^2.20191221"
 filetype = "^1.0.7"
 numpy = "^1.19.4"
+w3lib = "^1.22.0"
 
 [tool.poetry.dev-dependencies]
 coverage = "^5.3"
