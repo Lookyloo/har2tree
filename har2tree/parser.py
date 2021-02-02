@@ -1508,7 +1508,7 @@ class CrawledTree(object):
             return []
         elif len(redirect_node) > 1:
             self.logger.warning(f'Too many nodes found for {self.root_hartree.root_after_redirect}: {redirect_node}')
-        return [a.name for a in reversed(redirect_node[0].get_ancestors())]
+        return [a.name for a in reversed(redirect_node[0].get_ancestors())] + [redirect_node[0].name]
 
     @property
     def root_url(self) -> str:
