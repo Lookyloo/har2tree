@@ -289,6 +289,27 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
     return to_return
 
 
+def _unpack_data_uri(data: str) -> Optional[Tuple[str, str, BytesIO]]:
+    try:
+        parsed_uri = parse_data_uri(data)
+        if parsed_uri:
+            mime, mimeparams, unpacked_data = parsed_uri
+            if '/' not in mime:
+                # Turns out, it happens. The mimetype can be null for example.
+                kind = filetype.guess(unpacked_data)
+                if kind:
+                    mime = kind.mime
+                else:
+                    mime = ''
+
+            blob = BytesIO(unpacked_data)
+            b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+            return mime, b_hash, blob
+    except ValueError as e:
+        logger.warning(e, data)
+    return None
+
+
 def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
@@ -332,15 +353,10 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
             continue
 
         if uri.startswith('data:'):
-            try:
-                parsed_uri = parse_data_uri(uri)
-                if parsed_uri:
-                    mime, mimeparams, data = parsed_uri
-                    blob = BytesIO(data)
-                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                    embedded_ressources[mime].append((b_hash, blob))
-            except ValueError as e:
-                logger.warning(e, uri)
+            unpacked = _unpack_data_uri(uri)
+            if unpacked:
+                mime, b_hash, blob = unpacked
+                embedded_ressources[mime].append((b_hash, blob))
         else:
             external_ressources[link.name].append(unquote_plus(uri))
 
@@ -354,15 +370,10 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue()):
         url = url.decode()
         if url.startswith('data:'):
-            try:
-                parsed_uri = parse_data_uri(url)
-                if parsed_uri:
-                    mime, mimeparams, data = parsed_uri
-                    blob = BytesIO(data)
-                    b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-                    embedded_ressources[mime].append((b_hash, blob))
-            except ValueError as e:
-                logger.warning(e, url)
+            unpacked = _unpack_data_uri(url)
+            if unpacked:
+                mime, b_hash, blob = unpacked
+                embedded_ressources[mime].append((b_hash, blob))
         else:
             external_ressources['css'].append(url)
 
@@ -387,6 +398,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
+
 
 # ##################################################################
 
