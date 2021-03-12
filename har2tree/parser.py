@@ -473,7 +473,10 @@ class URLNode(HarTreeNode):
             #   * No fromisoformat
             #   * strptime %z does not like Z at the end of the string, and doesn't like +XX:XX either (wants +XXXX)
             har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+0000')
-        self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
+        if '.' in har_entry['startedDateTime']:
+            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
+        else:
+            self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S%z'))
 
         self.add_feature('pageref', har_entry['pageref'])
 
