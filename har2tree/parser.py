@@ -363,7 +363,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # Search for meta refresh redirect madness
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
     meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
-    if meta_refresh:
+    if meta_refresh and 'content' in meta_refresh:
         external_ressources['meta_refresh'].append(meta_refresh['content'].partition('=')[2])
 
     # external stuff loaded from css content, because reasons.
