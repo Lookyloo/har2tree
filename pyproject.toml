@@ -5,6 +5,7 @@ description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
 repository = "https://github.com/Lookyloo/har2tree"
+documentation = "https://har2tree.readthedocs.io/en/latest/"
 
 readme = "README.md"
 
