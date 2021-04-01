@@ -54,7 +54,7 @@ dev_debug_url = ''
 dev_debug_hostname = ''
 
 if dev_debug_mode:
-    logger.critical('You are running har3tree in dev debug mode.')
+    logger.critical('You are running har2tree in dev debug mode.')
     logger.critical(f'Path to the debug files: {path_to_debug_files}.')
 
 

@@ -19,6 +19,8 @@ classifiers = [
 	'Topic :: Internet'
 ]
 
+include = ['README.md']
+
 [tool.poetry.dependencies]
 python = "^3.8"
 ete3 = "^3.1.2"
@@ -29,6 +31,8 @@ publicsuffix2 = "^2.20191221"
 filetype = "^1.0.7"
 numpy = "^1.19.4"
 w3lib = "^1.22.0"
+Sphinx = { version = "^3.5.3", optional = true }
+myst-parser = { version = "^0.13.5", optional = true }
 
 [tool.poetry.dev-dependencies]
 coverage = "^5.5"
@@ -37,6 +41,9 @@ codecov = "^2.1.11"
 mypy = "^0.812"
 nose = "^1.3.7"
 ipython = "^7.22.0"
+
+[tool.poetry.extras]
+docs = ["Sphinx", "myst-parser"]
 
 [build-system]
 requires = ["poetry_core>=1.0", "setuptools"]
