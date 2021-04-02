@@ -22,7 +22,7 @@ copyright = '2021, Lookyloo team'
 author = 'Lookyloo team'
 
 # The full version, including alpha/beta/rc tags
-release = 'v1.4.4'
+release = 'v1.5.0'
 
 
 # -- General configuration ---------------------------------------------------
