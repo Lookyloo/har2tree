@@ -12,10 +12,12 @@ from typing import Iterable
 
 class SimpleTest(unittest.TestCase):
 
+    crawled_tree: CrawledTree
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'data' / 'simple'
-        har_to_process: Iterable[Path] = test_dir.glob('*.har')
+        har_to_process = [test_dir / 'heroku_index.har']
         cls.crawled_tree = CrawledTree(har_to_process, str(uuid.uuid4()))
 
     def test_root_url(self) -> None:
