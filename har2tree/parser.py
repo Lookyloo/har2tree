@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 try:
     psl_file = fetch()
     psl = PublicSuffixList(psl_file=psl_file)
-except Exception:
+except Exception as e:
+    logger.warning(f'Unable to fetch the PublicSuffixList: {e}')
     psl = PublicSuffixList()
 
 
