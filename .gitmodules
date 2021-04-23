@@ -1,0 +1,3 @@
+[submodule "tests/capture_samples"]
+	path = tests/capture_samples
+	url = https://github.com/Lookyloo/capture_samples.git
