@@ -23,12 +23,12 @@ jobs:
 
     - name: Install dependencies
       run: |
+        git submodule update --init --recursive
         python -m pip install --upgrade pip poetry
         poetry install
 
     - name: Test with nosetests
       run: |
-        git submodule update --init --recursive
         poetry run nosetests --with-coverage --cover-xml --cover-package=har2tree tests/test.py
         poetry run nosetests --with-coverage --cover-xml --cover-package=har2tree tests/simple_test.py
         poetry run mypy .
