@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from har2tree import CrawledTree, Har2Tree
+from har2tree import CrawledTree, Har2Tree, HarFile
 from pathlib import Path
 import datetime
 import os
@@ -20,8 +20,8 @@ class SimpleTest(unittest.TestCase):
         har_to_process = [test_dir / '0.har']
         # ct means CrawledTree
         cls.http_redirect_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
-    
 
+    
     def test_root_url(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_url, 'https://lookyloo-testing.herokuapp.com/redirect_http')
 
@@ -43,6 +43,8 @@ class SimpleTest(unittest.TestCase):
     def test_root_after_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 
+    def test_rendered_node_name_equals_last_redirect(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.rendered_node.name, self.http_redirect_ct.root_hartree.har.final_redirect)
 
 if __name__ == '__main__':
     unittest.main()
