@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from har2tree import CrawledTree, Har2Tree, HarFile
+from har2tree import CrawledTree
 from pathlib import Path
 import datetime
 import os
