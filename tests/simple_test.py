@@ -11,8 +11,7 @@ import uuid
 
 class SimpleTest(unittest.TestCase):
 
-    http_redirect_tree: CrawledTree
-
+    http_redirect_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -21,11 +20,7 @@ class SimpleTest(unittest.TestCase):
         har_to_process = [test_dir / '0.har']
         # ct means CrawledTree
         cls.http_redirect_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
-
-        # Har2Tree needs a string path contrarily to CrawledTree which needs Iterable
-        har_to_process_string = test_dir / '0.har'
-        cls.http_redirect_tree = Har2Tree(har_to_process_string, str(uuid.uuid4()))
-        
+    
 
     def test_root_url(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_url, 'https://lookyloo-testing.herokuapp.com/redirect_http')
@@ -40,17 +35,14 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(self.http_redirect_ct.start_time, datetime.datetime(2021, 4, 22, 15, 57, 51, 686108, tzinfo=datetime.timezone.utc))
 
     def test_root_referer(self) -> None:
-        self.assertEqual(self.http_redirect_tree.root_referer, '')
+        self.assertEqual(self.http_redirect_ct.root_hartree.root_referer, '')
 
     def test_stats(self) -> None:
-        self.assertEqual(self.http_redirect_tree.stats, {'total_hostnames': 1, 'total_urls': 1, 'total_cookies_sent': 0, 'total_cookies_received': 0})
+        self.assertEqual(self.http_redirect_ct.root_hartree.stats, {'total_hostnames': 5, 'total_urls': 7, 'total_cookies_sent': 1, 'total_cookies_received': 1})
 
     def test_root_after_redirect(self) -> None:
-        self.assertEqual(self.http_redirect_tree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
+        self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 
 
 if __name__ == '__main__':
     unittest.main()
-
-
-
