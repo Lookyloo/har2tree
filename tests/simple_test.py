@@ -4,6 +4,7 @@
 import unittest
 from har2tree import CrawledTree
 from pathlib import Path
+import datetime
 import os
 import uuid
 
@@ -26,8 +27,13 @@ class SimpleTest(unittest.TestCase):
     
     def test_redirects(self) -> None:
         self.assertEqual(self.http_redirect_tree.redirects[1], "https://www.youtube.com/watch?v=iwGFalTRHDA")
-    
+
+    def test_start_time(self) -> None:
+        self.assertEqual(self.http_redirect_tree.start_time, datetime.datetime(2021, 4, 22, 15, 57, 51, 686108, tzinfo=datetime.timezone.utc))
+
 if __name__ == '__main__':
     unittest.main() 
+
+
 
 
