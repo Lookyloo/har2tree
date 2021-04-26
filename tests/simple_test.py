@@ -42,6 +42,13 @@ class SimpleTest(unittest.TestCase):
     def test_root_referer(self) -> None:
         self.assertEqual(self.http_redirect_tree.root_referer, '')
 
+    def test_stats(self) -> None:
+        self.assertEqual(self.http_redirect_tree.stats, {'total_hostnames': 1, 'total_urls': 1, 'total_cookies_sent': 0, 'total_cookies_received': 0})
+
+    def test_root_after_redirect(self) -> None:
+        self.assertEqual(self.http_redirect_tree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
+
+
 if __name__ == '__main__':
     unittest.main()
 
