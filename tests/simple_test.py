@@ -27,7 +27,7 @@ class SimpleTest(unittest.TestCase):
 
     def test_user_agent(self) -> None:
         self.assertEqual(self.http_redirect_ct.user_agent, "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534+ (KHTML, like Gecko) BingPreview/1.0b")
-    
+
     def test_redirects(self) -> None:
         self.assertEqual(self.http_redirect_ct.redirects[1], "https://www.youtube.com/watch?v=iwGFalTRHDA")
 
@@ -40,7 +40,16 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(self.http_redirect_ct.root_hartree.root_referer, '')
 
     def test_stats(self) -> None:
-        self.assertEqual(self.http_redirect_ct.root_hartree.stats, {'total_hostnames': 5, 'total_urls': 7, 'total_cookies_sent': 1, 'total_cookies_received': 1})
+        stats = {'total_hostnames': 5,  # Nodes in hostname tree
+                 'total_urls': 7,  # Nodes in URL tree
+                 'total_cookies_sent': 1,  # Number of unique cookies sent
+                 'total_cookies_received': 1,  # Number of unique cookies received
+                 'total_redirects': 4,  # number of redirects leading to the landing page
+                 'total_unique_hostnames': 4,  # Number of unique hostnames
+                 'total_unique_urls': 6,  # Number of unique urls
+                 'tree_depth': 5  # Max depth of the tree (from the initial URL)
+                 }
+        self.assertEqual(self.http_redirect_ct.root_hartree.stats, stats)
 
     def test_root_after_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
@@ -64,6 +73,6 @@ class SimpleTest(unittest.TestCase):
         # As there is only one redirect, both initial and final redirects should return the same URL
         self.assertEqual(self.http_redirect_ct.root_hartree.har.initial_redirects[0], self.http_redirect_ct.root_hartree.har.final_redirect)
 
+
 if __name__ == '__main__':
     unittest.main()
-
