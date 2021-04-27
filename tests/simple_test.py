@@ -15,13 +15,13 @@ class SimpleTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'http_redirect'
 
+        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'http_redirect'
         har_to_process = [test_dir / '0.har']
         # ct means CrawledTree
         cls.http_redirect_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
 
-    
+    # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
     def test_root_url(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_url, 'https://lookyloo-testing.herokuapp.com/redirect_http')
 
@@ -31,10 +31,12 @@ class SimpleTest(unittest.TestCase):
     def test_redirects(self) -> None:
         self.assertEqual(self.http_redirect_ct.redirects[1], "https://www.youtube.com/watch?v=iwGFalTRHDA")
 
+    # Assert that start_time property gives correct date in correct format
     def test_start_time(self) -> None:
         self.assertEqual(self.http_redirect_ct.start_time, datetime.datetime(2021, 4, 22, 15, 57, 51, 686108, tzinfo=datetime.timezone.utc))
 
     def test_root_referer(self) -> None:
+        # We did not pass any referer in Lookyloo, we should get an empty response
         self.assertEqual(self.http_redirect_ct.root_hartree.root_referer, '')
 
     def test_stats(self) -> None:
@@ -44,6 +46,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 
     def test_search_final_redirect(self) -> None:
+        # make sure the program has access to the final_redirect.txt file
         self.http_redirect_ct.root_hartree.har._search_final_redirect()
         self.assertEqual(self.http_redirect_ct.root_hartree.har.final_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 
@@ -58,8 +61,9 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(tree_start_time, har_start_time)
 
     def test_initial_redirect_equals_final_redirect(self) -> None:
-        # That's normally the case in this capture
+        # As there is only one redirect, both initial and final redirects should return the same URL
         self.assertEqual(self.http_redirect_ct.root_hartree.har.initial_redirects[0], self.http_redirect_ct.root_hartree.har.final_redirect)
 
 if __name__ == '__main__':
     unittest.main()
+
