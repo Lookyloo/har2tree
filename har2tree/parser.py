@@ -914,6 +914,7 @@ class HarFile():
                 self.final_redirect: str = unquote_plus(_lr.read())
             self._search_final_redirect()
         else:
+            self.logger.info('No last_redirect file available.')
             self.final_redirect = ''
 
         cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
@@ -921,6 +922,7 @@ class HarFile():
             with cookiefile.open() as c:
                 self.cookies: List[Dict[str, Any]] = json.load(c)
         else:
+            self.logger.info('No cookies file available.')
             self.cookies = []
 
         htmlfile = self.path.parent / f'{self.path.stem}.html'
@@ -929,6 +931,7 @@ class HarFile():
             with htmlfile.open('rb') as _h:
                 self.html_content = BytesIO(_h.read())
         else:
+            self.logger.info('No rendered HTML content.')
             self.html_content = None
 
         # Sorting the entries by start time (it isn't the case by default)
@@ -1176,17 +1179,37 @@ class Har2Tree(object):
         """Statistics about the capture"""
         to_return: Dict[str, Any] = {'total_hostnames': 0}
         to_return['total_urls'] = sum(1 for _ in self.url_tree.traverse())
+        to_return['total_unique_urls'] = len({node.name for node in self.url_tree.traverse()})
 
         all_cookies_sent: Set[str] = set()
         all_cookies_received: Set[Tuple[str, str, bool]] = set()
+        all_hostnames: Set[str] = set()
         for host_node in self.hostname_tree.traverse():
             to_return['total_hostnames'] += 1
+            all_hostnames.add(host_node.name)
             all_cookies_sent.update(host_node.cookies_sent)
             all_cookies_received.update(host_node.cookies_received)
 
+        to_return['total_unique_hostnames'] = len(all_hostnames)
         to_return['total_cookies_sent'] = len(all_cookies_sent)
         to_return['total_cookies_received'] = len(all_cookies_received)
+        node, distance = self.hostname_tree.get_farthest_leaf()
+        to_return['tree_depth'] = int(distance) + 1
+        to_return['total_redirects'] = len(self.redirects)
         return to_return
+
+    @property
+    def redirects(self) -> List[str]:
+        """List of redirects for this tree"""
+        if not self.root_after_redirect:
+            return []
+        redirect_node = self.url_tree.search_nodes(name=self.root_after_redirect)
+        if not redirect_node:
+            self.logger.warning(f'Unable to find node {self.root_after_redirect}')
+            return []
+        elif len(redirect_node) > 1:
+            self.logger.warning(f'Too many nodes found for {self.root_after_redirect}: {redirect_node}')
+        return [a.name for a in reversed(redirect_node[0].get_ancestors())] + [redirect_node[0].name]
 
     @property
     def root_referer(self) -> Optional[str]:
@@ -1520,15 +1543,7 @@ class CrawledTree(object):
     @property
     def redirects(self) -> List[str]:
         """List of redirects for this capture"""
-        if not self.root_hartree.root_after_redirect:
-            return []
-        redirect_node = self.root_hartree.url_tree.search_nodes(name=self.root_hartree.root_after_redirect)
-        if not redirect_node:
-            self.logger.warning(f'Unable to find node {self.root_hartree.root_after_redirect}')
-            return []
-        elif len(redirect_node) > 1:
-            self.logger.warning(f'Too many nodes found for {self.root_hartree.root_after_redirect}: {redirect_node}')
-        return [a.name for a in reversed(redirect_node[0].get_ancestors())] + [redirect_node[0].name]
+        return self.root_hartree.redirects
 
     @property
     def root_url(self) -> str:
