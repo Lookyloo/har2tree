@@ -43,6 +43,10 @@ class SimpleTest(unittest.TestCase):
     def test_root_after_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 
+    def test_search_final_redirect(self) -> None:
+        self.http_redirect_ct.root_hartree.har._search_final_redirect()
+        self.assertEqual(self.http_redirect_ct.root_hartree.har.final_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
+
     def test_rendered_node_name_equals_last_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.rendered_node.name, self.http_redirect_ct.root_hartree.har.final_redirect)
 
@@ -57,6 +61,5 @@ class SimpleTest(unittest.TestCase):
         # That's normally the case in this capture
         self.assertEqual(self.http_redirect_ct.root_hartree.har.initial_redirects[0], self.http_redirect_ct.root_hartree.har.final_redirect)
 
-    
 if __name__ == '__main__':
     unittest.main()
