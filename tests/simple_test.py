@@ -46,5 +46,12 @@ class SimpleTest(unittest.TestCase):
     def test_rendered_node_name_equals_last_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.rendered_node.name, self.http_redirect_ct.root_hartree.har.final_redirect)
 
+    def test_tree_start_time_equals_har_start_time(self) -> None:
+        tree_start_time = self.http_redirect_ct.start_time.strftime("%Y-%m-%d %H:%M:%S")
+        har_start_time = self.http_redirect_ct.root_hartree.har.initial_start_time[0:19].replace('T', ' ')
+        self.assertEqual(tree_start_time, har_start_time)
+
 if __name__ == '__main__':
     unittest.main()
+
+
