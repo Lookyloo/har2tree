@@ -3,7 +3,7 @@
 
 import unittest
 from har2tree import CrawledTree
-from har2tree.parser import parse_data_uri
+from har2tree.parser import parse_data_uri, rebuild_url
 from pathlib import Path
 import datetime
 import os
@@ -78,5 +78,13 @@ class SimpleTest(unittest.TestCase):
         # decodes base 64 into hello world; gives an idea of what the function does
         self.assertEqual(parse_data_uri("data:text/plain;charset=US-ASCII;base64,SGVsbG8sIFdvcmxkIQ=="), ('text/plain', 'charset=US-ASCII', b'Hello, World!'))
 
+    def test_rebuild_url_simple(self) -> None:
+        # parser L188 shows that rebuild_url should behave differently if there is a slash or not at the end of the base URL
+        rebuilt_url_no_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
+        rebuilt_url_with_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir/', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
+        self.assertNotEqual(rebuilt_url_no_end_slash, rebuilt_url_with_end_slash)
+
 if __name__ == '__main__':
     unittest.main()
+
+
