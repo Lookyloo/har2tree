@@ -78,13 +78,30 @@ class SimpleTest(unittest.TestCase):
         # decodes base 64 into hello world; gives an idea of what the function does
         self.assertEqual(parse_data_uri("data:text/plain;charset=US-ASCII;base64,SGVsbG8sIFdvcmxkIQ=="), ('text/plain', 'charset=US-ASCII', b'Hello, World!'))
 
-    def test_rebuild_url_simple(self) -> None:
-        # parser L188 shows that rebuild_url should behave differently if there is a slash or not at the end of the base URL
+    def test_rebuild_url_end_slash(self) -> None:
+        # parser.py L#188 shows that rebuild_url should behave differently if there is a slash or not at the end of the base URL despite having same known urls;
+        # see next two tests
         rebuilt_url_no_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
         rebuilt_url_with_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir/', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
         self.assertNotEqual(rebuilt_url_no_end_slash, rebuilt_url_with_end_slash)
 
+    def test_rebuild_url_no_end_slash(self) -> None:
+        # in this case, /subdir disappears because the algorithm splits before the last found /
+        rebuilt_url_no_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
+        self.assertEqual(rebuilt_url_no_end_slash, 'https://lookyloo-testing.herokuapp.com/redirect_http_partial_no_slash_dest/')
+
+    def test_rebuild_url_with_end_slash(self) -> None:
+        # on the other hand, this test will simply add the partial URL to the given base url
+        rebuilt_url_with_end_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/subdir/', 'redirect_http_partial_no_slash_dest', ['https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest'])
+        self.assertEqual(rebuilt_url_with_end_slash, 'https://lookyloo-testing.herokuapp.com/subdir/redirect_http_partial_no_slash_dest')
+
+    def test_rebuild_url_partial_double_slash(self) -> None:
+        # a partial url starting with // means that it will redirect on the same scheme as the base url (if its https, it will redirect on https too)
+        rebuild_url_double_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/redirect_http_partial_no_scheme', '//www.youtube.com/watch?v=iwGFalTRHDA',  ['https://www.youtube.com/watch?v=iwGFalTRHDA'])
+        self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
+
 if __name__ == '__main__':
     unittest.main()
+
 
 
