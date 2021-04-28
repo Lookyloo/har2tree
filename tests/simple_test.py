@@ -3,6 +3,7 @@
 
 import unittest
 from har2tree import CrawledTree
+from har2tree.parser import parse_data_uri
 from pathlib import Path
 import datetime
 import os
@@ -73,6 +74,9 @@ class SimpleTest(unittest.TestCase):
         # As there is only one redirect, both initial and final redirects should return the same URL
         self.assertEqual(self.http_redirect_ct.root_hartree.har.initial_redirects[0], self.http_redirect_ct.root_hartree.har.final_redirect)
 
+    def test_parse_data_uri(self) -> None:
+        # decodes base 64 into hello world; gives an idea of what the function does
+        self.assertEqual(parse_data_uri("data:text/plain;charset=US-ASCII;base64,SGVsbG8sIFdvcmxkIQ=="), ('text/plain', 'charset=US-ASCII', b'Hello, World!'))
 
 if __name__ == '__main__':
     unittest.main()
