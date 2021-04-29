@@ -97,11 +97,9 @@ class SimpleTest(unittest.TestCase):
 
     def test_rebuild_url_partial_double_slash(self) -> None:
         # a partial url starting with // means that it will redirect on the same scheme as the base url (if its https, it will redirect on https too)
-        rebuild_url_double_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/redirect_http_partial_no_scheme', '//www.youtube.com/watch?v=iwGFalTRHDA',  ['https://www.youtube.com/watch?v=iwGFalTRHDA'])
+        rebuild_url_double_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/redirect_http_partial_no_scheme', '//www.youtube.com/watch?v=iwGFalTRHDA', ['https://www.youtube.com/watch?v=iwGFalTRHDA'])
         self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
+
 
 if __name__ == '__main__':
     unittest.main()
-
-
-
