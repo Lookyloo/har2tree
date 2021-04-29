@@ -1075,7 +1075,7 @@ class Har2Tree(object):
         self.har = HarFile(har_path, capture_uuid)
         self.hostname_tree = HostNode()
 
-        self.nodes_list: List[URLNode] = []
+        self._nodes_list: List[URLNode] = []
         self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
 
         # Format: pageref: node UUID
@@ -1089,19 +1089,19 @@ class Har2Tree(object):
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
         self.initial_cookies: Dict[str, Dict[str, Any]] = {}
-        if hasattr(self.nodes_list[0], 'cookies_sent'):
-            self.initial_cookies = {key: cookie for key, cookie in self.nodes_list[0].cookies_sent.items()}
+        if hasattr(self._nodes_list[0], 'cookies_sent'):
+            self.initial_cookies = {key: cookie for key, cookie in self._nodes_list[0].cookies_sent.items()}
 
         # Dictionary of all cookies received during the capture
         self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
-        for n in self.nodes_list:
+        for n in self._nodes_list:
             if hasattr(n, 'cookies_received'):
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
         # Dictionary of all cookies sent during the capture
         self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
-        for n in self.nodes_list:
+        for n in self._nodes_list:
             if hasattr(n, 'cookies_sent'):
                 for c_sent in n.cookies_sent.keys():
                     self.cookies_sent[c_sent].append(n)
@@ -1117,7 +1117,7 @@ class Har2Tree(object):
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
         self.locally_created_not_sent: Dict[str, Dict[str, Any]] = self.locally_created.copy()
         # Cross reference the source of the cookie
-        for n in self.nodes_list:
+        for n in self._nodes_list:
             if hasattr(n, 'cookies_sent'):
                 for c_sent in n.cookies_sent:
                     # Remove cookie from list if sent during the capture.
@@ -1134,7 +1134,7 @@ class Har2Tree(object):
             self.logger.debug(f'Cookies locally created & never sent {json.dumps(self.locally_created_not_sent, indent=2)}')
 
         # Add context if urls are found in external_ressources
-        for n in self.nodes_list:
+        for n in self._nodes_list:
             if hasattr(n, 'external_ressources'):
                 for type_ressource, urls in n.external_ressources.items():
                     for url in urls:
@@ -1172,7 +1172,7 @@ class Har2Tree(object):
                             if type_ressource == 'object':  # FIXME: Same as embed, but more things
                                 node.add_feature('octet_stream', True)
 
-        self.url_tree = self.nodes_list.pop(0)
+        self.url_tree = self._nodes_list.pop(0)
 
     @property
     def stats(self) -> Dict[str, Any]:
@@ -1258,7 +1258,7 @@ class Har2Tree(object):
                 else:
                     self.all_referer[n.referer].append(n.name)
 
-            self.nodes_list.append(n)
+            self._nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
 
         # So, sometimes, the startedDateTime in the page list is fucked up
@@ -1267,7 +1267,7 @@ class Har2Tree(object):
         for _, pages in self.har.pages_start_times.items():
             for page in pages:
                 if page['id'] not in self.pages_root:
-                    for node in self.nodes_list:
+                    for node in self._nodes_list:
                         if node.pageref == page['id']:
                             self.pages_root[node.pageref] = node.uuid
                             break
@@ -1329,10 +1329,10 @@ class Har2Tree(object):
     def make_tree(self) -> URLNode:
         """Build URL and Host trees"""
         self._make_subtree(self.url_tree)
-        while self.nodes_list:
+        while self._nodes_list:
             # We were not able to attach a few things using the referers, redirects, or grepping on the page.
             # The remaining nodes are things we cannot attach for sure, so we try a few things, knowing it won't be perfect.
-            node = self.nodes_list.pop(0)
+            node = self._nodes_list.pop(0)
             self._make_subtree_fallback(node)
 
         # Initialize the hostname tree root
@@ -1413,8 +1413,8 @@ class Har2Tree(object):
                 # => In that case, we want to attach URL 2 to URL 1, and not to the referer of URL 1.
                 if unode.redirect_url in self.all_redirects:
                     self.all_redirects.remove(unode.redirect_url)  # Makes sure we only follow a redirect once
-                    matching_urls = [url_node for url_node in self.all_url_requests[unode.redirect_url] if url_node in self.nodes_list]
-                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                    matching_urls = [url_node for url_node in self.all_url_requests[unode.redirect_url] if url_node in self._nodes_list]
+                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Redirections from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
@@ -1427,8 +1427,8 @@ class Har2Tree(object):
                 # The URL (unode.name) is in the list of known urls initiating calls
                 for u in self.all_initiator_url[unode.name]:
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self.nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
-                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                                     if url_node in self._nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
+                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
@@ -1440,8 +1440,8 @@ class Har2Tree(object):
                 # The URL (unode.name) is in the list of known referers
                 for u in self.all_referer[unode.name]:
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
-                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                                     if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
+                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
@@ -1453,8 +1453,8 @@ class Har2Tree(object):
                 # The URL (unode.name) stripped at the first `#` is in the list of known referers
                 for u in self.all_referer[unode.alternative_url_for_referer]:
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self.nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
-                    self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                                     if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
+                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Found via alternative referer from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
@@ -1469,8 +1469,8 @@ class Har2Tree(object):
                         if link not in self.all_url_requests:
                             # We have a lot of false positives
                             continue
-                        matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self.nodes_list]
-                        self.nodes_list = [node for node in self.nodes_list if node not in matching_urls]
+                        matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self._nodes_list]
+                        self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                         if dev_debug:
                             self.logger.warning(f'Found from {unode.name} via external ressources ({external_tag}): {matching_urls}.')
                         self._make_subtree(unode, matching_urls)
