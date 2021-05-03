@@ -357,7 +357,9 @@ class URLNode(HarTreeNode):
                 self.add_feature('redirect_to_nothing', True)
                 self.add_feature('redirect_url', har_entry['response']['redirectURL'])
                 self.logger.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
-                    original_url=self.name, original_redirect=har_entry['response']['redirectURL'], modified_redirect=redirect_url))
+                    original_url=self.name,
+                    original_redirect=har_entry['response']['redirectURL'],
+                    modified_redirect=redirect_url))
 
     def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> Optional[str]:
         # Because everything is terrible, and the call stack can have parents

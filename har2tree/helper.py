@@ -69,38 +69,14 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
 
     if re.match('^https?://', partial):
         # we have a proper URL... hopefully
-        # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
         final_url = partial
-    elif partial.startswith('//'):
-        # URL without scheme => takes the scheme from the caller
-        final_url = urljoin(base_url, partial)
-        if final_url not in known_urls:
-            logger.debug(f'URL without scheme: {base_url} - {partial} - {final_url}')
-    elif partial[0] == ';':
-        # partial starts with a parameter. Replace the full path (as the specs say)
-        # in base_url with partial
-        final_url = urljoin(base_url, partial)
-        if final_url not in known_urls:
-            logger.debug(f'URL with only parameter: {base_url} - {partial} - {final_url}')
-    elif partial[0] == '?':
-        # partial starts with a query. Replace the existing ones in base_url with partial
-        final_url = urljoin(base_url, partial)
-        if final_url not in known_urls:
-            logger.debug(f'URL with only query: {base_url} - {partial} - {final_url}')
-    elif partial[0] == '#':
-        # partial starts with a fragment. Replace the existing ones in base_url with partial
-        final_url = urljoin(base_url, partial)
-        if final_url not in known_urls:
-            logger.debug(f'URL with only fragment: {base_url} - {partial} - {final_url}')
     else:
-        # We have a path, but not necessarily a complete one urljoin handles that properly.
-        # The cases are a partial starting with:
-        # * filename
-        # * /filename
-        # * ../filename
-        final_url = urljoin(base_url, partial)
-        if final_url not in known_urls:
-            logger.debug(f'URL without netloc: {base_url} - {partial} - {final_url}')
+        # If the partial is a valid URL part, urljoin does the trick.
+        try:
+            final_url = urljoin(base_url, partial)
+        except Exception:
+            logger.debug(f'Partial {partial} probably not a url')
+            return ''
 
     if final_url not in known_urls:
         # sometimes, the port is in the partial, but striped in the list of known urls.
@@ -110,6 +86,14 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
                 final_url = final_url.replace(':443', '', 1)
             if final_url.startswith('http://') and final_parsed.netloc.endswith(':80'):
                 final_url = final_url.replace(':80', '', 1)
+        except Exception:
+            logger.debug(f'Not a URL: {base_url} - {partial}')
+
+    if final_url not in known_urls and splitted_base_url.fragment:
+        # On a redirect, if the initial URL has a fragment, it is appended to the destination URL
+        try:
+            parsed = urlparse(final_url)
+            final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
         except Exception:
             logger.debug(f'Not a URL: {base_url} - {partial}')
 
@@ -129,14 +113,6 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
             else:
                 # No path, just make it a /
                 final_url = parsed._replace(path='/').geturl()
-        except Exception:
-            logger.debug(f'Not a URL: {base_url} - {partial}')
-
-    if final_url not in known_urls and splitted_base_url.fragment:
-        # On a redirect, if the initial URL has a fragment, it is appended to the destination URL
-        try:
-            parsed = urlparse(final_url)
-            final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
         except Exception:
             logger.debug(f'Not a URL: {base_url} - {partial}')
 
