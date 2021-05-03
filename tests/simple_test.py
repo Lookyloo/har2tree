@@ -3,7 +3,7 @@
 
 import unittest
 from har2tree import CrawledTree
-from har2tree.parser import parse_data_uri, rebuild_url
+from har2tree.helper import parse_data_uri, rebuild_url
 from pathlib import Path
 import datetime
 import os
@@ -99,6 +99,13 @@ class SimpleTest(unittest.TestCase):
         # a partial url starting with // means that it will redirect on the same scheme as the base url (if its https, it will redirect on https too)
         rebuild_url_double_slash = rebuild_url('https://lookyloo-testing.herokuapp.com/redirect_http_partial_no_scheme', '//www.youtube.com/watch?v=iwGFalTRHDA', ['https://www.youtube.com/watch?v=iwGFalTRHDA'])
         self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
+
+    def test_hostname_tree_features(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'js', 'html', 'pdf', 'json', 'text', 'video', 'css', 'iframe', 'http_content', 'https_content', 'support', 'dist', 'octet_stream', 'font', 'redirect',
+                                                                                     'unknown_mimetype', 'contains_rendered_urlnode', 'urls', 'uuid', 'redirect_to_nothing', 'unset_mimetype', 'image'})
+
+    def test_url_node_resources_hashes(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.resources_hashes, {'b271f214df6b3351a4fb9b94b3680b62a53b1f555153539bdfbfe464b423e0d0a2d172607d40607ba306a17eae30dd1146ecc96e4a7de03ed2188974b915ddea'})
 
 
 if __name__ == '__main__':
