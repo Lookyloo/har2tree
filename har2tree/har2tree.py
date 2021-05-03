@@ -9,7 +9,7 @@ from urllib.parse import unquote_plus
 from io import BytesIO
 from operator import itemgetter
 from collections import defaultdict
-from .helper import rebuild_url
+from .helper import rebuild_url, Har2TreeError
 from .nodes import HostNode, URLNode
 from datetime import datetime
 from functools import wraps

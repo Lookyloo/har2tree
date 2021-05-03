@@ -11,7 +11,7 @@ import hashlib
 import logging
 from urllib.parse import urlparse, unquote_plus, unquote_to_bytes
 from io import BytesIO
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # type: ignore
 
 import filetype  # type: ignore
 
