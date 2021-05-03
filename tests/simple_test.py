@@ -3,7 +3,7 @@
 
 import unittest
 from har2tree import CrawledTree
-from har2tree.parser import parse_data_uri, rebuild_url
+from har2tree.helper import parse_data_uri, rebuild_url
 from pathlib import Path
 import datetime
 import os

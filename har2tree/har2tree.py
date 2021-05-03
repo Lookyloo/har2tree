@@ -1,18 +1,87 @@
-<<<<<<< HEAD
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from .parser import logger
+from pathlib import Path
 import logging
-from typing import Dict, Any, List, Optional, Tuple, Set, Union, MutableMapping
+from typing import Dict, Any, List, Optional, Tuple, Set, Union, MutableMapping, Callable
 import json
-from urllib import unquote_plus
+from urllib.parse import unquote_plus
 from io import BytesIO
 from operator import itemgetter
 from collections import defaultdict
-from .parser import rebuild_url, trace_make_subtree_fallback, trace_make_subtree
+from .helper import rebuild_url
 from .nodes import HostNode, URLNode
 from datetime import datetime
+from functools import wraps
+
+
+logger = logging.getLogger(__name__)
+
+
+# Dev debug mode is a mode that will print lots of things and will only be usable
+# by someone with a pretty deep understanding of har2tree and how the tree is built
+# The goal is to have a relatively simple way to investigate the construction of a tree itself
+# In order to enable it, it is assumed that you have the repository cloned on your machine
+# 1. Switch dev_debug_mode to True
+# 2. path_to_debug_files set a path to a directory of your choice, where you will create a file "url" or "hostname", with one line (the URL or the hostname)
+# 3. pip install .
+# 4. kill & restart the webserver
+# 5. Rebuild the tree, the debug messages will be in the terminal.
+
+path_to_debug_files = ''
+dev_debug_url = ''
+dev_debug_hostname = ''
+dev_debug_mode = False
+
+if dev_debug_mode:
+    logger.critical('You are running har2tree in dev debug mode.')
+    logger.critical(f'Path to the debug files: {path_to_debug_files}.')
+
+
+# ##################################################################
+
+def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., None]:
+    @wraps(method)
+    def _impl(self: Any, node: URLNode, dev_debug: bool=False) -> None:
+        if dev_debug_mode:
+            __load_debug_files()
+            if dev_debug_url and node.name == dev_debug_url:
+                logger.warning(f'Debugging URL: {dev_debug_url}.')
+                dev_debug = True
+            elif dev_debug_hostname and node.hostname == dev_debug_hostname:
+                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
+                dev_debug = True
+        return method(self, node, dev_debug)
+    return _impl
+
+
+def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
+    @wraps(method)
+    def _impl(self: Any, root: URLNode, nodes_to_attach: Optional[List[URLNode]]=None, dev_debug: bool=False) -> None:
+        if dev_debug_mode:
+            __load_debug_files()
+            if dev_debug_url and root.name == dev_debug_url or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.name == dev_debug_url):
+                logger.warning(f'Debugging URL: {dev_debug_url}.')
+                dev_debug = True
+            elif dev_debug_hostname and root.hostname == dev_debug_hostname or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.hostname == dev_debug_hostname):
+                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
+                dev_debug = True
+        return method(self, root, nodes_to_attach, dev_debug)
+    return _impl
+
+
+def __load_debug_files() -> None:
+    global dev_debug_url
+    global dev_debug_hostname
+    url_path = Path(path_to_debug_files) / 'url'
+    hostname_path = Path(path_to_debug_files) / 'hostname'
+    if url_path.exists():
+        with url_path.open() as f:
+            dev_debug_url = f.read().strip()
+    if hostname_path.exists():
+        with hostname_path.open() as f:
+            dev_debug_hostname = f.read().strip()
+
 
 class HarFile():
 
@@ -604,13 +673,3 @@ class Har2TreeLogAdapter(logging.LoggerAdapter):
     """
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
         return '[%s] %s' % (self.extra['uuid'], msg), kwargs
-
-
-class Har2TreeError(Exception):
-    def __init__(self, message: str):
-        """
-        Har2Tree Exception
-        """
-        super(Har2TreeError, self).__init__(message)
-        self.message = message
-        

@@ -3,11 +3,10 @@
 
 from pathlib import Path
 from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any
-from .parser import logger
 import logging
 import uuid
 import json
-from .helper import harnode_json_default, find_external_ressources, rebuild_url
+from .helper import find_external_ressources, rebuild_url
 from io import BytesIO
 from urllib.parse import unquote_plus, urlparse, urljoin
 import sys
@@ -16,7 +15,7 @@ import ipaddress
 from base64 import b64decode
 import hashlib
 import re
-from .har2tree import Har2TreeError
+from .helper import Har2TreeError
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
@@ -26,6 +25,8 @@ from w3lib.html import strip_html5_whitespace  # type: ignore
 from w3lib.url import canonicalize_url, safe_url_string  # type: ignore
 
 # Initialize Public Suffix List
+
+logger = logging.getLogger(__name__)
 
 try:
     psl_file = fetch()
@@ -520,3 +521,8 @@ class HostNode(HarTreeNode):
             self.http_content = True
         elif url.name.startswith('https://'):
             self.https_content = True
+
+
+def harnode_json_default(obj: 'HarTreeNode') -> MutableMapping[str, Any]:
+    if isinstance(obj, HarTreeNode):
+        return obj.to_dict()

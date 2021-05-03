@@ -3,68 +3,19 @@
 
 import os
 import re
-from pathlib import Path
 from collections import defaultdict
-from typing import Callable, Any, Optional, List, MutableMapping, Tuple, Dict, Mapping
-from functools import wraps
-from .nodes import URLNode, HarTreeNode
-from .parser import logger, path_to_debug_files, dev_debug_mode
+from typing import Optional, List, Tuple, Dict, Mapping
 from base64 import b64decode
 import binascii
 import hashlib
+import logging
 from urllib.parse import urlparse, unquote_plus, unquote_to_bytes
 from io import BytesIO
 from bs4 import BeautifulSoup
 
 import filetype  # type: ignore
 
-
-def __load_debug_files() -> None:
-    global dev_debug_url
-    global dev_debug_hostname
-    url_path = Path(path_to_debug_files) / 'url'
-    hostname_path = Path(path_to_debug_files) / 'hostname'
-    if url_path.exists():
-        with url_path.open() as f:
-            dev_debug_url = f.read().strip()
-    if hostname_path.exists():
-        with hostname_path.open() as f:
-            dev_debug_hostname = f.read().strip()
-
-
-def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., None]:
-    @wraps(method)
-    def _impl(self: Any, node: URLNode, dev_debug: bool=False) -> None:
-        if dev_debug_mode:
-            __load_debug_files()
-            if dev_debug_url and node.name == dev_debug_url:
-                logger.warning(f'Debugging URL: {dev_debug_url}.')
-                dev_debug = True
-            elif dev_debug_hostname and node.hostname == dev_debug_hostname:
-                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
-                dev_debug = True
-        return method(self, node, dev_debug)
-    return _impl
-
-
-def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
-    @wraps(method)
-    def _impl(self: Any, root: URLNode, nodes_to_attach: Optional[List[URLNode]]=None, dev_debug: bool=False) -> None:
-        if dev_debug_mode:
-            __load_debug_files()
-            if dev_debug_url and root.name == dev_debug_url or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.name == dev_debug_url):
-                logger.warning(f'Debugging URL: {dev_debug_url}.')
-                dev_debug = True
-            elif dev_debug_hostname and root.hostname == dev_debug_hostname or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.hostname == dev_debug_hostname):
-                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
-                dev_debug = True
-        return method(self, root, nodes_to_attach, dev_debug)
-    return _impl
-
-
-def harnode_json_default(obj: 'HarTreeNode') -> MutableMapping[str, Any]:
-    if isinstance(obj, HarTreeNode):
-        return obj.to_dict()
+logger = logging.getLogger(__name__)
 
 
 def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
@@ -346,3 +297,12 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
+
+
+class Har2TreeError(Exception):
+    def __init__(self, message: str):
+        """
+        Har2Tree Exception
+        """
+        super(Har2TreeError, self).__init__(message)
+        self.message = message
