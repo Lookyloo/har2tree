@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -612,3 +613,4 @@ class Har2TreeError(Exception):
         """
         super(Har2TreeError, self).__init__(message)
         self.message = message
+        
