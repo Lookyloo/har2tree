@@ -9,7 +9,7 @@ from base64 import b64decode
 import binascii
 import hashlib
 import logging
-from urllib.parse import urlparse, unquote_plus, unquote_to_bytes
+from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 from io import BytesIO
 from bs4 import BeautifulSoup  # type: ignore
 
@@ -66,50 +66,41 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
     partial = unquote_plus(partial)
     if not partial:
         return ''
+
     if re.match('^https?://', partial):
         # we have a proper URL... hopefully
         # DO NOT REMOVE THIS CLAUSE, required to make the difference with a path
         final_url = partial
     elif partial.startswith('//'):
         # URL without scheme => takes the scheme from the caller
-        final_url = f'{splitted_base_url.scheme}:{partial}'
+        final_url = urljoin(base_url, partial)
         if final_url not in known_urls:
             logger.debug(f'URL without scheme: {base_url} - {partial} - {final_url}')
-    elif partial.startswith('/') or partial[0] not in [';', '?', '#']:
-        # We have a path, but not necessarily a complete one (see below)
-        if partial[0] != '/':
-            # Yeah, that happens, and the browser appends the path in redirect_url to the current path
-            if base_url[-1] == '/':
-                # Example: http://foo.bar/some/path/ and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
-                final_url = f'{base_url}{partial}'
-            else:
-                # Need to strip the last part of the URL down to the first / (included), and attach the redirect
-                # Example: http://foo.bar/some/path/blah and some/redirect.html becomes http://foo.bar/some/path/some/redirect.html
-                last_slash = base_url.rfind('/') + 1
-                final_url = f'{base_url[:last_slash]}{partial}'
-        else:
-            # Just slap the partial right after the netloc (and the nto hostname, because we could have a port.
-            final_url = f'{splitted_base_url.scheme}://{splitted_base_url.netloc}{partial}'
-        if final_url not in known_urls:
-            logger.debug(f'URL without netloc: {base_url} - {partial} - {final_url}')
-    elif partial.startswith(';'):
-        # partial starts with a parameter. Replace the existing ones in base_url with partial
-        final_url = '{}{}'.format(base_url.split(';')[0], partial)
+    elif partial[0] == ';':
+        # partial starts with a parameter. Replace the full path (as the specs say)
+        # in base_url with partial
+        final_url = urljoin(base_url, partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only parameter: {base_url} - {partial} - {final_url}')
-    elif partial.startswith('?'):
+    elif partial[0] == '?':
         # partial starts with a query. Replace the existing ones in base_url with partial
-        final_url = '{}{}'.format(base_url.split('?')[0], partial)
+        final_url = urljoin(base_url, partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only query: {base_url} - {partial} - {final_url}')
-    elif partial.startswith('#'):
+    elif partial[0] == '#':
         # partial starts with a fragment. Replace the existing ones in base_url with partial
-        final_url = '{}{}'.format(base_url.split('#')[0], partial)
+        final_url = urljoin(base_url, partial)
         if final_url not in known_urls:
             logger.debug(f'URL with only fragment: {base_url} - {partial} - {final_url}')
     else:
-        # The 2nd elif should catch all the other cases
-        logger.debug(f'That should never happen: {base_url} - {partial}')
+        # We have a path, but not necessarily a complete one urljoin handles that properly.
+        # The cases are a partial starting with:
+        # * filename
+        # * /filename
+        # * ../filename
+        final_url = urljoin(base_url, partial)
+        if final_url not in known_urls:
+            logger.debug(f'URL without netloc: {base_url} - {partial} - {final_url}')
 
     if final_url not in known_urls:
         # sometimes, the port is in the partial, but striped in the list of known urls.
