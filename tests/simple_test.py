@@ -15,24 +15,32 @@ class SimpleTest(unittest.TestCase):
     http_redirect_ct: CrawledTree
     user_agent_android_ct: CrawledTree
     user_agent_macos_ct: CrawledTree
+    referer_ct: CrawledTree
+    no_referer_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
 
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'http_redirect'
-        har_to_process = [test_dir / '0.har']
-        # ct means CrawledTree
-        cls.http_redirect_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
+        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
 
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'user_agent_android'
-        har_to_process = [test_dir / '0.har']
-        # ct means CrawledTree
-        cls.user_agent_android_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
+        hars_to_process = [
+            test_dir / 'http_redirect' / '0.har',
+            test_dir / 'user_agent_android' / '0.har',
+            test_dir / 'user_agent_macos' / '0.har',
+            test_dir / 'referer' / '0.har',
+            test_dir / 'no_referer' / '0.har'
+        ]
 
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'user_agent_macos'
-        har_to_process = [test_dir / '0.har']
-        # ct means CrawledTree
-        cls.user_agent_macos_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
+        for har in hars_to_process:
+            folder_name = str(har).split('/')[-2]
+            tree_name = f'{folder_name}_ct'
+            setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
+
+        """ cls.http_redirect_ct = CrawledTree([hars_to_process[0]], str(uuid.uuid4()))
+        cls.user_agent_android_ct = CrawledTree([hars_to_process[1]], str(uuid.uuid4()))
+        cls.user_agent_macos_ct = CrawledTree([hars_to_process[2]], str(uuid.uuid4()))
+        cls.referer_ct = CrawledTree([hars_to_process[3]], str(uuid.uuid4()))
+        cls.no_referer_ct = CrawledTree([hars_to_process[4]], str(uuid.uuid4())) """
 
     # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
     def test_root_url(self) -> None:
@@ -139,6 +147,28 @@ class SimpleTest(unittest.TestCase):
         redirect_url = self.user_agent_macos_ct.root_hartree.redirects[1]
         self.assertEqual(redirect_url, 'https://www.youtube.com/watch?v=0NwkczSuwL8')
 
+    def test_referer_ct_has_referer(self) -> None:
+        self.assertEqual(self.referer_ct.root_hartree.root_referer, 'http://circl.lu')
+
+    def test_referer_cts_same_urls(self) -> None:
+        self.assertEqual(self.referer_ct.root_url, self.no_referer_ct.root_url)
+
+    def test_referer_cts_have_different_redirects_despite_same_url(self) -> None:
+        self.assertNotEqual(self.referer_ct.root_hartree.har.final_redirect, self.no_referer_ct.root_hartree.har.final_redirect)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+""" test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
+
+hars_to_process = [
+    test_dir / 'http_redirect' / '0.har',
+    test_dir / 'user_agent_android' / '0.har',
+    test_dir / 'user_agent_macos' / '0.har',
+    test_dir / 'referer' / '0.har',
+    test_dir / 'no_referer' / '0.har'
+]
+
+for har in hars_to_process:
+    print(str(har).split('/')[-2]) """
