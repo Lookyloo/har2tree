@@ -74,6 +74,11 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
         # If the partial is a valid URL part, urljoin does the trick.
         try:
             final_url = urljoin(base_url, partial)
+            # NOTE 2021-05-04: if a partial has empty parts (query/fragment), it will be stripped by urljoin
+            if final_url not in known_urls and '?' in partial and '?' not in final_url:
+                final_url += '?'
+            if final_url not in known_urls and '#' in partial and '#' not in final_url:
+                final_url += '#'
         except Exception:
             logger.debug(f'Partial {partial} probably not a url')
             return ''
