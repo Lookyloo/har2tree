@@ -36,12 +36,6 @@ class SimpleTest(unittest.TestCase):
             tree_name = f'{folder_name}_ct'
             setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
 
-        """ cls.http_redirect_ct = CrawledTree([hars_to_process[0]], str(uuid.uuid4()))
-        cls.user_agent_android_ct = CrawledTree([hars_to_process[1]], str(uuid.uuid4()))
-        cls.user_agent_macos_ct = CrawledTree([hars_to_process[2]], str(uuid.uuid4()))
-        cls.referer_ct = CrawledTree([hars_to_process[3]], str(uuid.uuid4()))
-        cls.no_referer_ct = CrawledTree([hars_to_process[4]], str(uuid.uuid4())) """
-
     # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
     def test_root_url(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_url, 'https://lookyloo-testing.herokuapp.com/redirect_http')
@@ -159,16 +153,3 @@ class SimpleTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-""" test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
-
-hars_to_process = [
-    test_dir / 'http_redirect' / '0.har',
-    test_dir / 'user_agent_android' / '0.har',
-    test_dir / 'user_agent_macos' / '0.har',
-    test_dir / 'referer' / '0.har',
-    test_dir / 'no_referer' / '0.har'
-]
-
-for har in hars_to_process:
-    print(str(har).split('/')[-2]) """
