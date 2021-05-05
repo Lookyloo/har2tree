@@ -7,12 +7,9 @@ from datetime import datetime
 from collections import defaultdict
 from typing import List, Dict, Optional, Iterable
 import logging
-from .har2tree import Har2Tree, Har2TreeLogAdapter
+from .har2tree import Har2Tree
 from .nodes import URLNode
-from .helper import Har2TreeError
-
-
-logger = logging.getLogger(__name__)
+from .helper import Har2TreeError, Har2TreeLogAdapter
 
 
 class CrawledTree(object):
@@ -20,7 +17,7 @@ class CrawledTree(object):
     def __init__(self, harfiles: Iterable[Path], uuid: str):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
         self.uuid = uuid
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': uuid})
         self.hartrees: List[Har2Tree] = self.load_all_harfiles(harfiles)
         if not self.hartrees:

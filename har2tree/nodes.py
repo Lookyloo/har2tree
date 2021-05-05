@@ -15,7 +15,7 @@ import ipaddress
 from base64 import b64decode
 import hashlib
 import re
-from .helper import Har2TreeError
+from .helper import Har2TreeError, Har2TreeLogAdapter
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup  # type: ignore
@@ -25,23 +25,21 @@ from w3lib.html import strip_html5_whitespace  # type: ignore
 from w3lib.url import canonicalize_url, safe_url_string  # type: ignore
 
 # Initialize Public Suffix List
-
-logger = logging.getLogger(__name__)
-
 try:
     psl_file = fetch()
     psl = PublicSuffixList(psl_file=psl_file)
 except Exception as e:
-    logger.warning(f'Unable to fetch the PublicSuffixList: {e}')
+    logging.getLogger(__name__).warning(f'Unable to fetch the PublicSuffixList: {e}')
     psl = PublicSuffixList()
 
 
 class HarTreeNode(TreeNode):
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node dumpable in json to display with d3js"""
         super(HarTreeNode, self).__init__(**kwargs)
-        self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
+        logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
+        self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.add_feature('uuid', str(uuid.uuid4()))
         self.features_to_skip = set(['dist', 'support'])
 
@@ -66,9 +64,9 @@ class HarTreeNode(TreeNode):
 
 class URLNode(HarTreeNode):
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node of the URL Tree"""
-        super(URLNode, self).__init__(**kwargs)
+        super(URLNode, self).__init__(capture_uuid=capture_uuid, **kwargs)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
         self.features_to_skip.add('url_split')
@@ -405,9 +403,9 @@ class URLNode(HarTreeNode):
 
 class HostNode(HarTreeNode):
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node of the Hostname Tree"""
-        super(HostNode, self).__init__(**kwargs)
+        super(HostNode, self).__init__(capture_uuid=capture_uuid, **kwargs)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
 

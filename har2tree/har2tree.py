@@ -3,20 +3,16 @@
 
 from pathlib import Path
 import logging
-from typing import Dict, Any, List, Optional, Tuple, Set, Union, MutableMapping, Callable
+from typing import Dict, Any, List, Optional, Tuple, Set, Union, Callable
 import json
 from urllib.parse import unquote_plus
 from io import BytesIO
 from operator import itemgetter
 from collections import defaultdict
-from .helper import rebuild_url, Har2TreeError
+from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
 from .nodes import HostNode, URLNode
 from datetime import datetime
 from functools import wraps
-
-
-logger = logging.getLogger(__name__)
-
 
 # Dev debug mode is a mode that will print lots of things and will only be usable
 # by someone with a pretty deep understanding of har2tree and how the tree is built
@@ -34,8 +30,8 @@ dev_debug_hostname = ''
 dev_debug_mode = False
 
 if dev_debug_mode:
-    logger.critical('You are running har2tree in dev debug mode.')
-    logger.critical(f'Path to the debug files: {path_to_debug_files}.')
+    logging.getLogger(__name__).critical('You are running har2tree in dev debug mode.')
+    logging.getLogger(__name__).critical(f'Path to the debug files: {path_to_debug_files}.')
 
 
 # ##################################################################
@@ -46,10 +42,10 @@ def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., No
         if dev_debug_mode:
             __load_debug_files()
             if dev_debug_url and node.name == dev_debug_url:
-                logger.warning(f'Debugging URL: {dev_debug_url}.')
+                node.logger.warning(f'Debugging URL: {dev_debug_url}.')
                 dev_debug = True
             elif dev_debug_hostname and node.hostname == dev_debug_hostname:
-                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
+                node.logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
                 dev_debug = True
         return method(self, node, dev_debug)
     return _impl
@@ -61,10 +57,10 @@ def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
         if dev_debug_mode:
             __load_debug_files()
             if dev_debug_url and root.name == dev_debug_url or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.name == dev_debug_url):
-                logger.warning(f'Debugging URL: {dev_debug_url}.')
+                root.logger.warning(f'Debugging URL: {dev_debug_url}.')
                 dev_debug = True
             elif dev_debug_hostname and root.hostname == dev_debug_hostname or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.hostname == dev_debug_hostname):
-                logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
+                root.logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
                 dev_debug = True
         return method(self, root, nodes_to_attach, dev_debug)
     return _impl
@@ -261,7 +257,7 @@ class Har2Tree(object):
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.har = HarFile(har_path, capture_uuid)
-        self.hostname_tree = HostNode()
+        self.hostname_tree = HostNode(capture_uuid=self.har.capture_uuid)
 
         self._nodes_list: List[URLNode] = []
         self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
@@ -419,7 +415,7 @@ class Har2Tree(object):
         and create a list of note for each URL we have in the HAR document'''
 
         for url_entry in self.har.entries:
-            n = URLNode(name=unquote_plus(url_entry['request']['url']))
+            n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
             if self.har.html_content and n.name == self.har.final_redirect:
                 n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.har.html_content)
             else:
@@ -504,7 +500,7 @@ class Har2Tree(object):
                 if child_node_url.hostname in children_hostnames:
                     child_node_hostname = children_hostnames[child_node_url.hostname]
                 else:
-                    child_node_hostname = root_node_hostname.add_child(HostNode(name=child_node_url.hostname))
+                    child_node_hostname = root_node_hostname.add_child(HostNode(capture_uuid=self.har.capture_uuid, name=child_node_url.hostname))
                     children_hostnames[child_node_url.hostname] = child_node_hostname
                 child_node_hostname.add_url(child_node_url)
                 child_node_url.add_feature('hostnode_uuid', child_node_hostname.uuid)
@@ -665,11 +661,3 @@ class Har2Tree(object):
 
     def __repr__(self) -> str:
         return f'Har2Tree({self.har.path}, {self.har.capture_uuid})'
-
-
-class Har2TreeLogAdapter(logging.LoggerAdapter):
-    """
-    Prepend log entry with the UUID of the capture
-    """
-    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
-        return '[%s] %s' % (self.extra['uuid'], msg), kwargs

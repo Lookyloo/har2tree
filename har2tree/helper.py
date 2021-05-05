@@ -4,7 +4,7 @@
 import os
 import re
 from collections import defaultdict
-from typing import Optional, List, Tuple, Dict, Mapping
+from typing import Optional, List, Tuple, Dict, Mapping, MutableMapping, Any
 from base64 import b64decode
 import binascii
 import hashlib
@@ -278,3 +278,11 @@ class Har2TreeError(Exception):
         """
         super(Har2TreeError, self).__init__(message)
         self.message = message
+
+
+class Har2TreeLogAdapter(logging.LoggerAdapter):
+    """
+    Prepend log entry with the UUID of the capture
+    """
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
+        return '[%s] %s' % (self.extra['uuid'], msg), kwargs
