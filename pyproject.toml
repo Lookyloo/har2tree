@@ -33,7 +33,7 @@ filetype = "^1.0.7"
 numpy = "^1.19.4"
 w3lib = "^1.22.0"
 Sphinx = { version = "^3.5.3", optional = true }
-myst-parser = { version = "^0.13.5", optional = true }
+myst-parser = { version = ">=0.13.5,<0.15.0", optional = true }
 
 [tool.poetry.dev-dependencies]
 coverage = "^5.5"
