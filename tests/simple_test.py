@@ -13,20 +13,34 @@ import uuid
 class SimpleTest(unittest.TestCase):
 
     http_redirect_ct: CrawledTree
+    user_agent_android_ct: CrawledTree
+    user_agent_macos_ct: CrawledTree
+    referer_ct: CrawledTree
+    no_referer_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
 
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples' / 'http_redirect'
-        har_to_process = [test_dir / '0.har']
-        # ct means CrawledTree
-        cls.http_redirect_ct = CrawledTree(har_to_process, str(uuid.uuid4()))
+        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
+
+        hars_to_process = [
+            test_dir / 'http_redirect' / '0.har',
+            test_dir / 'user_agent_android' / '0.har',
+            test_dir / 'user_agent_macos' / '0.har',
+            test_dir / 'referer' / '0.har',
+            test_dir / 'no_referer' / '0.har'
+        ]
+
+        for har in hars_to_process:
+            folder_name = str(har).split('/')[-2]
+            tree_name = f'{folder_name}_ct'
+            setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
 
     # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
     def test_root_url(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_url, 'https://lookyloo-testing.herokuapp.com/redirect_http')
 
-    def test_user_agent(self) -> None:
+    def test_user_agent_http_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.user_agent, "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534+ (KHTML, like Gecko) BingPreview/1.0b")
 
     def test_redirects(self) -> None:
@@ -106,6 +120,35 @@ class SimpleTest(unittest.TestCase):
 
     def test_url_node_resources_hashes(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.resources_hashes, {'b271f214df6b3351a4fb9b94b3680b62a53b1f555153539bdfbfe464b423e0d0a2d172607d40607ba306a17eae30dd1146ecc96e4a7de03ed2188974b915ddea'})
+
+    # Make sure that the correct user agent is detected
+    def test_user_agent_android(self) -> None:
+        self.assertEqual(self.user_agent_android_ct.user_agent, "Mozilla/5.0 (Linux; Android 7.0;) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; PetalBot;+https://webmaster.petalsearch.com/site/petalbot)")
+
+    def test_user_agent_macos(self) -> None:
+        self.assertEqual(self.user_agent_macos_ct.user_agent, "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)")
+
+    # Test that the redirect is correctly made and detected depending on the user agent
+    # We want to make sure that the use cases depicted in this link are working properly:
+    # https://github.com/Lookyloo/testing/blob/0ca5571ad9ee0a092318f2c2d70c591df2c561f8/website/__init__.py#L245
+
+    def test_redirect_user_agent_android(self) -> None:
+        # Using second ip instead of finalbecause it's much cleaner (it doesn't contain youtube consent url)
+        redirect_url = self.user_agent_android_ct.root_hartree.redirects[1]
+        self.assertEqual(redirect_url, 'https://www.youtube.com/watch?v=z1APG3HjO4Q')
+
+    def test_redirect_user_agent_macos(self) -> None:
+        redirect_url = self.user_agent_macos_ct.root_hartree.redirects[1]
+        self.assertEqual(redirect_url, 'https://www.youtube.com/watch?v=0NwkczSuwL8')
+
+    def test_referer_ct_has_referer(self) -> None:
+        self.assertEqual(self.referer_ct.root_hartree.root_referer, 'http://circl.lu')
+
+    def test_referer_cts_same_urls(self) -> None:
+        self.assertEqual(self.referer_ct.root_url, self.no_referer_ct.root_url)
+
+    def test_referer_cts_have_different_redirects_despite_same_url(self) -> None:
+        self.assertNotEqual(self.referer_ct.root_hartree.har.final_redirect, self.no_referer_ct.root_hartree.har.final_redirect)
 
 
 if __name__ == '__main__':
