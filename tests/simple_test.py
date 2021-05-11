@@ -17,24 +17,21 @@ class SimpleTest(unittest.TestCase):
     user_agent_macos_ct: CrawledTree
     referer_ct: CrawledTree
     no_referer_ct: CrawledTree
+    cookie_ct: CrawledTree
+    no_cookie_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
 
         test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
 
-        hars_to_process = [
-            test_dir / 'http_redirect' / '0.har',
-            test_dir / 'user_agent_android' / '0.har',
-            test_dir / 'user_agent_macos' / '0.har',
-            test_dir / 'referer' / '0.har',
-            test_dir / 'no_referer' / '0.har'
-        ]
-
-        for har in hars_to_process:
-            folder_name = str(har).split('/')[-2]
-            tree_name = f'{folder_name}_ct'
-            setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
+        # Iterates over capture_samples folder and makes a CrawledTree out of each folder
+        for x in test_dir.iterdir():
+            if x.is_dir():
+                folder_name = str(x).split('/')[-1]
+                tree_name = f'{folder_name}_ct'
+                har = test_dir / folder_name / '0.har'
+                setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
 
     # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
     def test_root_url(self) -> None:
@@ -150,6 +147,22 @@ class SimpleTest(unittest.TestCase):
     def test_referer_cts_have_different_redirects_despite_same_url(self) -> None:
         self.assertNotEqual(self.referer_ct.root_hartree.har.final_redirect, self.no_referer_ct.root_hartree.har.final_redirect)
 
+    # We want to check the redirect made in case there is a cookie
+    # Just making sure the two urls are the same
+
+    def test_cookie_captures_same_urls(self) -> None:
+        self.assertEqual(self.cookie_ct.root_url, self.no_cookie_ct.root_url)
+
+    # For that we make sure there is no eventual referer interfering with the cookie redirection
+    def test_cookie_captures_have_no_referer(self) -> None:
+        self.assertFalse(self.cookie_ct.root_hartree.root_referer or self.no_cookie_ct.root_hartree.root_referer)
+
+    # Finally we check that the two last redirects are indeed different
+    def test_cookie_captures_different_redirects(self) -> None:
+        self.assertNotEqual(self.cookie_ct.root_hartree.har.final_redirect, self.no_cookie_ct.root_hartree.har.final_redirect)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+
