@@ -19,6 +19,7 @@ class SimpleTest(unittest.TestCase):
     no_referer_ct: CrawledTree
     cookie_ct: CrawledTree
     no_cookie_ct: CrawledTree
+    iframe_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -161,8 +162,22 @@ class SimpleTest(unittest.TestCase):
     def test_cookie_captures_different_redirects(self) -> None:
         self.assertNotEqual(self.cookie_ct.root_hartree.har.final_redirect, self.no_cookie_ct.root_hartree.har.final_redirect)
 
+    def test_urls_in_rendered_page(self) -> None:
+        self.assertEquals
+        (
+            self.cookie_ct.root_hartree.rendered_node.urls_in_rendered_page,
+            ['https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DiwGFalTRHDA&gae=cb-23983172&hl=en',
+                'https://consent.youtube.com/d?continue=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DiwGFalTRHDA&gl=FR&hl=en&pc=yt&src=1&uxe=23983172',
+                'https://policies.google.com/privacy?hl=en&utm_source=ucb',
+                'https://policies.google.com/privacy?hl=en&utm_soure=ucb',
+                'https://policies.google.com/technologies/cookies?hl=en&utm_source=ucb',
+                'https://policies.google.com/terms?hl=en&utm_source=ucb',
+                'https://policies.google.com/terms?hl=en&utm_soure=ucb']
+        )
+
+    def test_iframe_feature(self) -> None:
+        self.assertTrue('iframe' in self.iframe_ct.root_hartree.hostname_tree.features)
+
 
 if __name__ == '__main__':
     unittest.main()
-
-
