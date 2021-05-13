@@ -204,6 +204,28 @@ class SimpleTest(unittest.TestCase):
         # We make sure that they are correctly trimmed (if so they should give the same URL)
         self.assertEqual(self.final_redirect_dash_ct.root_hartree.har.final_redirect, self.final_redirect_questionmark_ct.root_hartree.har.final_redirect)
 
+    # Using http_redirect_ct as much as possible because it's much faster than with cookie
+    def test_mixed_content(self) -> None:
+        self.assertFalse(self.http_redirect_ct.root_hartree.hostname_tree.mixed_content)
+
+    # Only one URL in the capture
+    def test_urls_count(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.urls_count, 1)
+
+    # Should be 1 as capture was made with a request cookie
+    def test_request_cookie(self) -> None:
+        self.assertEqual(self.cookie_ct.root_hartree.hostname_tree.request_cookie, 1)
+
+    # Should be 0 as capture was made without cookie
+    def test_request_cookie_no_cookie(self) -> None:
+        self.assertEqual(self.no_cookie_ct.root_hartree.hostname_tree.request_cookie, 0)
+
+    def test_response_cookie(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.response_cookie, 0)
+
+    def test_third_party_cookies_received(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.response_cookie, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
