@@ -20,6 +20,9 @@ class SimpleTest(unittest.TestCase):
     cookie_ct: CrawledTree
     no_cookie_ct: CrawledTree
     iframe_ct: CrawledTree
+    lonely_har_ct: CrawledTree
+    final_redirect_questionmark_ct: CrawledTree
+    final_redirect_dash_ct: CrawledTree
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -131,7 +134,7 @@ class SimpleTest(unittest.TestCase):
     # https://github.com/Lookyloo/testing/blob/0ca5571ad9ee0a092318f2c2d70c591df2c561f8/website/__init__.py#L245
 
     def test_redirect_user_agent_android(self) -> None:
-        # Using second ip instead of finalbecause it's much cleaner (it doesn't contain youtube consent url)
+        # Using second url instead of final because it's much cleaner (it doesn't contain youtube consent url)
         redirect_url = self.user_agent_android_ct.root_hartree.redirects[1]
         self.assertEqual(redirect_url, 'https://www.youtube.com/watch?v=z1APG3HjO4Q')
 
@@ -146,11 +149,11 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(self.referer_ct.root_url, self.no_referer_ct.root_url)
 
     def test_referer_cts_have_different_redirects_despite_same_url(self) -> None:
+        # Emphasize that the referer capture has a different final redirect than the no_referer capture despite having same URL
         self.assertNotEqual(self.referer_ct.root_hartree.har.final_redirect, self.no_referer_ct.root_hartree.har.final_redirect)
 
     # We want to check the redirect made in case there is a cookie
     # Just making sure the two urls are the same
-
     def test_cookie_captures_same_urls(self) -> None:
         self.assertEqual(self.cookie_ct.root_url, self.no_cookie_ct.root_url)
 
@@ -177,6 +180,51 @@ class SimpleTest(unittest.TestCase):
 
     def test_iframe_feature(self) -> None:
         self.assertTrue('iframe' in self.iframe_ct.root_hartree.hostname_tree.features)
+
+    def test_iframe_capture_name(self) -> None:
+        self.assertEqual(self.iframe_ct.root_hartree.har.initial_title, '!! No title found !!')
+
+    def test_cookie_number_entries(self) -> None:
+        self.assertEqual(self.cookie_ct.root_hartree.har.number_entries, 63)
+
+    def test_iframe_has_no_initial_redirects(self) -> None:
+        self.assertFalse(self.iframe_ct.root_hartree.har.has_initial_redirects)
+
+    def test_lonely_har_no_final_redirect(self) -> None:
+        self.assertFalse(self.lonely_har_ct.root_hartree.har.final_redirect)
+
+    def test_lonely_har_no_cookie_file(self) -> None:
+        self.assertFalse(self.lonely_har_ct.root_hartree.har.cookies)
+
+    def test_lonely_har_no_html_file(self) -> None:
+        self.assertFalse(self.lonely_har_ct.root_hartree.har.html_content)
+
+    def test_final_redirect_has_to_get_a_trim(self) -> None:
+        # Both final redirects have a ? or # that needs to be removed, apart from that the URLs are the same
+        # We make sure that they are correctly trimmed (if so they should give the same URL)
+        self.assertEqual(self.final_redirect_dash_ct.root_hartree.har.final_redirect, self.final_redirect_questionmark_ct.root_hartree.har.final_redirect)
+
+    # Using http_redirect_ct as much as possible because it's much faster than with cookie
+    def test_mixed_content(self) -> None:
+        self.assertFalse(self.http_redirect_ct.root_hartree.hostname_tree.mixed_content)
+
+    # Only one URL in the capture
+    def test_urls_count(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.urls_count, 1)
+
+    # Should be 1 as capture was made with a request cookie
+    def test_request_cookie(self) -> None:
+        self.assertEqual(self.cookie_ct.root_hartree.hostname_tree.request_cookie, 1)
+
+    # Should be 0 as capture was made without cookie
+    def test_request_cookie_no_cookie(self) -> None:
+        self.assertEqual(self.no_cookie_ct.root_hartree.hostname_tree.request_cookie, 0)
+
+    def test_response_cookie(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.response_cookie, 0)
+
+    def test_third_party_cookies_received(self) -> None:
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.response_cookie, 0)
 
 
 if __name__ == '__main__':
