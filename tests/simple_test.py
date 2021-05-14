@@ -24,7 +24,9 @@ class SimpleTest(unittest.TestCase):
     lonely_har_ct: CrawledTree
     final_redirect_questionmark_ct: CrawledTree
     final_redirect_dash_ct: CrawledTree
+
     maxDiff = None
+    test_dir: Path
 
     @classmethod
     def setUpClass(cls) -> None:
