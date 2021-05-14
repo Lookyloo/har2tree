@@ -122,6 +122,8 @@ class SimpleTest(unittest.TestCase):
     def test_hostname_tree_features(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'js', 'html', 'pdf', 'json', 'text', 'video', 'css', 'iframe', 'http_content', 'https_content', 'support', 'dist', 'octet_stream', 'font', 'redirect',
                                                                                      'unknown_mimetype', 'contains_rendered_urlnode', 'urls', 'uuid', 'redirect_to_nothing', 'unset_mimetype', 'image'})
+        self.assertTrue('meta_refresh' in self.http_redirect_ct.root_hartree.url_tree.external_ressources)
+        self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.external_ressources['meta_refresh'][0], 'https://www.youtube.com/watch?v=iwGFalTRHDA')
 
     def test_url_node_resources_hashes(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.resources_hashes, {'b271f214df6b3351a4fb9b94b3680b62a53b1f555153539bdfbfe464b423e0d0a2d172607d40607ba306a17eae30dd1146ecc96e4a7de03ed2188974b915ddea'})

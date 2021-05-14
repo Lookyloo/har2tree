@@ -229,8 +229,8 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
     # Search for meta refresh redirect madness
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
-    meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
-    if meta_refresh and 'content' in meta_refresh:
+    meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile("^refresh$", re.I)})
+    if meta_refresh and meta_refresh.get('content'):
         external_ressources['meta_refresh'].append(meta_refresh['content'].partition('=')[2])
 
     # external stuff loaded from css content, because reasons.
@@ -251,6 +251,9 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # Javascript changing the current page
     # I never found a website where it matched anything useful
     external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+    # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
+    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
+    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
     # Just in case, there is sometimes an unescape call in JS code
     for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc.getvalue()):
         unescaped = unquote_to_bytes(to_unescape)
