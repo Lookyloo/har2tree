@@ -8,6 +8,7 @@ from pathlib import Path
 import datetime
 import os
 import uuid
+import json
 
 
 class SimpleTest(unittest.TestCase):
@@ -23,18 +24,19 @@ class SimpleTest(unittest.TestCase):
     lonely_har_ct: CrawledTree
     final_redirect_questionmark_ct: CrawledTree
     final_redirect_dash_ct: CrawledTree
+    maxDiff = None
 
     @classmethod
     def setUpClass(cls) -> None:
 
-        test_dir = Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples'
+        setattr(cls, 'test_dir', Path(os.path.abspath(os.path.dirname(__file__))) / 'capture_samples')
 
         # Iterates over capture_samples folder and makes a CrawledTree out of each folder
-        for x in test_dir.iterdir():
+        for x in cls.test_dir.iterdir():
             if x.is_dir():
                 folder_name = str(x).split('/')[-1]
                 tree_name = f'{folder_name}_ct'
-                har = test_dir / folder_name / '0.har'
+                har = cls.test_dir / folder_name / '0.har'
                 setattr(cls, tree_name, CrawledTree([har], str(uuid.uuid4())))
 
     # First 3 tests make sure that CrawledTree methods access the contents of the .har file properly
@@ -225,6 +227,22 @@ class SimpleTest(unittest.TestCase):
 
     def test_third_party_cookies_received(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.response_cookie, 0)
+
+    def test_hostnode_to_json(self) -> None:
+
+        # Easiest way to test the to_json method without having a huge string here is extracting one from a file
+        # This file is already cleaned, no UUIDs (see)
+        with open(self.test_dir / 'iframe' / 'to_json.json') as json_file:
+            expected_dict = json.load(json_file)
+
+        to_test = json.loads(self.iframe_ct.root_hartree.hostname_tree.to_json())
+
+        # Removing all the UUIDs from this capture
+        # as a new UUID is generated on every instanciation of a CrawledTree
+        del to_test['uuid']
+        del to_test['children'][0]['uuid']
+
+        self.assertEqual(to_test, expected_dict)
 
 
 if __name__ == '__main__':
