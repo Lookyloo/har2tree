@@ -435,12 +435,8 @@ class Har2Tree(object):
                         break
 
             if hasattr(n, 'referer'):
-                if n.referer == n.name:
-                    # Skip to avoid loops:
-                    #   * referer to itself
-                    self.logger.warning(f'Referer to itself {n.name}')
-                else:
-                    self.all_referer[n.referer].append(n.name)
+                # NOTE 2021-05-14: referer to self are a real thing: url -> POST to self
+                self.all_referer[n.referer].append(n.name)
 
             self._nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
@@ -572,7 +568,13 @@ class Har2Tree(object):
             unodes = [self.url_tree]
         else:
             unodes = []
+            # NOTE 2021-05-14: skip nodes with status 0: Loading the URL failed, splash retried it, and we have an other node with the same URL in the list.
+            url_valid_status = [unode.name for unode in nodes_to_attach if unode.response['status'] != 0]
             for unode in nodes_to_attach:
+                if unode.response['status'] == 0 and unode.name in url_valid_status:
+                    self.logger.info(f'Status code 0 for {unode.name}, skip node.')
+                    continue
+
                 if dev_debug:
                     self.logger.warning(f'Attaching URLNode {unode.name} to {root.name}.')
 
@@ -598,6 +600,16 @@ class Har2Tree(object):
                 if unode.redirect_url in self.all_redirects:
                     self.all_redirects.remove(unode.redirect_url)  # Makes sure we only follow a redirect once
                     matching_urls = [url_node for url_node in self.all_url_requests[unode.redirect_url] if url_node in self._nodes_list]
+                    if len(matching_urls) > 1:
+                        # NOTE 2021-05-14: a redirect only redirects to one url, if there are a more, we probably have the same url somewhere else in the tree.
+                        # *but* we may still have more than one entry here: splash will sometimes add a response with status code 0, and retry it.
+                        # If that's the case, pass all the URLs up to the point we have a valid status code.
+                        to_attach = []
+                        for url in matching_urls:
+                            to_attach.append(url)
+                            if url.response['status'] != 0:
+                                break
+                        matching_urls = to_attach
                     self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Redirections from {unode.name} to {matching_urls}.')
