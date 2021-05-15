@@ -614,6 +614,9 @@ class Har2Tree(object):
                     if dev_debug:
                         self.logger.warning(f'Redirections from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
+                    # NOTE 2021-05-15: in case the redirect goes to self, we want to attach the remaining part of the tree to the redirected node
+                    if root.name == unode.name:
+                        continue
                 else:
                     self.logger.warning(f'The URLNode has a redirect to something we already processed ({unode.redirect_url}), this should not happen.')
 
