@@ -127,7 +127,7 @@ yaml = ["PyYAML (>=3.10)"]
 
 [[package]]
 name = "decorator"
-version = "5.0.8"
+version = "5.0.9"
 description = "Decorators for Humans"
 category = "dev"
 optional = false
@@ -796,8 +796,8 @@ coveralls = [
     {file = "coveralls-3.0.1.tar.gz", hash = "sha256:cbb942ae5ef3d2b55388cb5b43e93a269544911535f1e750e1c656aef019ce60"},
 ]
 decorator = [
-    {file = "decorator-5.0.8-py3-none-any.whl", hash = "sha256:77a3141f7f5837b5de43569c35508ca4570022ba501db8c8a2a8b292bd35772a"},
-    {file = "decorator-5.0.8.tar.gz", hash = "sha256:bff00cfb18698f9a19fa6400451fd7ea894f3845cedd7b8b7b0ce9c53171fefb"},
+    {file = "decorator-5.0.9-py3-none-any.whl", hash = "sha256:6e5c199c16f7a9f0e3a61a4a54b3d27e7dad0dbdde92b944426cb20914376323"},
+    {file = "decorator-5.0.9.tar.gz", hash = "sha256:72ecfba4320a893c53f9706bebb2d55c270c1e51a28789361aa93e4a21319ed5"},
 ]
 docopt = [
     {file = "docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491"},
