@@ -231,7 +231,6 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
     meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile("^refresh$", re.I)})
     if meta_refresh and meta_refresh.get('content'):
-
         # NOTE 2021-05-15: in theory, a meta key look like that: <number>;url=<url>
         # but the url= part may not be present
         content = meta_refresh['content'].strip()

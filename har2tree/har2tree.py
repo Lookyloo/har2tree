@@ -600,7 +600,6 @@ class Har2Tree(object):
                 if unode.redirect_url in self.all_redirects:
                     self.all_redirects.remove(unode.redirect_url)  # Makes sure we only follow a redirect once
                     matching_urls = [url_node for url_node in self.all_url_requests[unode.redirect_url] if url_node in self._nodes_list]
-                    print(matching_urls)
                     if len(matching_urls) > 1:
                         # NOTE 2021-05-14: a redirect only redirects to one url, if there are a more, we probably have the same url somewhere else in the tree.
                         # *but* we may still have more than one entry here: splash will sometimes add a response with status code 0, and retry it.
