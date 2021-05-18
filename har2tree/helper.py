@@ -234,10 +234,11 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         # NOTE 2021-05-15: in theory, a meta key look like that: <number>;url=<url>
         # but the url= part may not be present
         content = meta_refresh['content'].strip()
-        timeout, url = content.split(';', 1)
-        if timeout.isdigit():
-            # Strip timeout
-            content = url.strip()
+        if ';' in content:
+            timeout, url = content.split(';', 1)
+            if timeout.isdigit():
+                # Strip timeout
+                content = url.strip()
         if content[:4].lower() == 'url=':
             content = content[4:].strip()
         external_ressources['meta_refresh'].append(content)
