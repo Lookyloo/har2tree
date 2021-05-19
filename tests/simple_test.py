@@ -9,6 +9,7 @@ import datetime
 import os
 import uuid
 import json
+import cProfile
 
 
 class SimpleTest(unittest.TestCase):
@@ -258,4 +259,4 @@ class SimpleTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    cProfile.run('unittest.main()', 'restats')
