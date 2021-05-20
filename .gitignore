@@ -102,3 +102,6 @@ ENV/
 
 # vim swap
 *.swp
+
+# cprofile test
+restats
