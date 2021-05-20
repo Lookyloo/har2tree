@@ -251,12 +251,13 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(to_test, expected_dict)
 
     def test_redirect_to_same_url(self) -> None:
+
         # Edge case: only appears in very specific scenarios
         # root_hartree.redirects returns the list of redirects in chronological order;
         # if two redirects are next to each other, it means that redirect[n] redirects to redirect[n+1]
-
         self.assertEqual(self.special_redirects_ct.root_hartree.redirects[3], self.special_redirects_ct.root_hartree.redirects[4])
 
 
+# Creates cprofile file on run
 if __name__ == '__main__':
     cProfile.run('unittest.main()', 'restats')
