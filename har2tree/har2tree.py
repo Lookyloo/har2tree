@@ -11,7 +11,7 @@ from operator import itemgetter
 from collections import defaultdict
 from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
 from .nodes import HostNode, URLNode
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 # Dev debug mode is a mode that will print lots of things and will only be usable
@@ -359,6 +359,14 @@ class Har2Tree(object):
         self.url_tree = self._nodes_list.pop(0)
 
     @property
+    def total_load_time(self) -> timedelta:
+        return sum([urlnode.time for urlnode in self.url_tree.traverse()], timedelta())
+
+    @property
+    def total_size_responses(self) -> int:
+        return sum(urlnode.body.getbuffer().nbytes for urlnode in self.url_tree.traverse() if not urlnode.empty_response)
+
+    @property
     def stats(self) -> Dict[str, Any]:
         """Statistics about the capture"""
         to_return: Dict[str, Any] = {'total_hostnames': 0}
@@ -380,6 +388,8 @@ class Har2Tree(object):
         node, distance = self.hostname_tree.get_farthest_leaf()
         to_return['tree_depth'] = int(distance) + 1
         to_return['total_redirects'] = len(self.redirects)
+        to_return['total_load_time'] = str(self.total_load_time)
+        to_return['total_size_responses'] = self.total_size_responses
         return to_return
 
     @property

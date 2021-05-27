@@ -94,13 +94,17 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
         except Exception:
             logger.debug(f'Not a URL: {base_url} - {partial}')
 
-    if final_url not in known_urls and splitted_base_url.fragment:
+    if final_url not in known_urls:
         # On a redirect, if the initial URL has a fragment, it is appended to the destination URL
-        try:
-            parsed = urlparse(final_url)
-            final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
-        except Exception:
-            logger.debug(f'Not a URL: {base_url} - {partial}')
+        if splitted_base_url.fragment:
+            try:
+                parsed = urlparse(final_url)
+                final_url = parsed._replace(fragment=splitted_base_url.fragment).geturl()
+            except Exception:
+                logger.debug(f'Not a URL: {base_url} - {partial}')
+        elif '#' in base_url and '#' not in final_url:
+            # NOTE 2021-05-26: if the fragment is empty, splitted_base_url.fragment is false, but the # will still be in the redirect
+            final_url += '#'
 
     if final_url not in known_urls:
         # strip the single-dot crap: https://foo.bar/path/./blah.js => https://foo.bar/path/blah.js
