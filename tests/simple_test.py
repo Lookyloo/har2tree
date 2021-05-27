@@ -63,6 +63,8 @@ class SimpleTest(unittest.TestCase):
 
     def test_stats(self) -> None:
         stats = {'total_hostnames': 5,  # Nodes in hostname tree
+                 'total_load_time': '0:00:00.687000',  # Sum of all the load times
+                 'total_size_responses': 278127,  # Sum of all the response bodies
                  'total_urls': 7,  # Nodes in URL tree
                  'total_cookies_sent': 1,  # Number of unique cookies sent
                  'total_cookies_received': 1,  # Number of unique cookies received
