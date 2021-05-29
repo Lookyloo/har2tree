@@ -424,10 +424,14 @@ class Har2Tree(object):
         '''Initialize the list of nodes to attach to the tree (as URLNode),
         and create a list of note for each URL we have in the HAR document'''
 
-        for url_entry in self.har.entries:
+        got_final_redirect: bool = False
+
+        for i, url_entry in enumerate(self.har.entries):
             n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
-            if self.har.html_content and n.name == self.har.final_redirect:
+            if self.har.html_content and n.name == self.har.final_redirect and not got_final_redirect:
                 n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.har.html_content)
+                # NOTE 2021-05-28: only mark one node as final redirect
+                got_final_redirect = True
             else:
                 n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
@@ -444,9 +448,11 @@ class Har2Tree(object):
                         self.pages_root[n.pageref] = n.uuid
                         break
 
-            if hasattr(n, 'referer'):
+            # NOTE 2021-05-28: Ignore referer for first entry
+            if hasattr(n, 'referer') and i > 0:
                 # NOTE 2021-05-14: referer to self are a real thing: url -> POST to self
-                self.all_referer[n.referer].append(n.name)
+                if n.name != n.referer or ('method' in n.request and n.request['method'] == 'POST'):
+                    self.all_referer[n.referer].append(n.name)
 
             self._nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
@@ -641,9 +647,6 @@ class Har2Tree(object):
                     if dev_debug:
                         self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
-                if not self.all_initiator_url.get(unode.name):
-                    # remove the initiator url from the list if empty
-                    self.all_initiator_url.pop(unode.name)
 
             if self.all_referer.get(unode.name):
                 # The URL (unode.name) is in the list of known referers
@@ -654,9 +657,6 @@ class Har2Tree(object):
                     if dev_debug:
                         self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
-                if not self.all_referer.get(unode.name):
-                    # remove the referer from the list if empty
-                    self.all_referer.pop(unode.name)
 
             if self.all_referer.get(unode.alternative_url_for_referer):
                 # The URL (unode.name) stripped at the first `#` is in the list of known referers
@@ -667,9 +667,6 @@ class Har2Tree(object):
                     if dev_debug:
                         self.logger.warning(f'Found via alternative referer from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
-                # remove the referer from the list if empty
-                if not self.all_referer.get(unode.alternative_url_for_referer):
-                    self.all_referer.pop(unode.alternative_url_for_referer)
 
             if hasattr(unode, 'external_ressources'):
                 # the url loads external things, and some of them have no referer....

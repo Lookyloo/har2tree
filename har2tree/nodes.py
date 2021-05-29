@@ -272,16 +272,16 @@ class URLNode(HarTreeNode):
                 self.add_feature('filename', 'file.bin')
 
             # Common JS redirect we can catch easily
-            # NOTE: maybe make it a function.
-            js_redirects = ['window.location.href', 'window.location', 'top.location']
-            for js_redirect in js_redirects:
-                url = re.findall(f'{js_redirect}.*"(.*)".*'.encode(), self.body.getvalue())
-                if url:
-                    # TODO: new type, redirect_js or something like that
-                    redirect_url = rebuild_url(self.name, url[0].decode(), all_requests)
-                    if redirect_url in all_requests:
-                        self.add_feature('redirect', True)
-                        self.add_feature('redirect_url', redirect_url)
+            # NOTE: it is extremely fragile and doesn't work very often but is kinda better than nothing.
+            # Source: https://stackoverflow.com/questions/13363174/regular-expression-to-catch-as-many-javascript-redirections-as-possible
+            regex = re.compile(br"""((location.href)|(window.location)|(location.replace)|(location.assign))(( ?= ?)|( ?\( ?))("|')([^'"]*)("|')( ?\) ?)?;""", re.I)
+            matches = re.findall(regex, self.body.getvalue())
+            for match in matches:
+                # TODO: new type, redirect_js or something like that
+                redirect_url = rebuild_url(self.name, match[9].decode(), all_requests)
+                if redirect_url in all_requests:
+                    self.add_feature('redirect', True)
+                    self.add_feature('redirect_url', redirect_url)
 
             if 'meta_refresh' in self.external_ressources and self.external_ressources.get('meta_refresh'):
                 if self.external_ressources['meta_refresh'][0] in all_requests:
