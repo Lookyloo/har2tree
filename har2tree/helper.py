@@ -24,7 +24,7 @@ def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
     uri = uri[5:]
     if ';base64' in uri:
         mime, b64data = uri.split(';base64', 1)
-        if b64data[0] != ',':
+        if not b64data or b64data[0] != ',':
             return None
         b64data = b64data[1:].strip()
         if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
