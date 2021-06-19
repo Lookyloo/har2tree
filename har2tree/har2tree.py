@@ -672,8 +672,9 @@ class Har2Tree(object):
                 # the url loads external things, and some of them have no referer....
                 for external_tag, links in unode.external_ressources.items():
                     for link in links:
-                        if link not in self.all_url_requests:
+                        if link not in self.all_url_requests or link == self.har.final_redirect:
                             # We have a lot of false positives
+                            # 2021-06-19: or the URL of the final redirect is somewhere in an embeded content. In that case, we don't want to attach to the sub-node.
                             continue
                         matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self._nodes_list]
                         self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
