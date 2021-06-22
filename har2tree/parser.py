@@ -94,6 +94,6 @@ class CrawledTree(object):
         return self.root_hartree.user_agent
 
     @property
-    def referer(self) -> str:
+    def referer(self) -> Optional[str]:
         """Referer given to the first URL of the capture"""
         return self.root_hartree.initial_referer
