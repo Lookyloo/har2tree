@@ -359,6 +359,13 @@ class Har2Tree(object):
         self.url_tree = self._nodes_list.pop(0)
 
     @property
+    def initial_referer(self) -> Optional[str]:
+        '''The referer passed to the first URL in the tree'''
+        if hasattr(self.url_tree, 'referer'):
+            return self.url_tree.referer
+        return None
+
+    @property
     def total_load_time(self) -> timedelta:
         return sum([urlnode.time for urlnode in self.url_tree.traverse()], timedelta())
 
