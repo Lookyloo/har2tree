@@ -156,7 +156,7 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
             else:
-                logger.debug('{key} - not a URL - {to_attach}')
+                logger.debug(f'{key} - not a URL - {to_attach}')
     return to_return
 
 
