@@ -88,8 +88,11 @@ class HarFile():
         self.logger = Har2TreeLogAdapter(logger, {'uuid': self.capture_uuid})
         self.path = harfile
 
-        with self.path.open() as f:
-            self.har: Dict[str, Any] = json.load(f)
+        try:
+            with self.path.open() as f:
+                self.har: Dict[str, Any] = json.load(f)
+        except json.decoder.JSONDecodeError as e:
+            raise Har2TreeError(f'HAR file is not a valid JSON file: {e}')
 
         # I mean it, that's the last URL the splash browser was on
         last_redirect_file = self.path.parent / f'{self.path.stem}.last_redirect.txt'
