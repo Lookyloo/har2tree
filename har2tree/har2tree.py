@@ -580,9 +580,16 @@ class Har2Tree(object):
                 # If that's the case, we cannot use it as a reference
                 if page['id'] in self.pages_root:
                     page_before = page
-            page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
-            if dev_debug:
-                self.logger.warning(f'Failed to attach URLNode in the normal process, best guess attach to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
+            try:
+                page_root_node = self.get_url_node_by_uuid(self.pages_root[page_before['id']])
+                if dev_debug:
+                    self.logger.warning(f'Failed to attach URLNode in the normal process, best guess attach to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
+            except IndexError:
+                # So when that thing fails, it means that the the pageref is somehow in the wrong order
+                # like pageref 2 is loaded before pageref 1. In that case, we have no choice but attaching the
+                # node to the root node
+                page_root_node = self.url_tree
+                self.logger.warning('The pages in the HAR are in in the wrong order, this should not happen but here we are')
             self._make_subtree(page_root_node, [node])
 
     @trace_make_subtree
