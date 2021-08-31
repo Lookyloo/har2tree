@@ -15,6 +15,8 @@ import ipaddress
 from base64 import b64decode
 import hashlib
 import re
+from functools import lru_cache
+
 from .helper import Har2TreeError, Har2TreeLogAdapter
 
 import filetype  # type: ignore
@@ -24,13 +26,17 @@ from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
 from w3lib.html import strip_html5_whitespace  # type: ignore
 from w3lib.url import canonicalize_url, safe_url_string  # type: ignore
 
-# Initialize Public Suffix List
-try:
-    psl_file = fetch()
-    psl = PublicSuffixList(psl_file=psl_file)
-except Exception as e:
-    logging.getLogger(__name__).warning(f'Unable to fetch the PublicSuffixList: {e}')
-    psl = PublicSuffixList()
+
+@lru_cache(64)
+def get_public_suffix_list() -> PublicSuffixList:
+    # Initialize Public Suffix List
+    try:
+        psl_file = fetch()
+        psl = PublicSuffixList(psl_file=psl_file)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f'Unable to fetch the PublicSuffixList: {e}')
+        psl = PublicSuffixList()
+    return psl
 
 
 class HarTreeNode(TreeNode):
@@ -122,7 +128,7 @@ class URLNode(HarTreeNode):
             pass
 
         if not hasattr(self, 'hostname_is_ip'):
-            tld = psl.get_tld(self.hostname, strict=True)
+            tld = get_public_suffix_list().get_tld(self.hostname, strict=True)
             if tld:
                 self.add_feature('known_tld', tld)
             else:
@@ -373,7 +379,7 @@ class URLNode(HarTreeNode):
         if 'body_hash' in self.features:
             all_ressources_hashes.add(self.body_hash)
             if 'embedded_ressources' in self.features:
-                for mimetype, blobs in self.embedded_ressources.items():
+                for _mimetype, blobs in self.embedded_ressources.items():
                     all_ressources_hashes.update([h for h, b in blobs])
         return all_ressources_hashes
 
