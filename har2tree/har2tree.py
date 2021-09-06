@@ -437,6 +437,12 @@ class Har2Tree(object):
         got_final_redirect: bool = False
 
         for i, url_entry in enumerate(self.har.entries):
+            # NOTE 2021-09-06: skip nodes with status 0: Loading the URL failed, splash retried it,
+            # and we have an other node with the same URL in the list.
+            if url_entry['response']['status'] == 0:
+                self.logger.info(f'Status code 0 for {unquote_plus(url_entry["request"]["url"])}, skip node.')
+                continue
+
             n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
             if self.har.html_content and n.name == self.har.final_redirect and not got_final_redirect:
                 n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.har.html_content)
@@ -601,13 +607,7 @@ class Har2Tree(object):
             unodes = [self.url_tree]
         else:
             unodes = []
-            # NOTE 2021-05-14: skip nodes with status 0: Loading the URL failed, splash retried it, and we have an other node with the same URL in the list.
-            url_valid_status = [unode.name for unode in nodes_to_attach if unode.response['status'] != 0]
             for unode in nodes_to_attach:
-                if unode.response['status'] == 0 and unode.name in url_valid_status:
-                    self.logger.info(f'Status code 0 for {unode.name}, skip node.')
-                    continue
-
                 if dev_debug:
                     self.logger.warning(f'Attaching URLNode {unode.name} to {root.name}.')
 
