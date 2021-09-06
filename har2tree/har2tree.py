@@ -436,11 +436,26 @@ class Har2Tree(object):
 
         got_final_redirect: bool = False
 
+        #  NOTE 2021-09-06 - Clear URL entries:
+        # Some responses have a HTTP status code set to 0. It is generally incorrect,
+        # but it is also the default code set by splash when something went bad when
+        # loading a specific URL, and we often have an other entry requesting the same URL (but not always)
+        # * If we have an other query to the same URL in the list, discard the one with a status code to 0
+        # * If we don't, use the entry in the tree.
+        entries_with_0_status: Dict[str, List[int]] = defaultdict(list)
+        ignore: List[int] = []
         for i, url_entry in enumerate(self.har.entries):
-            # NOTE 2021-09-06: skip nodes with status 0: Loading the URL failed, splash retried it,
-            # and we have an other node with the same URL in the list.
+            url = unquote_plus(url_entry["request"]["url"])
             if url_entry['response']['status'] == 0:
-                self.logger.info(f'Status code 0 for {unquote_plus(url_entry["request"]["url"])}, skip node.')
+                entries_with_0_status[url].append(i)
+                self.logger.info(f'Status code 0 for {url}, maybe skip node.')
+                continue
+            # Response status is not 0
+            if url in entries_with_0_status:
+                ignore.extend(entries_with_0_status[url])
+
+        for i, url_entry in enumerate(self.har.entries):
+            if i in ignore:
                 continue
 
             n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
