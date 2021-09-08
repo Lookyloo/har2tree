@@ -25,7 +25,7 @@ include = ['README.md']
 [tool.poetry.dependencies]
 python = "^3.8"
 ete3 = "^3.1.2"
-beautifulsoup4 = "^4.9.3"
+beautifulsoup4 = "^4.10"
 lxml = "^4.6.3"
 six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
