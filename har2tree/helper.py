@@ -248,7 +248,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         external_ressources['meta_refresh'].append(content)
 
     # external stuff loaded from css content, because reasons.
-    for url in re.findall(rb'url\((.*?)\)', html_doc.getvalue()):
+    for url in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc.getvalue()):
         try:
             url = url.decode()
         except UnicodeDecodeError as e:
