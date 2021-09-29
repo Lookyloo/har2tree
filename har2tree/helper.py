@@ -181,7 +181,7 @@ def _unpack_data_uri(data: str) -> Optional[Tuple[str, str, BytesIO]]:
     return None
 
 
-def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, BytesIO]]]]:
+def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
@@ -205,7 +205,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
     embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
 
-    soup = BeautifulSoup(html_doc.getvalue(), 'lxml')
+    soup = BeautifulSoup(html_doc, 'lxml')
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source', 'link', 'object']):
         uri = None
         if link.get('src'):  # img script video audio iframe embed source
@@ -248,7 +248,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
         external_ressources['meta_refresh'].append(content)
 
     # external stuff loaded from css content, because reasons.
-    for url in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc.getvalue()):
+    for url in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc):
         try:
             url = url.decode()
         except UnicodeDecodeError as e:
@@ -264,12 +264,12 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc.getvalue())]
+    external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc)]
     # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
     # Just in case, there is sometimes an unescape call in JS code
-    for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc.getvalue()):
+    for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc):
         unescaped = unquote_to_bytes(to_unescape)
         kind = filetype.guess(unescaped)
         if kind:
@@ -282,7 +282,7 @@ def find_external_ressources(html_doc: BytesIO, base_url: str, all_requests: Lis
 
     if full_text_search:
         # Just regex in the whole blob, because we can
-        external_ressources['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc.getvalue())]
+        external_ressources['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc)]
         # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources

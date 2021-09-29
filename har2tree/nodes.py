@@ -259,9 +259,9 @@ class URLNode(HarTreeNode):
                 else:
                     self.add_feature('mimetype', '')
 
-            external_ressources, embedded_ressources = find_external_ressources(self.body, self.name, all_requests)
+            external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
             if 'rendered_html' in self.features:
-                rendered_external, rendered_embedded = find_external_ressources(self.rendered_html, self.name, all_requests)
+                rendered_external, rendered_embedded = find_external_ressources(self.rendered_html.getvalue(), self.name, all_requests)
                 # for the external ressources, the keys are always the same
                 external_ressources = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in external_ressources.items()}
 
