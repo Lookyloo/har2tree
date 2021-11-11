@@ -36,7 +36,7 @@ Sphinx = { version = "^4.2.0", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
-coverage = "^6.1.1"
+coverage = "^6.1.2"
 coveralls = "^3.3.0"
 codecov = "^2.1.12"
 mypy = "^0.910"
