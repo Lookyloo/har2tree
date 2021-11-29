@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from pathlib import Path
-import logging
-from typing import Dict, Any, List, Optional, Tuple, Set, Union, Callable
+import hashlib
 import json
-from urllib.parse import unquote_plus
+import logging
+
+from collections import defaultdict
+from datetime import datetime, timedelta
+from functools import wraps, lru_cache
 from io import BytesIO
 from operator import itemgetter
-from collections import defaultdict
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple, Set, Union, Callable
+from urllib.parse import unquote_plus
+
 from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
 from .nodes import HostNode, URLNode
-from datetime import datetime, timedelta
-from functools import wraps
 
 # Dev debug mode is a mode that will print lots of things and will only be usable
 # by someone with a pretty deep understanding of har2tree and how the tree is built
@@ -429,6 +432,26 @@ class Har2Tree(object):
     def start_time(self) -> datetime:
         """Start time of the capture"""
         return self.url_tree.start_time
+
+    @lru_cache
+    def build_all_hashes(self, algorithm: str='sha1') -> Dict[str, List[URLNode]]:
+        if algorithm not in hashlib.algorithms_available:
+            raise Har2TreeError(f'Invalid algorithm ({algorithm}), only the following are supported: {hashlib.algorithms_available}')
+
+        to_return: Dict[str, List[URLNode]] = defaultdict(list)
+        for urlnode in self.url_tree.traverse():
+            if urlnode.empty_response:
+                continue
+            h = hashlib.new(algorithm)
+            h.update(urlnode.body.getbuffer())
+            to_return[h.hexdigest()].append(urlnode)
+            if hasattr(urlnode, 'embedded_ressources'):
+                for _mimetype, blobs in urlnode.embedded_ressources.items():
+                    for blob in blobs:
+                        h = hashlib.new(algorithm)
+                        h.update(blob)
+                        to_return[h.hexdigest()].append(urlnode)
+        return to_return
 
     def _load_url_entries(self) -> None:
         '''Initialize the list of nodes to attach to the tree (as URLNode),

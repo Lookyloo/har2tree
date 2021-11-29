@@ -75,6 +75,14 @@ class SimpleTest(unittest.TestCase):
                  }
         self.assertEqual(self.http_redirect_ct.root_hartree.stats, stats)
 
+    def test_compute_hashes(self) -> None:
+        sha1 = self.http_redirect_ct.root_hartree.build_all_hashes()
+        assert "e4ae8369fc0bb5edb73322bbe68f2249481632b2" in sha1
+        md5 = self.http_redirect_ct.root_hartree.build_all_hashes('md5')
+        assert "d71687d8589ac622bad52b1df8350f1c" in md5
+        sha512 = self.http_redirect_ct.root_hartree.build_all_hashes('sha512')
+        assert "b271f214df6b3351a4fb9b94b3680b62a53b1f555153539bdfbfe464b423e0d0a2d172607d40607ba306a17eae30dd1146ecc96e4a7de03ed2188974b915ddea" in sha512
+
     def test_root_after_redirect(self) -> None:
         self.assertEqual(self.http_redirect_ct.root_hartree.root_after_redirect, "https://consent.youtube.com/ml?continue=https://www.youtube.com/watch?v=iwGFalTRHDA&gl=LU&hl=en&pc=yt&uxe=23983172&src=1")
 

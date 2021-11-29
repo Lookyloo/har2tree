@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9]
+        python-version: [3.8, 3.9, 3.10]
 
     steps:
     - uses: actions/checkout@v2
@@ -27,10 +27,10 @@ jobs:
         python -m pip install --upgrade pip poetry
         poetry install
 
-    - name: Test with nosetests
+    - name: Test with pytest
       run: |
-        poetry run nosetests --with-coverage --cover-xml --cover-package=har2tree tests/test.py
-        poetry run nosetests --with-coverage --cover-xml --cover-package=har2tree tests/simple_test.py
+        poetry run pytest --cov=har2tree tests/test.py
+        poetry run pytest --cov=har2tree tests/simple_test.py
         poetry run mypy .
 
     - name: Upload coverage to Codecov
