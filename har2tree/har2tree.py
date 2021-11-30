@@ -435,6 +435,7 @@ class Har2Tree(object):
 
     @lru_cache
     def build_all_hashes(self, algorithm: str='sha1') -> Dict[str, List[URLNode]]:
+        '''Build on demand hashes for all the ressources of the tree, in the alorighm provided by the user'''
         if algorithm not in hashlib.algorithms_available:
             raise Har2TreeError(f'Invalid algorithm ({algorithm}), only the following are supported: {hashlib.algorithms_available}')
 
@@ -449,7 +450,7 @@ class Har2Tree(object):
                 for _mimetype, blobs in urlnode.embedded_ressources.items():
                     for blob in blobs:
                         h = hashlib.new(algorithm)
-                        h.update(blob)
+                        h.update(blob[1].getbuffer())
                         to_return[h.hexdigest()].append(urlnode)
         return to_return
 
