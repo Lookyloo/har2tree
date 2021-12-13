@@ -38,7 +38,7 @@ cchardet = "^2.1.7"
 [tool.poetry.dev-dependencies]
 mypy = "^0.910"
 ipython = "^7.30.0"
-jupyterlab = "^3.2.4"
+jupyterlab = "^3.2.5"
 pytest-cov = "^3.0.0"
 
 [tool.poetry.extras]
