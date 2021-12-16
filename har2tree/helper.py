@@ -297,7 +297,7 @@ class Har2TreeError(Exception):
         self.message = message
 
 
-class Har2TreeLogAdapter(logging.LoggerAdapter):
+class Har2TreeLogAdapter(logging.LoggerAdapter[Any]):
     """
     Prepend log entry with the UUID of the capture
     """
