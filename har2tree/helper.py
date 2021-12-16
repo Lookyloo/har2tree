@@ -1,19 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
-import re
-from collections import defaultdict
-from typing import Optional, List, Tuple, Dict, Mapping, MutableMapping, Any
-from base64 import b64decode
 import binascii
 import hashlib
 import logging
-from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
+import os
+import re
+
+from base64 import b64decode
+from collections import defaultdict
 from io import BytesIO
-from bs4 import BeautifulSoup  # type: ignore
+from logging import LoggerAdapter
+from typing import Optional, List, Tuple, Dict, Mapping, MutableMapping, Any
+from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 
 import filetype  # type: ignore
+
+from bs4 import BeautifulSoup  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +300,7 @@ class Har2TreeError(Exception):
         self.message = message
 
 
-class Har2TreeLogAdapter(logging.LoggerAdapter[Any]):
+class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore
     """
     Prepend log entry with the UUID of the capture
     """
