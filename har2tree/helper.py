@@ -267,7 +267,13 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    external_ressources['javascript'] = [url.decode() for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc)]
+    for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc):
+        try:
+            url = url.decode()
+        except UnicodeDecodeError as e:
+            logger.info(f'Unable to decode {url}: {e}')
+            continue
+        external_ressources['javascript'].append(url)
     # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
