@@ -36,9 +36,9 @@ Sphinx = { version = "^4.3.2", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
-mypy = "^0.930"
+mypy = "^0.931"
 ipython = "^7.31.0"
-jupyterlab = "^3.2.4"
+jupyterlab = "^3.2.6"
 pytest-cov = "^3.0.0"
 
 [tool.poetry.extras]
