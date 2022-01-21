@@ -30,15 +30,15 @@ lxml = "^4.6.5,!=4.7.0"
 six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
 filetype = "^1.0.8"
-numpy = "^1.22.0"
+numpy = "^1.22.1"
 w3lib = "^1.22.0"
-Sphinx = { version = "^4.3.2", optional = true }
+Sphinx = { version = "^4.4.0", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.931"
-ipython = "^8.0.0"
-jupyterlab = "^3.2.7"
+ipython = "^8.0.1"
+jupyterlab = "^3.2.8"
 pytest-cov = "^3.0.0"
 
 [tool.poetry.extras]
