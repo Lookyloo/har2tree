@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import binascii
 import hashlib
@@ -302,7 +301,7 @@ class Har2TreeError(Exception):
         """
         Har2Tree Exception
         """
-        super(Har2TreeError, self).__init__(message)
+        super().__init__(message)
         self.message = message
 
 
@@ -311,4 +310,4 @@ class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore
     Prepend log entry with the UUID of the capture
     """
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
-        return '[%s] %s' % (self.extra['uuid'], msg), kwargs
+        return '[{}] {}'.format(self.extra['uuid'], msg), kwargs

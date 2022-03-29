@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from pathlib import Path
 from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any
@@ -43,11 +42,11 @@ class HarTreeNode(TreeNode):
 
     def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node dumpable in json to display with d3js"""
-        super(HarTreeNode, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.add_feature('uuid', str(uuid.uuid4()))
-        self.features_to_skip = set(['dist', 'support'])
+        self.features_to_skip = {'dist', 'support'}
 
     def to_dict(self) -> MutableMapping[str, Any]:
         """Make a dict that can then be dumped in json.
@@ -72,7 +71,7 @@ class URLNode(HarTreeNode):
 
     def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node of the URL Tree"""
-        super(URLNode, self).__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid, **kwargs)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
         self.features_to_skip.add('url_split')
@@ -327,7 +326,7 @@ class URLNode(HarTreeNode):
                 self.add_feature('unset_mimetype', True)
             else:
                 self.add_feature('unknown_mimetype', True)
-                self.logger.warning('Unknown mimetype: {}'.format(self.mimetype))
+                self.logger.warning(f'Unknown mimetype: {self.mimetype}')
 
         # NOTE: Chrome/Chromium only features
         if har_entry.get('serverIPAddress'):
@@ -411,7 +410,7 @@ class HostNode(HarTreeNode):
 
     def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node of the Hostname Tree"""
-        super(HostNode, self).__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid, **kwargs)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
 
@@ -439,7 +438,7 @@ class HostNode(HarTreeNode):
 
     def to_dict(self) -> MutableMapping[str, Any]:
         """Make a dictionary that is json dumpable for d3js"""
-        to_return = super(HostNode, self).to_dict()
+        to_return = super().to_dict()
         to_return['urls_count'] = self.urls_count
         to_return['request_cookie'] = self.request_cookie
         to_return['response_cookie'] = self.response_cookie

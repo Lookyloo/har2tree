@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import hashlib
 import json
@@ -254,7 +253,7 @@ class HarFile():
         return f'HarFile({self.path}, {self.capture_uuid})'
 
 
-class Har2Tree(object):
+class Har2Tree:
 
     def __init__(self, har_path: Path, capture_uuid: str):
         """Build the ETE Toolkit tree based on the HAR file, cookies, and HTML content
@@ -373,7 +372,7 @@ class Har2Tree(object):
 
     @property
     def total_load_time(self) -> timedelta:
-        return sum([urlnode.time for urlnode in self.url_tree.traverse()], timedelta())
+        return sum((urlnode.time for urlnode in self.url_tree.traverse()), timedelta())
 
     @property
     def total_size_responses(self) -> int:

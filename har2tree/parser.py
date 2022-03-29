@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from pathlib import Path
 import copy
@@ -12,7 +11,7 @@ from .nodes import URLNode
 from .helper import Har2TreeError, Har2TreeLogAdapter
 
 
-class CrawledTree(object):
+class CrawledTree:
 
     def __init__(self, harfiles: Iterable[Path], uuid: str):
         """ Convert a list of HAR files into a ETE Toolkit tree"""
