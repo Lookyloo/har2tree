@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import pstats
 from pstats import SortKey
@@ -17,6 +16,6 @@ p.print_callers(25)
 # Note: it might not be very clear what the program does with this tool
 # Instead, you could use snakeviz:
 # Simply type in:
-# pip install snakeviz 
-# and then 
+# pip install snakeviz
+# and then
 # snakeviz restats

@@ -54,5 +54,3 @@ Har2TreeError
 
 .. autoclass:: Har2TreeError
    :members:
-
-
