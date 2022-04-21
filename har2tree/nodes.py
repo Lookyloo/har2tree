@@ -330,7 +330,12 @@ class URLNode(HarTreeNode):
 
         # NOTE: Chrome/Chromium only features
         if har_entry.get('serverIPAddress'):
-            self.add_feature('ip_address', ipaddress.ip_address(har_entry['serverIPAddress']))
+            # check ipv6 format
+            if har_entry['serverIPAddress'].startswith('['):
+                _ipaddress = har_entry['serverIPAddress'][1:-1]
+            else:
+                _ipaddress = har_entry['serverIPAddress']
+            self.add_feature('ip_address', ipaddress.ip_address(_ipaddress))
         if '_initiator' in har_entry:
             if har_entry['_initiator']['type'] == 'other':
                 pass

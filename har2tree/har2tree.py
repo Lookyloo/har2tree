@@ -228,7 +228,8 @@ class HarFile():
                         previous_entry = e
                     else:
                         continue
-                elif (self.__find_referer(e) and (self.__find_referer(e) == previous_entry['response']['url'])):
+                elif (self.__find_referer(e) and 'url' in previous_entry['response']
+                        and (self.__find_referer(e) == previous_entry['response']['url'])):
                     to_return.append(e['request']['url'])
                     previous_entry = e
                 else:
