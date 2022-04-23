@@ -29,7 +29,7 @@ beautifulsoup4 = "^4.11.1"
 lxml = "^4.8.0"
 six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
-filetype = "^1.0.10"
+filetype = "^1.0.13"
 numpy = "^1.22.3"
 w3lib = "^1.22.0"
 Sphinx = { version = "^4.5.0", optional = true }
@@ -38,7 +38,7 @@ cchardet = "^2.1.7"
 [tool.poetry.dev-dependencies]
 mypy = "^0.942"
 ipython = "^8.2.0"
-jupyterlab = "^3.3.3"
+jupyterlab = "^3.3.4"
 pytest-cov = "^3.0.0"
 
 [tool.poetry.extras]
