@@ -259,6 +259,7 @@ class SimpleTest(unittest.TestCase):
 
         self.assertEqual(to_test, expected_dict)
 
+    @unittest.skip("Shouldn't be relevant anymore.")
     def test_redirect_to_same_url(self) -> None:
 
         # Edge case: only appears in very specific scenarios
