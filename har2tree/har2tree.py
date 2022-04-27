@@ -600,7 +600,7 @@ class Har2Tree:
         # => attach to that node.
         if len(self.har.har['log']['pages']) > 1 and node.pageref != self.har.har['log']['pages'][0] and self.pages_root[node.pageref] != node.uuid:
             # In that case, we check if there is already a page with the pageref of the orphan node,
-            # and attach the node to that. NOTE: we can only do that if thre is already a node withi this pageref in the tree.
+            # and attach the node to that. NOTE: we can only do that if there is already a node with this pageref in the tree.
             # This node is not a page root, we can attach it \o/
             page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
             if dev_debug:
@@ -704,24 +704,24 @@ class Har2Tree:
                         self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
 
-            if self.all_referer.get(unode.name):
-                # The URL (unode.name) is in the list of known referers
-                for u in self.all_referer[unode.name]:
-                    matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.name]
-                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
-                    if dev_debug:
-                        self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
-                    self._make_subtree(unode, matching_urls)
-
-            if self.all_referer.get(unode.alternative_url_for_referer):
-                # The URL (unode.name) stripped at the first `#` is in the list of known referers
-                for u in self.all_referer[unode.alternative_url_for_referer]:
-                    matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == unode.alternative_url_for_referer]
-                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
-                    if dev_debug:
-                        self.logger.warning(f'Found via alternative referer from {unode.name} to {matching_urls}.')
+            # 2022-04-27: Referers are supposed to be the complete URL, but they can also be only part of it.
+            #             what we do here is going from best to worse in the hope one of them matches
+            _referer_strings: List[str] = [
+                unode.name,  # full URL
+                unode.alternative_url_for_referer,  # URL up to the first `#`
+                f'{unode.url_split.scheme}://{unode.url_split.netloc}/',  # URL up to the path
+                f'{unode.url_split.scheme}://{unode.url_split.netloc}'  # URL up to the path, without slash
+            ]
+            for ref in _referer_strings:
+                if self.all_referer.get(ref):
+                    matching_urls = []
+                    for u in self.all_referer[ref]:
+                        matching_urls += [url_node for url_node in self.all_url_requests[u]
+                                          if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == ref]
+                        self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
+                        if dev_debug:
+                            self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
+                    # 2022-04-27: build subtrees recursively *after* we find all the best referer matches
                     self._make_subtree(unode, matching_urls)
 
             if hasattr(unode, 'external_ressources'):

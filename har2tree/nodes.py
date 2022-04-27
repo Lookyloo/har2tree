@@ -8,7 +8,6 @@ import json
 from .helper import find_external_ressources, rebuild_url
 from io import BytesIO
 from urllib.parse import unquote_plus, urlparse, urljoin
-import sys
 from datetime import datetime, timedelta
 import ipaddress
 from base64 import b64decode
@@ -96,15 +95,6 @@ class URLNode(HarTreeNode):
         # So we need an alternative URL to do a lookup against
         self.add_feature('alternative_url_for_referer', self.name.split('#')[0])
 
-        # Instant the request is made
-        if sys.version_info < (3, 7) and har_entry['startedDateTime'][-1] == 'Z':
-            # Python 3.7:
-            #   * fromisoformat does not like Z at the end of the string, and wants +XX:XX (not +XXXX)
-            #   * strptime %z is cool with Z (=>tzinfo=datetime.timezone.utc) or +XXXX or +XX:XX
-            # Python 3.6:
-            #   * No fromisoformat
-            #   * strptime %z does not like Z at the end of the string, and doesn't like +XX:XX either (wants +XXXX)
-            har_entry['startedDateTime'] = har_entry['startedDateTime'].replace('Z', '+0000')
         if '.' in har_entry['startedDateTime']:
             self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S.%f%z'))
         else:
