@@ -11,7 +11,7 @@ from io import BytesIO
 from operator import itemgetter
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Set, Union, Callable
-from urllib.parse import unquote_plus
+from urllib.parse import unquote_plus, urlparse
 
 from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
 from .nodes import HostNode, URLNode
@@ -593,6 +593,22 @@ class Har2Tree:
 
     @trace_make_subtree_fallback
     def _make_subtree_fallback(self, node: URLNode, dev_debug: bool=False) -> None:
+        if hasattr(node, 'referer'):
+            # 2022-04-28: the node has a referer, but for some reason, it could't be attached to the tree
+            #             Probable reason: the referer is a part of the URL (hostname)
+            # FIXME: this is a very dirty fix, but I'm not sure we can do it any better
+            if (referer_hostname := urlparse(node.referer).hostname):
+                # the referer has a hostname
+                if (nodes_with_hostname := self.url_tree.search_nodes(hostname=referer_hostname)):
+                    # the hostname has at least a node in the tree
+                    for node_with_hostname in nodes_with_hostname:
+                        if not node_with_hostname.empty_response:
+                            # we got an non-empty response, breaking
+                            break
+                    # attach to the the first response with something, or to whatever we get.
+                    self._make_subtree(node_with_hostname, [node])
+                    return
+
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
         # IF we have more than one page in the list
         # AND the orphan node's pageref points to an other page than the first one <= FIXME not enabled yet
@@ -688,6 +704,9 @@ class Har2Tree:
                     self._make_subtree(unode, matching_urls)
                     # NOTE 2021-05-15: in case the redirect goes to self, we want to attach the remaining part of the tree to the redirected node
                     if root.name == unode.name:
+                        continue
+                    # NOTE 2022-04-28: if the node is empty, and it is a redirect, it cannot have more than one single child
+                    if unode.empty_response:
                         continue
                 else:
                     self.logger.warning(f'The URLNode has a redirect to something we already processed ({unode.redirect_url}), this should not happen.')
