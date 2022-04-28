@@ -86,7 +86,12 @@ class URLNode(HarTreeNode):
             # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
             self.add_feature('name', unquote_plus(har_entry['request']['url']))
 
-        self.add_feature('url_split', urlparse(self.name))
+        splitted_url = urlparse(self.name)
+        if splitted_url.scheme == 'blob':
+            # this is a new weird feature, but it seems to be usable as a URL, so let's do that
+            self.add_feature('url_split', urlparse(splitted_url.path))
+        else:
+            self.add_feature('url_split', splitted_url)
 
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)

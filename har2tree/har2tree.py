@@ -570,7 +570,6 @@ class Har2Tree:
                     child_node_hostname = root_node_hostname.add_child(HostNode(capture_uuid=self.har.capture_uuid, name=child_node_url.hostname))
                     children_hostnames[child_node_url.hostname] = child_node_hostname
                 child_node_hostname.add_url(child_node_url)
-                child_node_url.add_feature('hostnode_uuid', child_node_hostname.uuid)
 
                 if not child_node_url.is_leaf():
                     sub_roots[child_node_hostname].append(child_node_url)
@@ -728,8 +727,6 @@ class Har2Tree:
             _referer_strings: List[str] = [
                 unode.name,  # full URL
                 unode.alternative_url_for_referer,  # URL up to the first `#`
-                f'{unode.url_split.scheme}://{unode.url_split.netloc}/',  # URL up to the path
-                f'{unode.url_split.scheme}://{unode.url_split.netloc}'  # URL up to the path, without slash
             ]
             for ref in _referer_strings:
                 if self.all_referer.get(ref):
