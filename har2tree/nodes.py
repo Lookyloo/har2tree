@@ -136,6 +136,9 @@ class URLNode(HarTreeNode):
             if h['name'].lower() == 'user-agent':
                 self.add_feature('user_agent', h['value'])
 
+        if 'user_agent' not in self.features:
+            self.add_feature('user_agent', '')
+
         if 'method' in self.request and self.request['method'] == 'POST' and 'postData' in self.request:
             # If the content is empty, we don't care
             if self.request['postData']['text']:
