@@ -204,10 +204,9 @@ class HarFile():
 
     @property
     def has_initial_redirects(self) -> bool:
-        """True is the capture has redirects"""
-        if self.final_redirect:
-            return self.entries[0]['request']['url'] != self.final_redirect
-        return False
+        """True is the capture has redirects.
+        Meaning: the first URL in the HAR is different from the URL in the address bar"""
+        return self.entries[0]['request']['url'] != self.final_redirect
 
     @property
     def initial_redirects(self) -> List[str]:
@@ -408,15 +407,7 @@ class Har2Tree:
     @property
     def redirects(self) -> List[str]:
         """List of redirects for this tree"""
-        if not self.root_after_redirect:
-            return []
-        redirect_node = self.url_tree.search_nodes(name=self.root_after_redirect)
-        if not redirect_node:
-            self.logger.warning(f'Unable to find node {self.root_after_redirect}')
-            return []
-        elif len(redirect_node) > 1:
-            self.logger.warning(f'Too many nodes found for {self.root_after_redirect}: {redirect_node}')
-        return [a.name for a in reversed(redirect_node[0].get_ancestors())] + [redirect_node[0].name]
+        return [a.name for a in reversed(self.rendered_node.get_ancestors())] + [self.rendered_node.name]
 
     @property
     def root_referer(self) -> Optional[str]:
@@ -532,20 +523,20 @@ class Har2Tree:
         return self.url_tree.search_nodes(uuid=uuid)[0]
 
     @property
-    def root_after_redirect(self) -> Optional[str]:
-        '''Iterate through the list of entries until there are no redirectURL in
-        the response anymore: it is the first URL loading content.
-        '''
-        if self.har.has_initial_redirects:
-            return self.har.final_redirect
-        return None
-
-    @property
     def rendered_node(self) -> URLNode:
         node = self.url_tree.search_nodes(name=self.har.final_redirect)
         if node:
             return node[0]
-        raise Har2TreeError('Unable to find the rendered node.')
+
+        self.logger.warning('Final redirect URL from adress bar not in tree')
+        # Just try to get the best guess: first node after JS/HTTP redirects
+        curnode = self.url_tree
+        while hasattr(curnode, 'redirect') and curnode.redirect:
+            for child in curnode.children:
+                if child.name == curnode.redirect_url:
+                    curnode = child
+                    break
+        return curnode
 
     def to_json(self) -> str:
         """Dump the whole HostNode tree to json (for d3js)"""
@@ -585,6 +576,11 @@ class Har2Tree:
             node = self._nodes_list.pop(0)
             self._make_subtree_fallback(node)
 
+        # 2022-05-12: Sanity check for final URL: it may not be in the tree (JS code changing it without HTTP request)
+        #             In that case, we assign the "landing page" to the first URL node after JS/HTTP redirects
+        if not self.url_tree.search_nodes(name=self.har.final_redirect):
+            self.rendered_node.add_feature('rendered_html', self.har.html_content)
+
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
@@ -621,14 +617,14 @@ class Har2Tree:
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
             self._make_subtree(page_root_node, [node])
-        elif self.url_tree.search_nodes(name=self.root_after_redirect):
+        elif self.url_tree.search_nodes(name=self.har.final_redirect):
             # Generally, when we have a bunch of redirects, they do not branch out before the final landing page
             # *but* it is not always the case: some intermediary redirects will have calls to 3rd party pages.
             # Hopefully, this last case was taken care of in the branch above.
             # In this branch, we get the landing page after the redirects (if any), and attach the node to it.
             if dev_debug:
-                self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.root_after_redirect}.')
-            self._make_subtree(self.url_tree.search_nodes(name=self.root_after_redirect)[0], [node])
+                self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
+            self._make_subtree(self.url_tree.search_nodes(name=self.har.final_redirect)[0], [node])
         else:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]

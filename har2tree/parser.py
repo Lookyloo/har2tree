@@ -53,10 +53,10 @@ class CrawledTree:
             parent = root.url_tree
         elif parent_root is not None:
             parent = parent_root
-        if root.root_after_redirect:
+        if root.har.final_redirect:
             # If the first URL is redirected, the referer of the subtree
             # will be the redirect.
-            sub_trees = self.referers.pop(root.root_after_redirect, None)
+            sub_trees = self.referers.pop(root.har.final_redirect, None)
         else:
             sub_trees = self.referers.pop(root.har.root_url, None)
         if not sub_trees:

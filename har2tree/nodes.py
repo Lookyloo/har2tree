@@ -18,7 +18,7 @@ from functools import lru_cache
 from .helper import Har2TreeError, Har2TreeLogAdapter
 
 import filetype  # type: ignore
-from bs4 import BeautifulSoup  # type: ignore
+from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
 from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
 from w3lib.html import strip_html5_whitespace  # type: ignore
@@ -279,9 +279,9 @@ class URLNode(HarTreeNode):
             # Source: https://stackoverflow.com/questions/13363174/regular-expression-to-catch-as-many-javascript-redirections-as-possible
             regex = re.compile(br"""((location.href)|(window.location)|(location.replace)|(location.assign))(( ?= ?)|( ?\( ?))("|')([^'"]*)("|')( ?\) ?)?;""", re.I)
             matches = re.findall(regex, self.body.getvalue())
-            for match in matches:
+            for m in matches:
                 # TODO: new type, redirect_js or something like that
-                redirect_url = rebuild_url(self.name, match[9].decode(), all_requests)
+                redirect_url = rebuild_url(self.name, m[9].decode(), all_requests)
                 if redirect_url in all_requests:
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', redirect_url)

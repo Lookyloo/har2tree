@@ -15,7 +15,7 @@ from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 
 import filetype  # type: ignore
 
-from bs4 import BeautifulSoup  # type: ignore
+from bs4 import BeautifulSoup, Tag
 
 logger = logging.getLogger(__name__)
 
@@ -236,23 +236,25 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
     # Search for meta refresh redirect madness
     # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
     meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile("^refresh$", re.I)})
-    if meta_refresh and meta_refresh.get('content'):
+    if meta_refresh and isinstance(meta_refresh, Tag) and meta_refresh.get('content'):
         # NOTE 2021-05-15: in theory, a meta key look like that: <number>;url=<url>
         # but the url= part may not be present
-        content = meta_refresh['content'].strip()
-        if ';' in content:
-            timeout, url = content.split(';', 1)
-            if timeout.isdigit():
-                # Strip timeout
-                content = url.strip()
-        if content[:4].lower() == 'url=':
-            content = content[4:].strip()
-        external_ressources['meta_refresh'].append(content)
+        content = meta_refresh['content']
+        if isinstance(content, str):
+            content = content.strip()
+            if ';' in content:
+                timeout, url = content.split(';', 1)
+                if timeout.isdigit():
+                    # Strip timeout
+                    content = url.strip()
+            if content[:4].lower() == 'url=':
+                content = content[4:].strip()
+            external_ressources['meta_refresh'].append(content)
 
     # external stuff loaded from css content, because reasons.
-    for url in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc):
+    for u in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc):
         try:
-            url = url.decode()
+            url = u.decode()
         except UnicodeDecodeError as e:
             logger.info(f'Unable to decode {url}: {e}')
             continue
@@ -266,9 +268,9 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    for url in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc):
+    for u in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc):
         try:
-            url = url.decode()
+            url = u.decode()
         except UnicodeDecodeError as e:
             logger.info(f'Unable to decode {url}: {e}')
             continue
