@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "har2tree"
-version = "1.11.6"
+version = "1.11.7"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -38,7 +38,7 @@ cchardet = "^2.1.7"
 [tool.poetry.dev-dependencies]
 mypy = "^0.950"
 ipython = "^8.3.0"
-jupyterlab = "^3.4.1"
+jupyterlab = "^3.4.2"
 pytest-cov = "^3.0.0"
 types-beautifulsoup4 = "^4.11.1"
 types-setuptools = "^57.4.14"
