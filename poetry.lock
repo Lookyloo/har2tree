@@ -1287,7 +1287,7 @@ python-versions = "*"
 
 [[package]]
 name = "types-setuptools"
-version = "57.4.15"
+version = "57.4.16"
 description = "Typing stubs for setuptools"
 category = "dev"
 optional = false
@@ -1372,7 +1372,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "d2f6df443c5553b5119063a7615cdc88f235b355905214b04e143481eec49b17"
+content-hash = "760e8908f8579a0395d42d51ce3b3a6f39b2b8e31c237554e03078de7186b19b"
 
 [metadata.files]
 alabaster = [
@@ -2231,8 +2231,8 @@ types-beautifulsoup4 = [
     {file = "types_beautifulsoup4-4.11.1-py3-none-any.whl", hash = "sha256:b2feb44f7060379bbec9451580ac24f6dfa7ae97652724a01a0ef92847e002d5"},
 ]
 types-setuptools = [
-    {file = "types-setuptools-57.4.15.tar.gz", hash = "sha256:650528ce803586029d7f153f32aed2dbaa6bb2888b233334af80d7ba63ed3c87"},
-    {file = "types_setuptools-57.4.15-py3-none-any.whl", hash = "sha256:f8f19876f714a440c4badef1b91b0648604ed443e703d29d44cd36ac93b01a77"},
+    {file = "types-setuptools-57.4.16.tar.gz", hash = "sha256:325d8db7eee39f67f78b7f000683cc81d651300060f67e6e93058e17c6951a9a"},
+    {file = "types_setuptools-57.4.16-py3-none-any.whl", hash = "sha256:93caeaae4d61d7a4e70b07831145e3eeb0102aa16bcc9b174ebdf1bea78e1bbb"},
 ]
 typing-extensions = [
     {file = "typing_extensions-4.2.0-py3-none-any.whl", hash = "sha256:6657594ee297170d19f67d55c05852a874e7eb634f4f753dbd667855e07c1708"},
