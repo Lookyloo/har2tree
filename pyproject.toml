@@ -36,12 +36,12 @@ Sphinx = { version = "^4.5.0", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
-mypy = "^0.950"
+mypy = "^0.960"
 ipython = "^8.3.0"
 jupyterlab = "^3.4.2"
 pytest-cov = "^3.0.0"
 types-beautifulsoup4 = "^4.11.1"
-types-setuptools = "^57.4.15"
+types-setuptools = "^57.4.16"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
