@@ -40,7 +40,7 @@ mypy = "^0.961"
 ipython = "^8.4.0"
 jupyterlab = "^3.4.3"
 pytest-cov = "^3.0.0"
-types-beautifulsoup4 = "^4.11.1"
+types-beautifulsoup4 = "^4.11.2"
 types-setuptools = "^57.4.17"
 
 [tool.poetry.extras]
