@@ -256,7 +256,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
         try:
             url = u.decode()
         except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode {url}: {e}')
+            logger.info(f'Unable to decode {u}: {e}')
             continue
         if url.startswith('data:'):
             unpacked = _unpack_data_uri(url)
