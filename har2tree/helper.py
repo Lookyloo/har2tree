@@ -272,7 +272,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
         try:
             url = u.decode()
         except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode {url}: {e}')
+            logger.info(f'Unable to decode {u}: {e}')
             continue
         external_ressources['javascript'].append(url)
     # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
