@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import gzip
 import hashlib
 import json
 import logging
@@ -91,8 +92,13 @@ class HarFile():
         self.path = harfile
 
         try:
-            with self.path.open() as f:
-                self.har: Dict[str, Any] = json.load(f)
+            self.har: Dict[str, Any]
+            if self.path.suffix == '.gz':
+                with gzip.open(self.path, 'rb') as f:
+                    self.har = json.load(f)
+            else:
+                with self.path.open() as f:
+                    self.har = json.load(f)
         except json.decoder.JSONDecodeError as e:
             raise Har2TreeError(f'HAR file is not a valid JSON file: {e}')
 
