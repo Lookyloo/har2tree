@@ -326,7 +326,7 @@ class URLNode(HarTreeNode):
                 self.add_feature('unknown_mimetype', True)
                 self.logger.warning(f'Unknown mimetype: {self.mimetype}')
 
-        # NOTE: Chrome/Chromium only features
+        # NOTE: Chrome/Chromium/Playwright only feature
         if har_entry.get('serverIPAddress'):
             # check ipv6 format
             if har_entry['serverIPAddress'].startswith('['):
@@ -334,6 +334,8 @@ class URLNode(HarTreeNode):
             else:
                 _ipaddress = har_entry['serverIPAddress']
             self.add_feature('ip_address', ipaddress.ip_address(_ipaddress))
+
+        # NOTE: Chrome/Chromium only feature
         if '_initiator' in har_entry:
             if har_entry['_initiator']['type'] == 'other':
                 pass
@@ -349,6 +351,14 @@ class URLNode(HarTreeNode):
             else:
                 # FIXME: Need usecase
                 raise Exception(har_entry)
+
+        # NOTE: Playwright only feature
+        if '_securityDetails' in har_entry and har_entry.get('_securityDetails'):
+            if 'validFrom' in har_entry['_securityDetails']:
+                har_entry['_securityDetails']['validFrom'] = datetime.fromtimestamp(har_entry['_securityDetails']['validFrom'])
+            if 'validTo' in har_entry['_securityDetails']:
+                har_entry['_securityDetails']['validTo'] = datetime.fromtimestamp(har_entry['_securityDetails']['validTo'])
+            self.add_feature('security_details', har_entry['_securityDetails'])
 
         if har_entry['response']['redirectURL']:
             self.add_feature('redirect', True)

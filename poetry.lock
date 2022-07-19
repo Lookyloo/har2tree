@@ -266,7 +266,7 @@ python-versions = "*"
 
 [[package]]
 name = "fastjsonschema"
-version = "2.15.3"
+version = "2.16.1"
 description = "Fastest Python implementation of JSON schema"
 category = "dev"
 optional = false
@@ -1274,7 +1274,7 @@ python-versions = "*"
 
 [[package]]
 name = "types-setuptools"
-version = "62.6.1"
+version = "63.2.0"
 description = "Typing stubs for setuptools"
 category = "dev"
 optional = false
@@ -1359,7 +1359,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "b86158757a3598f57301c17eaca483ba2bb03730a583200ab3c7422ceebe0c2f"
+content-hash = "b1d53653f84fe2c1978839e0b2a81c151ef95c674f8943c00a2b78482c0d639a"
 
 [metadata.files]
 alabaster = [
@@ -1624,8 +1624,8 @@ executing = [
     {file = "executing-0.8.3.tar.gz", hash = "sha256:c6554e21c6b060590a6d3be4b82fb78f8f0194d809de5ea7df1c093763311501"},
 ]
 fastjsonschema = [
-    {file = "fastjsonschema-2.15.3-py3-none-any.whl", hash = "sha256:ddb0b1d8243e6e3abb822bd14e447a89f4ab7439342912d590444831fa00b6a0"},
-    {file = "fastjsonschema-2.15.3.tar.gz", hash = "sha256:0a572f0836962d844c1fc435e200b2e4f4677e4e6611a2e3bdd01ba697c275ec"},
+    {file = "fastjsonschema-2.16.1-py3-none-any.whl", hash = "sha256:2f7158c4de792555753d6c2277d6a2af2d406dfd97aeca21d17173561ede4fe6"},
+    {file = "fastjsonschema-2.16.1.tar.gz", hash = "sha256:d6fa3ffbe719768d70e298b9fb847484e2bdfdb7241ed052b8d57a9294a8c334"},
 ]
 filetype = [
     {file = "filetype-1.1.0-py2.py3-none-any.whl", hash = "sha256:117e25a50988d1a03a32ed510f4a15353e7291e683e94c63930497dd2c66ce24"},
@@ -2184,8 +2184,8 @@ types-beautifulsoup4 = [
     {file = "types_beautifulsoup4-4.11.3-py3-none-any.whl", hash = "sha256:4d4b4d88099d1d738e4dc88de86acc953235629a29830a269d76cdf073325c35"},
 ]
 types-setuptools = [
-    {file = "types-setuptools-62.6.1.tar.gz", hash = "sha256:affd968a3a7218e1c96f1806eb457f4027eac803b3caaddccf98a4e5776b1724"},
-    {file = "types_setuptools-62.6.1-py3-none-any.whl", hash = "sha256:b0341c29c7f44f7625204532b8829bd92ebb5fd48aa9f3e2052177e743e990b1"},
+    {file = "types-setuptools-63.2.0.tar.gz", hash = "sha256:fc9a6c4776a398d0f57b259ca893748342174c52a35d593d08b56f52aa99c1a4"},
+    {file = "types_setuptools-63.2.0-py3-none-any.whl", hash = "sha256:f9d0d0443dd344cad78da04320a3fb7837d4dd3f3ef4b25d3e0958edea6da812"},
 ]
 typing-extensions = [
     {file = "typing_extensions-4.3.0-py3-none-any.whl", hash = "sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02"},
