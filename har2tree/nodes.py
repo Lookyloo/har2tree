@@ -292,38 +292,9 @@ class URLNode(HarTreeNode):
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
 
-            if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype:
-                self.add_feature('js', True)
-            elif self.mimetype.startswith('image'):
-                self.add_feature('image', True)
-            elif self.mimetype.startswith('text/css'):
-                self.add_feature('css', True)
-            elif 'json' in self.mimetype:
-                self.add_feature('json', True)
-            elif 'html' in self.mimetype:
-                self.add_feature('html', True)
-            elif 'font' in self.mimetype:
-                self.add_feature('font', True)
-            elif 'octet-stream' in self.mimetype:
-                self.add_feature('octet_stream', True)
-            elif ('text/plain' in self.mimetype or 'xml' in self.mimetype
-                    or 'application/x-www-form-urlencoded' in self.mimetype):
-                self.add_feature('text', True)
-            elif 'video' in self.mimetype:
-                self.add_feature('video', True)
-            elif 'audio' in self.mimetype:
-                self.add_feature('audio', True)
-            elif 'mpegurl' in self.mimetype.lower():
-                self.add_feature('livestream', True)
-            elif ('application/x-shockwave-flash' in self.mimetype
-                    or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
-                self.add_feature('flash', True)
-            elif 'application/pdf' in self.mimetype:
-                self.add_feature('pdf', True)
-            elif not self.mimetype:
-                self.add_feature('unset_mimetype', True)
-            else:
-                self.add_feature('unknown_mimetype', True)
+            # FIXME: Deprecated, use generic_type directly. Keep for now for backward compat
+            self.add_feature(self.generic_type, True)
+            if self.generic_type == 'unknown_mimetype':
                 self.logger.warning(f'Unknown mimetype: {self.mimetype}')
 
         # NOTE: Chrome/Chromium/Playwright only feature
@@ -376,6 +347,41 @@ class URLNode(HarTreeNode):
                     original_url=self.name,
                     original_redirect=har_entry['response']['redirectURL'],
                     modified_redirect=redirect_url))
+
+    @property
+    def generic_type(self) -> str:
+        if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype:
+            return 'js'
+        elif self.mimetype.startswith('image'):
+            return 'image'
+        elif self.mimetype.startswith('text/css'):
+            return 'css'
+        elif 'json' in self.mimetype:
+            return 'json'
+        elif 'html' in self.mimetype:
+            return 'html'
+        elif 'font' in self.mimetype:
+            return 'font'
+        elif 'octet-stream' in self.mimetype:
+            return 'octet-stream'
+        elif ('text/plain' in self.mimetype or 'xml' in self.mimetype
+                or 'application/x-www-form-urlencoded' in self.mimetype):
+            return 'text'
+        elif 'video' in self.mimetype:
+            return 'video'
+        elif 'audio' in self.mimetype:
+            return 'audio'
+        elif 'mpegurl' in self.mimetype.lower():
+            return 'livestream'
+        elif ('application/x-shockwave-flash' in self.mimetype
+                or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
+            return 'flash'
+        elif 'application/pdf' in self.mimetype:
+            return 'pdf'
+        elif not self.mimetype:
+            return 'unset_mimetype'
+        else:
+            return 'unknown_mimetype'
 
     def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> Optional[str]:
         # Because everything is terrible, and the call stack can have parents
