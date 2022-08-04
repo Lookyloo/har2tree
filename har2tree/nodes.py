@@ -90,6 +90,10 @@ class URLNode(HarTreeNode):
         if splitted_url.scheme == 'blob':
             # this is a new weird feature, but it seems to be usable as a URL, so let's do that
             self.add_feature('url_split', urlparse(splitted_url.path))
+        elif splitted_url.scheme == 'file':
+            # file on disk, we do not have a proper URL
+            self.add_feature('file_on_disk', True)
+            self.add_feature('url_split', urlparse(splitted_url.path))
         else:
             self.add_feature('url_split', splitted_url)
 
@@ -109,7 +113,13 @@ class URLNode(HarTreeNode):
 
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
-        self.add_feature('hostname', self.url_split.hostname)
+
+        if hasattr(self, 'file_on_disk'):
+            # TODO: Do something better? hostname is the feature name used for the aggregared tree
+            # so we need that unless we want to change the JS
+            self.add_feature('hostname', str(Path(self.url_split.path).parent))
+        else:
+            self.add_feature('hostname', self.url_split.hostname)
 
         if not self.hostname:
             self.logger.warning(f'Something is broken in that node: {har_entry}')
@@ -121,7 +131,7 @@ class URLNode(HarTreeNode):
             # Not an IP
             pass
 
-        if not hasattr(self, 'hostname_is_ip'):
+        if not hasattr(self, 'hostname_is_ip') and not hasattr(self, 'file_on_disk'):
             tld = get_public_suffix_list().get_tld(self.hostname, strict=True)
             if tld:
                 self.add_feature('known_tld', tld)
