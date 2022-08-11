@@ -31,17 +31,17 @@ six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
 filetype = "^1.1.0"
 numpy = "^1.23.1"
-w3lib = "^1.22.0"
+w3lib = "^2.0.1"
 Sphinx = { version = "^5.1.1", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.971"
 ipython = "^8.4.0"
-jupyterlab = "^3.4.4"
+jupyterlab = "^3.4.5"
 pytest-cov = "^3.0.0"
 types-beautifulsoup4 = "^4.11.4"
-types-setuptools = "^63.4.0"
+types-setuptools = "^63.4.1"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]

@@ -64,7 +64,7 @@ tests = ["pytest"]
 
 [[package]]
 name = "asttokens"
-version = "2.0.5"
+version = "2.0.7"
 description = "Annotate AST trees with source code positions"
 category = "dev"
 optional = false
@@ -74,7 +74,7 @@ python-versions = "*"
 six = "*"
 
 [package.extras]
-test = ["astroid", "pytest"]
+test = ["astroid (<=2.5.3)", "pytest"]
 
 [[package]]
 name = "atomicwrites"
@@ -530,7 +530,7 @@ test = ["coverage", "ipykernel", "pre-commit", "pytest-console-scripts", "pytest
 
 [[package]]
 name = "jupyterlab"
-version = "3.4.4"
+version = "3.4.5"
 description = "JupyterLab computational environment"
 category = "dev"
 optional = false
@@ -700,7 +700,7 @@ test = ["black", "check-manifest", "flake8", "ipykernel", "ipython (<8.0.0)", "i
 
 [[package]]
 name = "nbconvert"
-version = "6.5.0"
+version = "6.5.3"
 description = "Converting Jupyter Notebooks"
 category = "dev"
 optional = false
@@ -714,6 +714,7 @@ entrypoints = ">=0.2.2"
 jinja2 = ">=3.0"
 jupyter-core = ">=4.7"
 jupyterlab-pygments = "*"
+lxml = "*"
 MarkupSafe = ">=2.0"
 mistune = ">=0.8.1,<2"
 nbclient = ">=0.5.0"
@@ -1314,7 +1315,7 @@ python-versions = "*"
 
 [[package]]
 name = "types-setuptools"
-version = "63.4.0"
+version = "63.4.1"
 description = "Typing stubs for setuptools"
 category = "dev"
 optional = false
@@ -1343,14 +1344,11 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 
 [[package]]
 name = "w3lib"
-version = "1.22.0"
+version = "2.0.1"
 description = "Library of web-related functions"
 category = "main"
 optional = false
-python-versions = "*"
-
-[package.dependencies]
-six = ">=1.4.1"
+python-versions = ">=3.6"
 
 [[package]]
 name = "wcwidth"
@@ -1399,7 +1397,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "e80619a07ed1b3a35b59fa2d160c2da07384ec255a05dbbb8bfa307614910d29"
+content-hash = "348d18ec6069f41373c65151cb298cdf951f150789cd7fcae3ffae565a9d0379"
 
 [metadata.files]
 alabaster = [
@@ -1442,8 +1440,8 @@ argon2-cffi-bindings = [
     {file = "argon2_cffi_bindings-21.2.0-pp38-pypy38_pp73-win_amd64.whl", hash = "sha256:5e00316dabdaea0b2dd82d141cc66889ced0cdcbfa599e8b471cf22c620c329a"},
 ]
 asttokens = [
-    {file = "asttokens-2.0.5-py2.py3-none-any.whl", hash = "sha256:0844691e88552595a6f4a4281a9f7f79b8dd45ca4ccea82e5e05b4bbdb76705c"},
-    {file = "asttokens-2.0.5.tar.gz", hash = "sha256:9a54c114f02c7a9480d56550932546a3f1fe71d8a02f1bc7ccd0ee3ee35cf4d5"},
+    {file = "asttokens-2.0.7-py2.py3-none-any.whl", hash = "sha256:f5589ef8518f73dd82c15e1c19f795d8a62c133485e557c04443d4a1a730cf9f"},
+    {file = "asttokens-2.0.7.tar.gz", hash = "sha256:8444353e4e2a99661c8dfb85ec9c02eedded08f0006234bff7db44a06840acc2"},
 ]
 atomicwrites = [
     {file = "atomicwrites-1.4.1.tar.gz", hash = "sha256:81b2c9071a49367a7f770170e5eec8cb66567cfbbc8c73d20ce5ca4a8d71cf11"},
@@ -1732,8 +1730,8 @@ jupyter-server = [
     {file = "jupyter_server-1.18.1.tar.gz", hash = "sha256:2b72fc595bccae292260aad8157a0ead8da2c703ec6ae1bb7b36dbad0e267ea7"},
 ]
 jupyterlab = [
-    {file = "jupyterlab-3.4.4-py3-none-any.whl", hash = "sha256:2c12a0c995bf5d49b0a17e833aaf6417c6d6a4721dfd4742a5f22f4e48661146"},
-    {file = "jupyterlab-3.4.4.tar.gz", hash = "sha256:5a2a0fdd22bd8628ad45b618e3520387c32a4818e3af112dbad1f649304dfc20"},
+    {file = "jupyterlab-3.4.5-py3-none-any.whl", hash = "sha256:3181d60518e6101b9e43f6da231aa4be812a59d81ddcc8fe680dd33066fddae6"},
+    {file = "jupyterlab-3.4.5.tar.gz", hash = "sha256:472f6b7996c75f6991592483c26d9fe205a59a71ccbce15842400155dc64f59b"},
 ]
 jupyterlab-pygments = [
     {file = "jupyterlab_pygments-0.2.2-py2.py3-none-any.whl", hash = "sha256:2405800db07c9f770863bcf8049a529c3dd4d3e28536638bd7c1c01d2748309f"},
@@ -1904,8 +1902,8 @@ nbclient = [
     {file = "nbclient-0.6.6.tar.gz", hash = "sha256:0df76a7961d99a681b4796c74a1f2553b9f998851acc01896dce064ad19a9027"},
 ]
 nbconvert = [
-    {file = "nbconvert-6.5.0-py3-none-any.whl", hash = "sha256:c56dd0b8978a1811a5654f74c727ff16ca87dd5a43abd435a1c49b840fcd8360"},
-    {file = "nbconvert-6.5.0.tar.gz", hash = "sha256:223e46e27abe8596b8aed54301fadbba433b7ffea8196a68fd7b1ff509eee99d"},
+    {file = "nbconvert-6.5.3-py3-none-any.whl", hash = "sha256:2564bb5125d862949f72475de0c0348392add7ea62cc950985347bfe7bbc2034"},
+    {file = "nbconvert-6.5.3.tar.gz", hash = "sha256:10ed693c4cfd3c63583c87ca5c3a2f6ed874145103595f3824efcc8dfcb7522c"},
 ]
 nbformat = [
     {file = "nbformat-5.4.0-py3-none-any.whl", hash = "sha256:0d6072aaec95dddc39735c144ee8bbc6589c383fb462e4058abc855348152dad"},
@@ -2233,8 +2231,8 @@ types-beautifulsoup4 = [
     {file = "types_beautifulsoup4-4.11.4-py3-none-any.whl", hash = "sha256:461aead477fa4e110d2e135509f1bee847f3cada404cb6f969eb66d330a792b9"},
 ]
 types-setuptools = [
-    {file = "types-setuptools-63.4.0.tar.gz", hash = "sha256:f954044034066cd3d8ceccc87e2d5cebe7a96c9f87996f61c3c6a92cd56cc8a4"},
-    {file = "types_setuptools-63.4.0-py3-none-any.whl", hash = "sha256:f568830d82b48783a0df00646bc84effeddb4886bf0f19708fbbadeb552b6ece"},
+    {file = "types-setuptools-63.4.1.tar.gz", hash = "sha256:6aad80dd16bb5ee5c78260d7b5536ddbb95470ed8cc3dab19027802a7f8dc362"},
+    {file = "types_setuptools-63.4.1-py3-none-any.whl", hash = "sha256:8781e2fe71fd2885b085f2eeaad099468cda791b383ccbc735d9aad0c44f5355"},
 ]
 typing-extensions = [
     {file = "typing_extensions-4.3.0-py3-none-any.whl", hash = "sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02"},
@@ -2245,8 +2243,8 @@ urllib3 = [
     {file = "urllib3-1.26.11.tar.gz", hash = "sha256:ea6e8fb210b19d950fab93b60c9009226c63a28808bc8386e05301e25883ac0a"},
 ]
 w3lib = [
-    {file = "w3lib-1.22.0-py2.py3-none-any.whl", hash = "sha256:0161d55537063e00d95a241663ede3395c4c6d7b777972ba2fd58bbab2001e53"},
-    {file = "w3lib-1.22.0.tar.gz", hash = "sha256:0ad6d0203157d61149fd45aaed2e24f53902989c32fc1dccc2e2bfba371560df"},
+    {file = "w3lib-2.0.1-py3-none-any.whl", hash = "sha256:c5d966f86ae3fb546854478c769250c3ccb7581515b3221bcd2f864440000188"},
+    {file = "w3lib-2.0.1.tar.gz", hash = "sha256:13df15f8c17b163de0fd5faa892c1ad143e190dfcbdb98534bb975eb37c6c7d6"},
 ]
 wcwidth = [
     {file = "wcwidth-0.2.5-py2.py3-none-any.whl", hash = "sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784"},
