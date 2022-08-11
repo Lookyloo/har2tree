@@ -102,14 +102,14 @@ class HarFile():
         except json.decoder.JSONDecodeError as e:
             raise Har2TreeError(f'HAR file is not a valid JSON file: {e}')
 
-        # I mean it, that's the last URL the splash browser was on
+        # I mean it, that's the last URL the browser was on
         last_redirect_file = self.path.parent / f'{self.path.stem}.last_redirect.txt'
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
                 self.final_redirect: str = unquote_plus(_lr.read())
             self._search_final_redirect()
         else:
-            self.logger.info('No last_redirect file available.')
+            self.logger.debug('No last_redirect file available.')
             self.final_redirect = ''
 
         cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
@@ -117,7 +117,7 @@ class HarFile():
             with cookiefile.open() as c:
                 self.cookies: List[Dict[str, Any]] = json.load(c)
         else:
-            self.logger.info('No cookies file available.')
+            self.logger.debug('No cookies file available.')
             self.cookies = []
 
         htmlfile = self.path.parent / f'{self.path.stem}.html'
@@ -126,7 +126,7 @@ class HarFile():
             with htmlfile.open('rb') as _h:
                 self.html_content = BytesIO(_h.read())
         else:
-            self.logger.info('No rendered HTML content.')
+            self.logger.debug('No rendered HTML content.')
             self.html_content = None
 
         # Sorting the entries by start time (it isn't the case by default)
@@ -534,7 +534,11 @@ class Har2Tree:
         if node:
             return node[0]
 
-        self.logger.warning('Final redirect URL from adress bar not in tree')
+        if self.har.final_redirect:
+            self.logger.warning('Final redirect URL from adress bar not in tree')
+        else:
+            # No final redirect, already logged earlier.
+            pass
         # Just try to get the best guess: first node after JS/HTTP redirects
         curnode = self.url_tree
         while hasattr(curnode, 'redirect') and curnode.redirect:
