@@ -21,8 +21,8 @@ import filetype  # type: ignore
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
 from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
-from w3lib.html import strip_html5_whitespace  # type: ignore
-from w3lib.url import canonicalize_url, safe_url_string  # type: ignore
+from w3lib.html import strip_html5_whitespace
+from w3lib.url import canonicalize_url, safe_url_string
 
 
 @lru_cache(64)
