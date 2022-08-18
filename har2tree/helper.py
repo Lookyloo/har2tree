@@ -208,7 +208,8 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
     embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
 
     soup = BeautifulSoup(html_doc, 'lxml')
-    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed', 'source', 'link', 'object']):
+    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed',
+                               'source', 'link', 'object']):
         uri = None
         if link.get('src'):  # img script video audio iframe embed source
             uri = link.get('src')

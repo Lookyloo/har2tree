@@ -413,16 +413,9 @@ class URLNode(HarTreeNode):
 
     @property
     def urls_in_rendered_page(self) -> List[str]:
-        if not self.rendered_html:
-            raise Har2TreeError('Not the node of a page rendered, invalid request.')
-        urls: Set[str] = set()
-        soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
-        for a_tag in soup.find_all(["a", "area"]):
-            href = a_tag.attrs.get("href")
-            if not href:
-                continue
 
-            href = strip_html5_whitespace(href)
+        def _sanitize(maybe_url: str) -> Optional[str]:
+            href = strip_html5_whitespace(maybe_url)
             href = safe_url_string(href)
 
             href = urljoin(self.name, href)
@@ -430,8 +423,35 @@ class URLNode(HarTreeNode):
             href = canonicalize_url(href, keep_fragments=True)
             parsed = urlparse(href)
             if not parsed.netloc:
+                return None
+            return href
+
+        if not self.rendered_html:
+            raise Har2TreeError('Not the node of a page rendered, invalid request.')
+        urls: Set[str] = set()
+        soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
+
+        # The simple ones: the links.
+        for a_tag in soup.find_all(["a", "area"]):
+            href = a_tag.attrs.get("href")
+            if not href:
                 continue
-            urls.add(href)
+            if href := _sanitize(href):
+                urls.add(href)
+
+        # The rest of the mess
+        for tag in soup.find_all(True):
+            if tag.name in ["a", "area", 'img', 'script', 'video', 'audio', 'iframe', 'embed',
+                            'source', 'link', 'object']:
+                # processed either above or as external resources
+                continue
+            for attr_name, value in tag.attrs.items():
+                if not isinstance(value, str):
+                    continue
+                if value.startswith('http'):
+                    if href := _sanitize(value):
+                        urls.add(href)
+
         return sorted(urls)
 
 
