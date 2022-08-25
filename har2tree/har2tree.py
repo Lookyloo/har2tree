@@ -120,6 +120,20 @@ class HarFile():
             self.logger.debug('No cookies file available.')
             self.cookies = []
 
+        dlfile = self.path.parent / f'{self.path.stem}.data'
+        dlfilename = self.path.parent / f'{self.path.stem}.data.filename'
+        self.downloaded_file: Optional[BytesIO]
+        self.downloaded_filename: str
+        if dlfile.is_file() and dlfilename.is_file():
+            with dlfilename.open('r') as _fn:
+                self.downloaded_filename = _fn.read()
+            with dlfile.open('rb') as _f:
+                self.downloaded_file = BytesIO(_f.read())
+        else:
+            self.logger.debug('No downloaded file.')
+            self.downloaded_file = None
+            self.downloaded_filename = ''
+
         htmlfile = self.path.parent / f'{self.path.stem}.html'
         self.html_content: Optional[BytesIO]
         if htmlfile.is_file():
@@ -455,8 +469,6 @@ class Har2Tree:
         '''Initialize the list of nodes to attach to the tree (as URLNode),
         and create a list of note for each URL we have in the HAR document'''
 
-        got_final_redirect: bool = False
-
         #  NOTE 2021-09-06 - Clear URL entries:
         # Some responses have a HTTP status code set to 0. It is generally incorrect,
         # but it is also the default code set by splash when something went bad when
@@ -480,12 +492,7 @@ class Har2Tree:
                 continue
 
             n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
-            if self.har.html_content and n.name == self.har.final_redirect and not got_final_redirect:
-                n.load_har_entry(url_entry, list(self.all_url_requests.keys()), self.har.html_content)
-                # NOTE 2021-05-28: only mark one node as final redirect
-                got_final_redirect = True
-            else:
-                n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
+            n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
                 self.all_redirects.append(n.redirect_url)
 
@@ -586,10 +593,11 @@ class Har2Tree:
             node = self._nodes_list.pop(0)
             self._make_subtree_fallback(node)
 
-        # 2022-05-12: Sanity check for final URL: it may not be in the tree (JS code changing it without HTTP request)
-        #             In that case, we assign the "landing page" to the first URL node after JS/HTTP redirects
-        if not self.url_tree.search_nodes(name=self.har.final_redirect):
-            self.rendered_node.add_feature('rendered_html', self.har.html_content)
+        # 2022-08-25: We now have a tree, we have a self.rendered_node, attach the features.
+        if self.har.html_content:
+            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()), rendered_html=self.har.html_content)
+        elif self.har.downloaded_file and self.har.downloaded_filename:
+            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()), downloaded_file=(self.har.downloaded_filename, self.har.downloaded_file))
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)

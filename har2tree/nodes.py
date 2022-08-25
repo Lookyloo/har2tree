@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from pathlib import Path
-from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any
+from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict
 import logging
 import uuid
 import json
@@ -79,7 +79,22 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str], rendered_html: Optional[BytesIO]=None) -> None:
+    def add_rendered_features(self, all_requests: List[str], rendered_html: Optional[BytesIO]=None, downloaded_file: Tuple[str, Optional[BytesIO]]=('', None)) -> None:
+        if rendered_html:
+            self.add_feature('rendered_html', rendered_html)
+            rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
+            # for the external ressources, the keys are always the same
+            self.external_ressources: Dict[str, List[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
+
+            # for the embedded ressources, the keys are the mimetypes, they may not overlap
+            mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
+            self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
+        elif downloaded_file:
+            downloaded_filename, downloaded_file_data = downloaded_file
+            self.add_feature('downloaded_file', downloaded_file_data)
+            self.add_feature('downloaded_filename', downloaded_filename)
+
+    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
         """Load one entry of the HAR file, initialize most of the features of the node"""
         if not self.name:
             # We're in the actual root node
@@ -96,9 +111,6 @@ class URLNode(HarTreeNode):
             self.add_feature('url_split', urlparse(splitted_url.path))
         else:
             self.add_feature('url_split', splitted_url)
-
-        if rendered_html:
-            self.add_feature('rendered_html', rendered_html)
 
         # If the URL contains a fragment (i.e. something after a #), it is stripped in the referer.
         # So we need an alternative URL to do a lookup against
@@ -267,17 +279,9 @@ class URLNode(HarTreeNode):
                     self.add_feature('mimetype', '')
 
             external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
-            if 'rendered_html' in self.features:
-                rendered_external, rendered_embedded = find_external_ressources(self.rendered_html.getvalue(), self.name, all_requests)
-                # for the external ressources, the keys are always the same
-                external_ressources = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in external_ressources.items()}
-
-                # for the embedded ressources, the keys are the mimetypes, they may not overlap
-                mimetypes = list(embedded_ressources.keys()) + list(rendered_embedded.keys())
-                embedded_ressources = {mimetype: embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
-
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
+
             filename = Path(self.url_split.path).name
             if filename:
                 self.add_feature('filename', filename)
@@ -532,8 +536,10 @@ class HostNode(HarTreeNode):
         # Add to URLNode a reference to the HostNode UUID
         url.add_feature('hostnode_uuid', self.uuid)
 
-        if hasattr(url, 'rendered_html'):
+        if hasattr(url, 'rendered_html') or hasattr(url, 'downloaded_filename'):
             self.contains_rendered_urlnode = True
+            if hasattr(url, 'downloaded_filename'):
+                self.add_feature('downloaded_filename', url.downloaded_filename)
 
         if hasattr(url, 'cookies_sent'):
             # Keep a set of cookies sent: different URLs will send the same cookie
