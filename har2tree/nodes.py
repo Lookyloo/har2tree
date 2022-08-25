@@ -83,12 +83,18 @@ class URLNode(HarTreeNode):
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
             rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
-            # for the external ressources, the keys are always the same
-            self.external_ressources: Dict[str, List[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
+            if hasattr(self, 'external_ressources'):
+                # for the external ressources, the keys are always the same
+                self.external_ressources: Dict[str, List[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
+            else:
+                self.add_feature('external_ressources', rendered_external)
 
-            # for the embedded ressources, the keys are the mimetypes, they may not overlap
-            mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
-            self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
+            if hasattr(self, 'embedded_ressources'):
+                # for the embedded ressources, the keys are the mimetypes, they may not overlap
+                mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
+                self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
+            else:
+                self.add_feature('embedded_ressources', rendered_embedded)
         elif downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
             self.add_feature('downloaded_file', downloaded_file_data)

@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='har2tree',
-    version='1.14-dev',
+    version='1.16-dev',
     author='Raphaël Vinot',
     author_email='raphael.vinot@circl.lu',
     maintainer='Raphaël Vinot',
