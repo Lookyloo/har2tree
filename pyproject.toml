@@ -41,13 +41,12 @@ ipython = "^8.4.0"
 jupyterlab = "^3.4.5"
 pytest-cov = "^3.0.0"
 types-beautifulsoup4 = "^4.11.5"
-types-setuptools = "^65.1.0"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
 
 [build-system]
-requires = ["poetry_core>=1.0", "setuptools"]
+requires = ["poetry_core>=1.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
