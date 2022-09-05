@@ -154,7 +154,7 @@ class URLNode(HarTreeNode):
             if tld:
                 self.add_feature('known_tld', tld)
             else:
-                self.logger.info(f'###### No TLD/domain broken {self.name}')
+                self.logger.debug(f'###### No TLD/domain broken {self.name}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers

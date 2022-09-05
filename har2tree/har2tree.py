@@ -479,6 +479,10 @@ class Har2Tree:
         ignore: List[int] = []
         for i, url_entry in enumerate(self.har.entries):
             url = unquote_plus(url_entry["request"]["url"])
+            if url_entry['response']['status'] == -1:
+                # NOTE 2022-09-06: Status -1 generally means the URL is invalid, and the entry shouldn't be added to te tree
+                # We might (?) want to give them to the user somehow, but let's ignore for now.
+                ignore.append(i)
             if url_entry['response']['status'] == 0:
                 entries_with_0_status[url].append(i)
                 self.logger.info(f'Status code 0 for {url}, maybe skip node.')
@@ -515,7 +519,6 @@ class Har2Tree:
 
             self._nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
-
         # So, sometimes, the startedDateTime in the page list is fucked up
         # Ex: start time of page 3 == start time of page 1. This is wrong, but it happens
         # Solution: if we miss an entry in self.pages_root, we put the first node with that page ref.
