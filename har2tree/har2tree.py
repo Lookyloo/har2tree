@@ -476,6 +476,7 @@ class Har2Tree:
         # * If we have an other query to the same URL in the list, discard the one with a status code to 0
         # * If we don't, use the entry in the tree.
         entries_with_0_status: Dict[str, List[int]] = defaultdict(list)
+        entries_with_negative_status: Dict[str, List[int]] = defaultdict(list)
         ignore: List[int] = []
         for i, url_entry in enumerate(self.har.entries):
             url = unquote_plus(url_entry["request"]["url"])
@@ -483,9 +484,15 @@ class Har2Tree:
                 entries_with_0_status[url].append(i)
                 self.logger.info(f'Status code 0 for {url}, maybe skip node.')
                 continue
-            # Response status is not 0
+            if url_entry['response']['status'] < 0:
+                entries_with_negative_status[url].append(i)
+                self.logger.info(f'Status code {url_entry["response"]["status"]} for {url}, maybe skip node.')
+                continue
+            # Response status is not 0 or negative
             if url in entries_with_0_status:
                 ignore.extend(entries_with_0_status[url])
+            elif url in entries_with_negative_status:
+                ignore.extend(entries_with_negative_status[url])
 
         for i, url_entry in enumerate(self.har.entries):
             if i in ignore:
@@ -586,14 +593,17 @@ class Har2Tree:
     def make_tree(self) -> URLNode:
         """Build URL and Host trees"""
         self._make_subtree(self.url_tree)
+        # at this point, if the nodes that couldn't be attached is huge, something bad happened.
+        # We only take the first 1000 and break off
+        max_dangling_nodes = 1000
         while self._nodes_list:
             # We were not able to attach a few things using the referers, redirects, or grepping on the page.
             # The remaining nodes are things we cannot attach for sure, so we try a few things, knowing it won't be perfect.
             node = self._nodes_list.pop(0)
-            if node.response['status'] == -1:
-                # 2022-09-06: The node cannot be fetched, and we couldn't attach it initially, just ignore that.
-                continue
             self._make_subtree_fallback(node)
+            max_dangling_nodes -= 1
+            if max_dangling_nodes <= 0:
+                self._nodes_list = []
 
         # 2022-08-25: We now have a tree, we have a self.rendered_node, attach the features.
         if self.har.html_content:
