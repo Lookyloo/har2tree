@@ -559,6 +559,11 @@ class Har2Tree:
                 if child.name == curnode.redirect_url:
                     curnode = child
                     break
+            else:
+                # 2022-09-06: the current node has a redirect but it cannot be located in the childrens
+                # This is a bug and shouldn't happen, but when it does, we must break out of the while loop
+                self.logger.critical('Unable to find redirected node in childrens. This capture is buggy.')
+                break
         return curnode
 
     def to_json(self) -> str:
