@@ -1317,7 +1317,7 @@ test = ["pre-commit", "pytest"]
 
 [[package]]
 name = "types-beautifulsoup4"
-version = "4.11.5"
+version = "4.11.6"
 description = "Typing stubs for beautifulsoup4"
 category = "dev"
 optional = false
@@ -1399,7 +1399,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.11"
-content-hash = "3c844b600a0be4de671d943b828eaa8471f9d528d3840e9de01f33071a7d1cae"
+content-hash = "9b6af9feba7e9c8fb883582630a173415d39850a8909843f1a962a0e98c70e9c"
 
 [metadata.files]
 alabaster = [
@@ -2283,8 +2283,8 @@ traitlets = [
     {file = "traitlets-5.3.0.tar.gz", hash = "sha256:0bb9f1f9f017aa8ec187d8b1b2a7a6626a2a1d877116baba52a129bfa124f8e2"},
 ]
 types-beautifulsoup4 = [
-    {file = "types-beautifulsoup4-4.11.5.tar.gz", hash = "sha256:645963117b0f03f4a44bda36cf3da50cc0e25001e4d19c044d1e323a37c69d73"},
-    {file = "types_beautifulsoup4-4.11.5-py3-none-any.whl", hash = "sha256:4b97fce9049e5367ddf45333c8c7224e57d71a3f93162c714be52bf1aa538f0a"},
+    {file = "types-beautifulsoup4-4.11.6.tar.gz", hash = "sha256:2670dd71995df464041e2941fa9bbb694795271e3dedd7262b4766649a1cbe82"},
+    {file = "types_beautifulsoup4-4.11.6-py3-none-any.whl", hash = "sha256:ac9dd1383481201ea07f27c5a43e7b1ee71caf9c720b7ae951db15d60d126e80"},
 ]
 typing-extensions = [
     {file = "typing_extensions-4.3.0-py3-none-any.whl", hash = "sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02"},

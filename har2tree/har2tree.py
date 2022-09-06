@@ -479,10 +479,6 @@ class Har2Tree:
         ignore: List[int] = []
         for i, url_entry in enumerate(self.har.entries):
             url = unquote_plus(url_entry["request"]["url"])
-            if url_entry['response']['status'] == -1:
-                # NOTE 2022-09-06: Status -1 generally means the URL is invalid, and the entry shouldn't be added to te tree
-                # We might (?) want to give them to the user somehow, but let's ignore for now.
-                ignore.append(i)
             if url_entry['response']['status'] == 0:
                 entries_with_0_status[url].append(i)
                 self.logger.info(f'Status code 0 for {url}, maybe skip node.')
@@ -594,6 +590,9 @@ class Har2Tree:
             # We were not able to attach a few things using the referers, redirects, or grepping on the page.
             # The remaining nodes are things we cannot attach for sure, so we try a few things, knowing it won't be perfect.
             node = self._nodes_list.pop(0)
+            if node.response['status'] == -1:
+                # 2022-09-06: The node cannot be fetched, and we couldn't attach it initially, just ignore that.
+                continue
             self._make_subtree_fallback(node)
 
         # 2022-08-25: We now have a tree, we have a self.rendered_node, attach the features.
