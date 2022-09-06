@@ -608,6 +608,7 @@ class Har2Tree:
             self._make_subtree_fallback(node)
             max_dangling_nodes -= 1
             if max_dangling_nodes <= 0:
+                self.logger.warning(f'Way too many dangling nodes {len(self._nodes_list)}, this capture is broken.')
                 self._nodes_list = []
 
         # 2022-08-25: We now have a tree, we have a self.rendered_node, attach the features.
