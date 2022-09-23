@@ -31,7 +31,8 @@ class CrawledTree:
         for har_path in files:
             try:
                 har2tree = Har2Tree(har_path, capture_uuid=self.uuid)
-            except Har2TreeError:
+            except Har2TreeError as e:
+                self.logger.warning(f'Cannot process the HAR file {har_path.name}: {e}')
                 continue
             har2tree.make_tree()
             loaded.append(har2tree)
