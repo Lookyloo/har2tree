@@ -32,11 +32,11 @@ publicsuffix2 = "^2.20191221"
 filetype = "^1.1.0"
 numpy = "^1.23.3"
 w3lib = "^2.0.1"
-Sphinx = { version = "^5.1.1", optional = true }
+Sphinx = { version = "^5.2.2", optional = true }
 cchardet = "^2.1.7"
 
 [tool.poetry.dev-dependencies]
-mypy = "^0.971"
+mypy = "^0.981"
 ipython = "^8.5.0"
 jupyterlab = "^3.4.7"
 pytest-cov = "^3.0.0"
