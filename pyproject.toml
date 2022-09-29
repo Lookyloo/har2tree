@@ -39,7 +39,7 @@ cchardet = "^2.1.7"
 mypy = "^0.981"
 ipython = "^8.5.0"
 jupyterlab = "^3.4.7"
-pytest-cov = "^3.0.0"
+pytest-cov = "^4.0.0"
 types-beautifulsoup4 = "^4.11.6"
 
 [tool.poetry.extras]
