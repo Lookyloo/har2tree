@@ -35,10 +35,10 @@ w3lib = "^2.0.1"
 Sphinx = { version = "^5.2.3", optional = true }
 cchardet = "^2.1.7"
 
-[tool.poetry.dev-dependencies]
-mypy = "^0.981"
+[tool.poetry.group.dev.dependencies]
+mypy = "^0.982"
 ipython = "^8.5.0"
-jupyterlab = "^3.4.7"
+jupyterlab = "^3.4.8"
 pytest-cov = "^4.0.0"
 types-beautifulsoup4 = "^4.11.6"
 
