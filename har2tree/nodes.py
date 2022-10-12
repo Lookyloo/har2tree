@@ -436,7 +436,7 @@ class URLNode(HarTreeNode):
                 return None
             return href
 
-        if not self.rendered_html:
+        if not hasattr(self, 'rendered_html') or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
         urls: Set[str] = set()
         soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
