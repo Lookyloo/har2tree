@@ -30,7 +30,10 @@ lxml = "^4.9.1"
 six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
 filetype = "^1.1.0"
-numpy = "^1.23.4"
+numpy = [
+    { version = "1.23.3", python = "<3.10" },
+    { version = "^1.23.4", python = ">=3.10" }
+]
 w3lib = "^2.0.1"
 Sphinx = { version = "^5.3.0", optional = true }
 cchardet = "^2.1.7"
