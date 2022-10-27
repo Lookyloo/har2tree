@@ -23,7 +23,7 @@ classifiers = [
 include = ['README.md']
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.12"
 ete3 = "^3.1.2"
 beautifulsoup4 = "^4.11.1"
 lxml = "^4.9.1"
