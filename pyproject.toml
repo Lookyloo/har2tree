@@ -29,7 +29,7 @@ beautifulsoup4 = "^4.11.1"
 lxml = "^4.9.1"
 six = "^1.16.0"
 publicsuffix2 = "^2.20191221"
-filetype = "^1.1.0"
+filetype = "^1.2.0"
 numpy = [
     { version = "1.23.3", python = "<3.10" },
     { version = "^1.23.4", python = ">=3.10" }
@@ -40,7 +40,7 @@ cchardet = "^2.1.7"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.982"
-ipython = "^8.5.0"
+ipython = "^8.6.0"
 jupyterlab = "^3.5.0"
 pytest-cov = "^4.0.0"
 types-beautifulsoup4 = "^4.11.6"
