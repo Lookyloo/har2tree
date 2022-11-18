@@ -509,7 +509,7 @@ class Har2Tree:
 
             if url_entry['startedDateTime'] in self.har.pages_start_times:
                 for page in self.har.pages_start_times[url_entry['startedDateTime']]:
-                    if page['id'] == n.pageref:
+                    if hasattr(n, 'pageref') and page['id'] == n.pageref:
                         # This node is the root entry of a page. Can be used as a fallback when we build the tree
                         self.pages_root[n.pageref] = n.uuid
                         break
@@ -529,6 +529,10 @@ class Har2Tree:
             for page in pages:
                 if page['id'] not in self.pages_root:
                     for node in self._nodes_list:
+                        if not hasattr(node, 'pageref'):
+                            # 2022-11-19: No pageref for this node in the HAR file,
+                            #             this is weird but we need it as a fallback.
+                            node.add_feature('pageref', page['id'])
                         if node.pageref == page['id']:
                             self.pages_root[node.pageref] = node.uuid
                             break

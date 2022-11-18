@@ -127,13 +127,14 @@ class URLNode(HarTreeNode):
         else:
             self.add_feature('start_time', datetime.strptime(har_entry['startedDateTime'], '%Y-%m-%dT%H:%M:%S%z'))
 
-        self.add_feature('pageref', har_entry['pageref'])
+        if 'pageref' in har_entry:
+            self.add_feature('pageref', har_entry['pageref'])
 
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
 
         if hasattr(self, 'file_on_disk'):
-            # TODO: Do something better? hostname is the feature name used for the aggregared tree
+            # TODO: Do something better? hostname is the feature name used for the aggregated tree
             # so we need that unless we want to change the JS
             self.add_feature('hostname', str(Path(self.url_split.path).parent))
         else:
