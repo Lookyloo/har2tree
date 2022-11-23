@@ -482,11 +482,11 @@ class Har2Tree:
             url = unquote_plus(url_entry["request"]["url"])
             if url_entry['response']['status'] == 0:
                 entries_with_0_status[url].append(i)
-                self.logger.info(f'Status code 0 for {url}, maybe skip node.')
+                self.logger.debug(f'Status code 0 for {url}, maybe skip node.')
                 continue
             if url_entry['response']['status'] < 0:
                 entries_with_negative_status[url].append(i)
-                self.logger.info(f'Status code {url_entry["response"]["status"]} for {url}, maybe skip node.')
+                self.logger.debug(f'Status code {url_entry["response"]["status"]} for {url}, maybe skip node.')
                 continue
             # Response status is not 0 or negative
             if url in entries_with_0_status:
