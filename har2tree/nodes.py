@@ -192,7 +192,19 @@ class URLNode(HarTreeNode):
                                 self.logger.warning(f'Expected urlencoded, got garbage: {posted_data!r}')
                         if isinstance(posted_data, str):
                             posted_data = unquote_plus(posted_data)
-                    elif self.request['postData']['mimeType'].startswith('application/json') or self.request['postData']['mimeType'].startswith('application/csp-report'):
+                    elif (self.request['postData']['mimeType'].startswith('application/json')
+                          or self.request['postData']['mimeType'].startswith('application/csp-report')
+                          or self.request['postData']['mimeType'].startswith('application/x-amz-json-1.1')
+                          or self.request['postData']['mimeType'].startswith('application/x-json-stream')
+                          or self.request['postData']['mimeType'].startswith('application/reports+json')
+                          ):
+                        try:
+                            # it is relatively common that the supposedly json blob is base64 encoded but the encoding wasn't set properly, let's try to decode anyway.
+                            posted_data = b64decode(posted_data)
+                            self.logger.info(f"Got a sneakily base64 encoded json blob: {posted_data}")
+                        except Exception:
+                            pass
+
                         try:
                             posted_data = json.loads(posted_data)
                         except Exception:
@@ -204,13 +216,16 @@ class URLNode(HarTreeNode):
                     elif self.request['postData']['mimeType'].startswith('application/x-protobuffer'):
                         # FIXME If possible, decode?
                         pass
+                    elif self.request['postData']['mimeType'].startswith('application/vnd.oasis.opendocument.formula-template'):
+                        # FIXME Office document => icon?
+                        pass
                     elif self.request['postData']['mimeType'].startswith('text'):
                         # We got text, keep what we already have
                         pass
                     elif self.request['postData']['mimeType'] == '?':
                         # Just skip it, no need to go in the warnings
                         pass
-                    elif self.request['postData']['mimeType'] == 'application/octet-stream':
+                    elif self.request['postData']['mimeType'] in ['application/octet-stream', 'x-unknown']:
                         # Should flag it.
                         pass
                     else:

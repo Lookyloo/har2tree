@@ -552,7 +552,7 @@ class Har2Tree:
             return node[0]
 
         if self.har.final_redirect:
-            self.logger.warning('Final redirect URL from adress bar not in tree')
+            self.logger.warning(f'Final redirect URL from adress bar not in tree: {self.har.final_redirect}')
         else:
             # No final redirect, already logged earlier.
             pass
