@@ -209,7 +209,7 @@ class URLNode(HarTreeNode):
                             try:
                                 posted_data = json.loads(posted_data)
                             except Exception:
-                                self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}")
+                                self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}[...]")
 
                     elif self.request['postData']['mimeType'].startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
@@ -329,7 +329,8 @@ class URLNode(HarTreeNode):
             # FIXME: Deprecated, use generic_type directly. Keep for now for backward compat
             self.add_feature(self.generic_type, True)
             if self.generic_type == 'unknown_mimetype':
-                self.logger.warning(f'Unknown mimetype: {self.mimetype}')
+                if self.mimetype not in ['x-unknown']:
+                    self.logger.warning(f'Unknown mimetype: {self.mimetype}')
 
         # NOTE: Chrome/Chromium/Playwright only feature
         if har_entry.get('serverIPAddress'):
@@ -399,7 +400,8 @@ class URLNode(HarTreeNode):
         elif 'octet-stream' in self.mimetype:
             return 'octet-stream'
         elif ('text/plain' in self.mimetype or 'xml' in self.mimetype
-                or 'application/x-www-form-urlencoded' in self.mimetype):
+                or 'application/x-www-form-urlencoded' in self.mimetype
+                or 'application/vnd.oasis.opendocument.formula-template' in self.mimetype):
             return 'text'
         elif 'video' in self.mimetype:
             return 'video'

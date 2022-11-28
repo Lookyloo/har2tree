@@ -257,7 +257,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
         try:
             url = u.decode()
         except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode {u}: {e}')
+            logger.info(f'Unable to decode ressource in CSS {u[:20]}[...]: {e}')
             continue
         if url.startswith('data:'):
             unpacked = _unpack_data_uri(url)
@@ -273,7 +273,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
         try:
             url = u.decode()
         except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode {u}: {e}')
+            logger.info(f'Unable to decode ressource in JS {u[:20]}[...]: {e}')
             continue
         external_ressources['javascript'].append(url)
     # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
