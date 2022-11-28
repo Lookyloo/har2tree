@@ -201,7 +201,7 @@ class URLNode(HarTreeNode):
                         try:
                             # it is relatively common that the supposedly json blob is base64 encoded but the encoding wasn't set properly, let's try to decode anyway.
                             posted_data = b64decode(posted_data)
-                            self.logger.info(f"Got a sneakily base64 encoded json blob: {posted_data!r}")
+                            self.logger.info("Contains a sneakily base64 encoded json blob.")
                         except Exception:
                             pass
 
