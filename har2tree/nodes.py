@@ -205,10 +205,11 @@ class URLNode(HarTreeNode):
                         except Exception:
                             pass
 
-                        try:
-                            posted_data = json.loads(posted_data)
-                        except Exception:
-                            self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data!r}")
+                        if posted_data:
+                            try:
+                                posted_data = json.loads(posted_data)
+                            except Exception:
+                                self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}")
 
                     elif self.request['postData']['mimeType'].startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
@@ -216,16 +217,13 @@ class URLNode(HarTreeNode):
                     elif self.request['postData']['mimeType'].startswith('application/x-protobuffer'):
                         # FIXME If possible, decode?
                         pass
-                    elif self.request['postData']['mimeType'].startswith('application/vnd.oasis.opendocument.formula-template'):
-                        # FIXME Office document => icon?
-                        pass
                     elif self.request['postData']['mimeType'].startswith('text'):
                         # We got text, keep what we already have
                         pass
                     elif self.request['postData']['mimeType'] == '?':
                         # Just skip it, no need to go in the warnings
                         pass
-                    elif self.request['postData']['mimeType'] in ['application/octet-stream', 'x-unknown']:
+                    elif self.request['postData']['mimeType'] in ['application/octet-stream']:
                         # Should flag it.
                         pass
                     else:
@@ -292,7 +290,7 @@ class URLNode(HarTreeNode):
                 self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             if har_entry['response']['content']['mimeType']:
-                self.add_feature('mimetype', har_entry['response']['content']['mimeType'])
+                self.add_feature('mimetype', har_entry['response']['content']['mimeType'].lower())
             else:
                 kind = filetype.guess(self.body.getvalue())
                 if kind:
@@ -396,7 +394,7 @@ class URLNode(HarTreeNode):
             return 'json'
         elif 'html' in self.mimetype:
             return 'html'
-        elif 'font' in self.mimetype:
+        elif 'font' in self.mimetype or 'woff' in self.mimetype:
             return 'font'
         elif 'octet-stream' in self.mimetype:
             return 'octet-stream'
