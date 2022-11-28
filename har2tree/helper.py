@@ -5,6 +5,7 @@ import hashlib
 import logging
 import os
 import re
+import warnings
 
 from base64 import b64decode
 from collections import defaultdict
@@ -15,7 +16,9 @@ from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 
 import filetype  # type: ignore
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
+
+warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 
 logger = logging.getLogger(__name__)
 
