@@ -215,10 +215,10 @@ class HarFile():
         """First URL of the capture"""
         return self.entries[0]['request']['url']
 
-    def __find_referer(self, har_entry: Dict[str, Any]) -> Optional[str]:
-        """Return the referer of the entry, if it exists."""
+    def __find_header_value(self, har_entry: Dict[str, Any], header_name: str) -> Optional[str]:
+        """Get the value of a specific header"""
         for header_entry in har_entry['request']['headers']:
-            if header_entry['name'] == 'Referer':
+            if header_entry['name'] == header_name:
                 return header_entry['value']
         return None
 
@@ -247,8 +247,8 @@ class HarFile():
                         previous_entry = e
                     else:
                         continue
-                elif (self.__find_referer(e) and 'url' in previous_entry['response']
-                        and (self.__find_referer(e) == previous_entry['response']['url'])):
+                elif (self.__find_header_value(e, 'Referer') and 'url' in previous_entry['response']
+                        and (self.__find_header_value(e, 'Referer') == previous_entry['response']['url'])):
                     to_return.append(e['request']['url'])
                     previous_entry = e
                 else:
@@ -267,7 +267,12 @@ class HarFile():
     @property
     def root_referrer(self) -> Optional[str]:
         '''Get the referer if the first entry. Only relevant when there are multiple tree to attach together'''
-        return self.__find_referer(self.entries[0])
+        return self.__find_header_value(self.entries[0], 'Referer')
+
+    @property
+    def root_user_agent(self) -> Optional[str]:
+        '''Get the User Agent of the first entry'''
+        return self.__find_header_value(self.entries[0], 'User-Agent')
 
     def __repr__(self) -> str:
         return f'HarFile({self.path}, {self.capture_uuid})'
