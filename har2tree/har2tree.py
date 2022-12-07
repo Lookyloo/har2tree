@@ -218,7 +218,7 @@ class HarFile():
     def __find_header_value(self, har_entry: Dict[str, Any], header_name: str) -> Optional[str]:
         """Get the value of a specific header"""
         for header_entry in har_entry['request']['headers']:
-            if header_entry['name'] == header_name:
+            if header_entry['name'].lower() == header_name.lower():
                 return header_entry['value']
         return None
 
