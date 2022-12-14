@@ -138,7 +138,10 @@ class URLNode(HarTreeNode):
             # so we need that unless we want to change the JS
             self.add_feature('hostname', str(Path(self.url_split.path).parent))
         else:
-            self.add_feature('hostname', self.url_split.hostname)
+            if self.url_split.hostname:
+                self.add_feature('hostname', self.url_split.hostname)
+            else:
+                self.add_feature('hostname', self.name)
 
         if not self.hostname:
             self.logger.warning(f'Something is broken in that node: {har_entry}')
