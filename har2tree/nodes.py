@@ -291,15 +291,20 @@ class URLNode(HarTreeNode):
                 self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
             else:
                 self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
+
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
             if har_entry['response']['content']['mimeType']:
-                self.add_feature('mimetype', har_entry['response']['content']['mimeType'].lower())
-            else:
-                kind = filetype.guess(self.body.getvalue())
-                if kind:
+                mt = har_entry['response']['content']['mimeType'].lower()
+                if mt not in ["application/octet-stream", "x-unknown"]:
+                    self.add_feature('mimetype', mt)
+
+            if not hasattr(self, 'mimetype'):
+                # try to guess something better
+                if kind := filetype.guess(self.body.getvalue()):
                     self.add_feature('mimetype', kind.mime)
-                else:
-                    self.add_feature('mimetype', '')
+
+            if not hasattr(self, 'mimetype'):
+                self.add_feature('mimetype', '')
 
             external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
