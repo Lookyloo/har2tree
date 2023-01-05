@@ -35,15 +35,15 @@ numpy = [
     { version = "^1.23.4", python = ">=3.10" }
 ]
 w3lib = "^2.1.1"
-Sphinx = { version = "^6.0.0", optional = true }
+Sphinx = { version = "^6.1.0", optional = true }
 charset-normalizer = "^2.1.1"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
-ipython = "^8.7.0"
+ipython = "^8.8.0"
 jupyterlab = "^3.5.2"
 pytest-cov = "^4.0.0"
-types-beautifulsoup4 = "^4.11.6.1"
+types-beautifulsoup4 = "^4.11.6.2"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
