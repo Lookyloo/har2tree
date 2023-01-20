@@ -43,7 +43,7 @@ mypy = "^0.991"
 ipython = "^8.8.0"
 jupyterlab = "^3.5.2"
 pytest-cov = "^4.0.0"
-types-beautifulsoup4 = "^4.11.6.2"
+types-beautifulsoup4 = "^4.11.6.4"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
