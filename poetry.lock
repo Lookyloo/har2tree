@@ -1808,16 +1808,20 @@ files = [
 ]
 
 [[package]]
-name = "publicsuffix2"
-version = "2.20191221"
-description = "Get a public suffix for a domain name using the Public Suffix List. Forked from and using the same API as the publicsuffix package."
+name = "publicsuffixlist"
+version = "0.9.2"
+description = "publicsuffixlist implement"
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=2.6"
 files = [
-    {file = "publicsuffix2-2.20191221-py2.py3-none-any.whl", hash = "sha256:786b5e36205b88758bd3518725ec8cfe7a8173f5269354641f581c6b80a99893"},
-    {file = "publicsuffix2-2.20191221.tar.gz", hash = "sha256:00f8cc31aa8d0d5592a5ced19cccba7de428ebca985db26ac852d920ddd6fe7b"},
+    {file = "publicsuffixlist-0.9.2-py2.py3-none-any.whl", hash = "sha256:8fe444e9b2fd47e377b7af7c90404532afebb24519e493a2b177e518279a4c8c"},
+    {file = "publicsuffixlist-0.9.2.tar.gz", hash = "sha256:d1aa03a40ad6ba5c12d6617b3ea1c7ffccb928b4ed6b5523f65a2ff968df01f3"},
 ]
+
+[package.extras]
+readme = ["pandoc"]
+update = ["requests"]
 
 [[package]]
 name = "pure-eval"
@@ -2672,4 +2676,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "e4fe206d71c3a0c95e3137c36fa753b160d7ba8312551d6bd27d007f02b171c5"
+content-hash = "d4036796b0a82280e5fbd2ff0fe45bef84d99b92b4499781d7af4edf1912f499"

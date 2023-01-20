@@ -20,7 +20,7 @@ from .helper import Har2TreeError, Har2TreeLogAdapter
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
-from publicsuffix2 import PublicSuffixList, fetch  # type: ignore
+from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
@@ -28,13 +28,8 @@ from w3lib.url import canonicalize_url, safe_url_string
 @lru_cache(64)
 def get_public_suffix_list() -> PublicSuffixList:
     # Initialize Public Suffix List
-    try:
-        psl_file = fetch()
-        psl = PublicSuffixList(psl_file=psl_file)
-    except Exception as e:
-        logging.getLogger(__name__).warning(f'Unable to fetch the PublicSuffixList: {e}')
-        psl = PublicSuffixList()
-    return psl
+    # TODO (?): fetch the list
+    return PublicSuffixList()
 
 
 class HarTreeNode(TreeNode):
@@ -154,7 +149,7 @@ class URLNode(HarTreeNode):
             pass
 
         if not hasattr(self, 'hostname_is_ip') and not hasattr(self, 'file_on_disk'):
-            tld = get_public_suffix_list().get_tld(self.hostname, strict=True)
+            tld = get_public_suffix_list().publicsuffix(self.hostname)
             if tld:
                 self.add_feature('known_tld', tld)
             else:
