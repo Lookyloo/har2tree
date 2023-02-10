@@ -39,8 +39,8 @@ Sphinx = { version = "^6.1.3", optional = true }
 charset-normalizer = " >=2,<4"
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^0.991"
-ipython = "^8.9.0"
+mypy = "^1.0.0"
+ipython = "^8.10.0"
 jupyterlab = "^3.6.1"
 pytest-cov = "^4.0.0"
 types-beautifulsoup4 = "^4.11.6.5"
