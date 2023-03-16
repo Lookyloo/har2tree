@@ -187,7 +187,7 @@ class URLNode(HarTreeNode):
                             try:
                                 posted_data = posted_data.decode()
                             except Exception:
-                                self.logger.warning(f'Expected urlencoded, got garbage: {posted_data!r}')
+                                self.logger.debug(f'Expected urlencoded, got garbage: {posted_data!r}')
                         if isinstance(posted_data, str):
                             posted_data = unquote_plus(posted_data)
                     elif (self.request['postData']['mimeType'].startswith('application/json')
@@ -207,7 +207,7 @@ class URLNode(HarTreeNode):
                             try:
                                 posted_data = json.loads(posted_data)
                             except Exception:
-                                self.logger.warning(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}[...]")
+                                self.logger.debug(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}[...]")
 
                     elif self.request['postData']['mimeType'].startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
@@ -556,6 +556,10 @@ class HostNode(HarTreeNode):
         if not self.name:
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
+
+        if hasattr(url, 'hostname_is_ip') and url.hostname_is_ip:
+            self.add_feature('hostname_is_ip', True)
+
         self.urls.append(url)
 
         # Add to URLNode a reference to the HostNode UUID
