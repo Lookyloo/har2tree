@@ -26,10 +26,18 @@ jobs:
       run: |
         git submodule update --init --recursive
         python -m pip install --upgrade pip poetry
-        poetry install -vvv --no-cache
+
+    - run: echo "POETRY_VERSION=$(poetry --version)" >> $GITHUB_ENV
+      shell: bash
+
+    - run: poetry config installer.modern-installation false
+      # workaround for bug: https://github.com/microsoft/debugpy/issues/1246
+      if: ${{ contains(env.POETRY_VERSION, '1.4.1') }}
+      shell: bash
 
     - name: Run MyPy
       run: |
+        poetry install -vvv --no-cache
         poetry run mypy .
 
     - name: Test with pytest
