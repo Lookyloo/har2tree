@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "har2tree"
-version = "1.18.1"
+version = "1.19.0"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -25,7 +25,7 @@ include = ['README.md']
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
 ete3 = "^3.1.2"
-beautifulsoup4 = "^4.11.2"
+beautifulsoup4 = "^4.12.0"
 lxml = "^4.9.2"
 six = "^1.16.0"
 publicsuffixlist = "^0.9.3"
@@ -41,9 +41,9 @@ charset-normalizer = " >=2,<4"
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.1.1"
 ipython = "^8.11.0"
-jupyterlab = "^3.6.1"
+jupyterlab = "^3.6.2"
 pytest-cov = "^4.0.0"
-types-beautifulsoup4 = "^4.11.6.7"
+types-beautifulsoup4 = "^4.12.0.1"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
