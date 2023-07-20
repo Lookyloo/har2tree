@@ -23,6 +23,38 @@ warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 logger = logging.getLogger(__name__)
 
 
+def make_hhhash(entry: Dict[str, Any]) -> str:
+    """Generate a HTTP Headers Hash following as described: https://github.com/adulau/HHHash"""
+    # NOTES:
+    #   * Even if the headers are in a list, some implementations of HTTP Archive will sort
+    #     the HTTP headers alphabetically by name. It is incorrect, but happens (chromium in playwright v1.36.0).
+    #     We have no way to know so we build the hash anyway.
+    #   * Playwright will split the value of the HTTP header on a comma (,).
+    #     Which means that we have the same header name multiples times in a row instead of once.
+    #     It makes senses for cookies but breaks the hashes. In this implementation,
+    #     we remove from the headers names with the same name if they follow eachother.
+    #     Example: [Date, Date, Cache-Control] becomes [Date, Cache-Control]
+    prec: Optional[str] = None
+    to_hash: str = ''
+    for header in entry['headers']:
+        if prec is None:
+            to_hash = header['name']
+        elif prec != header['name']:
+            to_hash += f':{header["name"]}'
+        prec = header['name']
+    if not to_hash:
+        raise HHHashError('Unable to generate HHHash: no HTTP headers.')
+    sha256 = hashlib.sha256(to_hash.encode()).hexdigest()
+    # We need the HTTP version used for the query:
+    # * The HTTP Header names in HTTP 1.1 can have uppercase characters
+    # * The HTTP Header names in HTTP 2 *must* be lowercase: https://www.rfc-editor.org/rfc/rfc7540#section-8.1.2
+    if entry['httpVersion'] == "HTTP/1.1":
+        return f'hhh:1:{sha256}'
+    if entry['httpVersion'] == "HTTP/2":
+        return f'hhh:2:{sha256}'
+    raise HHHashError(f'Unable to generate HHHash: invalid http version ({entry["httpVersion"]})')
+
+
 def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
     if not uri.startswith('data:'):
         return None
@@ -312,6 +344,10 @@ class Har2TreeError(Exception):
         """
         super().__init__(message)
         self.message = message
+
+
+class HHHashError(Har2TreeError):
+    pass
 
 
 class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore

@@ -15,7 +15,7 @@ import hashlib
 import re
 from functools import lru_cache
 
-from .helper import Har2TreeError, Har2TreeLogAdapter
+from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
@@ -243,8 +243,12 @@ class URLNode(HarTreeNode):
                 self.add_feature('posted_data', posted_data)
 
         self.add_feature('response', har_entry['response'])
+        try:
+            self.add_feature('hhhash', make_hhhash(self.response))
+        except HHHashError as e:
+            self.logger.warning(e)
 
-        self.add_feature('response_cookie', har_entry['response']['cookies'])
+        self.add_feature('response_cookie', self.response['cookies'])
         if self.response_cookie:
             self.add_feature('set_third_party_cookies', False)
             # https://developer.mozilla.org/en-US/docs/Web/HTTP/headers/Set-Cookie
@@ -277,19 +281,19 @@ class URLNode(HarTreeNode):
             for cookie in self.request_cookie:
                 self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
 
-        if not har_entry['response']['content'].get('text') or har_entry['response']['content']['text'] == '':
+        if not self.response['content'].get('text') or self.response['content']['text'] == '':
             # If the content of the response is empty, skip.
             self.add_feature('empty_response', True)
         else:
             self.add_feature('empty_response', False)
-            if har_entry['response']['content'].get('encoding') == 'base64':
-                self.add_feature('body', BytesIO(b64decode(har_entry['response']['content']['text'])))
+            if self.response['content'].get('encoding') == 'base64':
+                self.add_feature('body', BytesIO(b64decode(self.response['content']['text'])))
             else:
-                self.add_feature('body', BytesIO(har_entry['response']['content']['text'].encode()))
+                self.add_feature('body', BytesIO(self.response['content']['text'].encode()))
 
             self.add_feature('body_hash', hashlib.sha512(self.body.getvalue()).hexdigest())
-            if har_entry['response']['content']['mimeType']:
-                mt = har_entry['response']['content']['mimeType'].lower()
+            if self.response['content']['mimeType']:
+                mt = self.response['content']['mimeType'].lower()
                 if mt not in ["application/octet-stream", "x-unknown"]:
                     self.add_feature('mimetype', mt)
 
@@ -369,9 +373,9 @@ class URLNode(HarTreeNode):
                 har_entry['_securityDetails']['validTo'] = datetime.fromtimestamp(har_entry['_securityDetails']['validTo'])
             self.add_feature('security_details', har_entry['_securityDetails'])
 
-        if har_entry['response']['redirectURL']:
+        if self.response['redirectURL']:
             self.add_feature('redirect', True)
-            redirect_url = har_entry['response']['redirectURL']
+            redirect_url = self.response['redirectURL']
             # Rebuild the redirect URL so it matches the entry that sould be in all_requests
             redirect_url = rebuild_url(self.name, redirect_url, all_requests)
             # At this point, we should have a URL available in all_requests...
@@ -380,10 +384,10 @@ class URLNode(HarTreeNode):
             else:
                 # ..... Or not. Unable to find a URL for this redirect
                 self.add_feature('redirect_to_nothing', True)
-                self.add_feature('redirect_url', har_entry['response']['redirectURL'])
+                self.add_feature('redirect_url', self.response['redirectURL'])
                 self.logger.warning('Unable to find that URL: {original_url} - {original_redirect} - {modified_redirect}'.format(
                     original_url=self.name,
-                    original_redirect=har_entry['response']['redirectURL'],
+                    original_redirect=self.response['redirectURL'],
                     modified_redirect=redirect_url))
 
     @property
