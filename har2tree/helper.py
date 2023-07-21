@@ -50,8 +50,10 @@ def make_hhhash(entry: Dict[str, Any]) -> str:
     # * The HTTP Header names in HTTP 2 *must* be lowercase: https://www.rfc-editor.org/rfc/rfc7540#section-8.1.2
     if entry['httpVersion'] == "HTTP/1.1":
         return f'hhh:1:{sha256}'
-    if entry['httpVersion'] == "HTTP/2":
+    if entry['httpVersion'] == "HTTP/2.0":
         return f'hhh:2:{sha256}'
+    if entry['httpVersion'] == "h3":
+        return f'hhh:3:{sha256}'
     raise HHHashError(f'Unable to generate HHHash: invalid http version ({entry["httpVersion"]})')
 
 
