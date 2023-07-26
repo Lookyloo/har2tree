@@ -7,6 +7,7 @@ import os
 import re
 import warnings
 
+import charset_normalizer
 from base64 import b64decode
 from collections import defaultdict
 from io import BytesIO
@@ -263,6 +264,9 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
 
     embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
 
+    if not charset_normalizer.detect(html_doc)['encoding']:
+        # no need to bother.
+        return external_ressources, embedded_ressources
     if html_doc.startswith(b'<?xml'):
         soup = BeautifulSoup(html_doc, 'lxml-xml')
     else:
