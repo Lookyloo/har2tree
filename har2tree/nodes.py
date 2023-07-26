@@ -15,7 +15,7 @@ import hashlib
 import re
 from functools import lru_cache
 
-from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError
+from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
@@ -199,7 +199,7 @@ class URLNode(HarTreeNode):
                         try:
                             # it is relatively common that the supposedly json blob is base64 encoded but the encoding wasn't set properly, let's try to decode anyway.
                             posted_data = b64decode(posted_data)
-                            self.logger.info("Contains a sneakily base64 encoded json blob.")
+                            self.logger.debug("Contains a sneakily base64 encoded json blob.")
                         except Exception:
                             pass
 
@@ -245,6 +245,8 @@ class URLNode(HarTreeNode):
         self.add_feature('response', har_entry['response'])
         try:
             self.add_feature('hhhash', make_hhhash(self.response))
+        except HHHashNote as e:
+            self.logger.debug(e)
         except HHHashError as e:
             self.logger.warning(e)
 

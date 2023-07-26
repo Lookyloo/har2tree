@@ -23,6 +23,23 @@ warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 logger = logging.getLogger(__name__)
 
 
+class Har2TreeError(Exception):
+    def __init__(self, message: str):
+        """
+        Har2Tree Exception
+        """
+        super().__init__(message)
+        self.message = message
+
+
+class HHHashError(Har2TreeError):
+    pass
+
+
+class HHHashNote(Har2TreeError):
+    pass
+
+
 def make_hhhash(entry: Dict[str, Any]) -> str:
     """Generate a HTTP Headers Hash following as described: https://github.com/adulau/HHHash"""
     # NOTES:
@@ -43,17 +60,19 @@ def make_hhhash(entry: Dict[str, Any]) -> str:
             to_hash += f':{header["name"]}'
         prec = header['name']
     if not to_hash:
-        raise HHHashError('Unable to generate HHHash: no HTTP headers.')
+        raise HHHashNote('Unable to generate HHHash: no HTTP headers.')
     sha256 = hashlib.sha256(to_hash.encode()).hexdigest()
     # We need the HTTP version used for the query:
     # * The HTTP Header names in HTTP 1.1 can have uppercase characters
     # * The HTTP Header names in HTTP 2 *must* be lowercase: https://www.rfc-editor.org/rfc/rfc7540#section-8.1.2
-    if entry['httpVersion'] == "HTTP/1.1":
+    if entry['httpVersion'].lower() in ["http/1.1", "http/1.0"]:
         return f'hhh:1:{sha256}'
-    if entry['httpVersion'] == "HTTP/2.0":
+    if entry['httpVersion'].lower() == "http/2.0":
         return f'hhh:2:{sha256}'
-    if entry['httpVersion'] == "h3":
+    if entry['httpVersion'].lower() == "h3":
         return f'hhh:3:{sha256}'
+    if entry['httpVersion'].lower() in ["blob", "file"]:
+        raise HHHashNote('Unable to generate HHHash: known incompatible HTTP version')
     raise HHHashError(f'Unable to generate HHHash: invalid http version ({entry["httpVersion"]})')
 
 
@@ -337,19 +356,6 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
         # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
-
-
-class Har2TreeError(Exception):
-    def __init__(self, message: str):
-        """
-        Har2Tree Exception
-        """
-        super().__init__(message)
-        self.message = message
-
-
-class HHHashError(Har2TreeError):
-    pass
 
 
 class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore
