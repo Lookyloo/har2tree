@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from pathlib import Path
-from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict
+from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict, overload, Literal
 import logging
 import uuid
 import json
@@ -19,7 +19,7 @@ from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError,
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
-from ete3 import TreeNode  # type: ignore
+from ete4 import Tree  # type: ignore
 from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
@@ -32,15 +32,53 @@ def get_public_suffix_list() -> PublicSuffixList:
     return PublicSuffixList()
 
 
-class HarTreeNode(TreeNode):
+class HarTreeNode(Tree):
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str, name: Optional[str]=None):
         """Node dumpable in json to display with d3js"""
-        super().__init__(**kwargs)
+        super().__init__()
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.add_feature('uuid', str(uuid.uuid4()))
-        self.features_to_skip = {'dist', 'support'}
+        if name:
+            self.add_feature('name', name)
+        self.features_to_skip: Set[str] = set()
+
+    def add_feature(self, feature_name: str, feature_value: Any) -> None:
+        self.add_prop(feature_name, feature_value)
+
+    def __setattr__(self, attribute: str, value: Any) -> None:
+        if hasattr(self, 'props') and self.props and attribute in self.props:
+            self.props[attribute] = value
+        else:
+            super().__setattr__(attribute, value)
+
+    def __getattr__(self, attribute: str) -> Any:
+        try:
+            return super().__getattribute__(attribute)
+        except AttributeError:
+            # reproduce ete3.
+            return self.props[attribute]
+
+    @property
+    def features(self) -> Set[str]:
+        return set(self.props.keys())
+
+    @overload
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[True]=True) -> Optional['HarTreeNode']:
+        ...
+
+    @overload
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[False]) -> 'HarTreeNode':
+        ...
+
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: bool=False) -> Optional['HarTreeNode']:
+        try:
+            return next(self.search_nodes(**{feature_name: value}))
+        except StopIteration:
+            if expect_missing:
+                return None
+            raise Har2TreeError(f'Unable to find feature "{feature_name}": "{value}"')
 
     def to_dict(self) -> MutableMapping[str, Any]:
         """Make a dict that can then be dumped in json.
@@ -49,7 +87,7 @@ class HarTreeNode(TreeNode):
         for feature in self.features:
             if feature in self.features_to_skip:
                 continue
-            to_return[feature] = getattr(self, feature)
+            to_return[feature] = self.props[feature]
 
         for child in self.children:
             to_return['children'].append(child)
@@ -63,9 +101,9 @@ class HarTreeNode(TreeNode):
 
 class URLNode(HarTreeNode):
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str, name: str):
         """Node of the URL Tree"""
-        super().__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid, name=name)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
         self.features_to_skip.add('url_split')
@@ -78,13 +116,13 @@ class URLNode(HarTreeNode):
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
             rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
-            if hasattr(self, 'external_ressources'):
+            if 'external_ressources' in self.features:
                 # for the external ressources, the keys are always the same
                 self.external_ressources: Dict[str, List[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
             else:
                 self.add_feature('external_ressources', rendered_external)
 
-            if hasattr(self, 'embedded_ressources'):
+            if 'embedded_ressources' in self.features:
                 # for the embedded ressources, the keys are the mimetypes, they may not overlap
                 mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
                 self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
@@ -128,7 +166,7 @@ class URLNode(HarTreeNode):
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
 
-        if hasattr(self, 'file_on_disk'):
+        if 'file_on_disk' in self.features:
             # TODO: Do something better? hostname is the feature name used for the aggregated tree
             # so we need that unless we want to change the JS
             self.add_feature('hostname', str(Path(self.url_split.path).parent))
@@ -148,7 +186,7 @@ class URLNode(HarTreeNode):
             # Not an IP
             pass
 
-        if not hasattr(self, 'hostname_is_ip') and not hasattr(self, 'file_on_disk'):
+        if 'hostname_is_ip' not in self.features and 'file_on_disk' not in self.features:
             tld = get_public_suffix_list().publicsuffix(self.hostname)
             if tld:
                 self.add_feature('known_tld', tld)
@@ -286,6 +324,7 @@ class URLNode(HarTreeNode):
         if not self.response['content'].get('text') or self.response['content']['text'] == '':
             # If the content of the response is empty, skip.
             self.add_feature('empty_response', True)
+            self.add_feature('mimetype', '')
         else:
             self.add_feature('empty_response', False)
             if self.response['content'].get('encoding') == 'base64':
@@ -299,12 +338,12 @@ class URLNode(HarTreeNode):
                 if mt not in ["application/octet-stream", "x-unknown"]:
                     self.add_feature('mimetype', mt)
 
-            if not hasattr(self, 'mimetype'):
+            if 'mimetype' not in self.features:
                 # try to guess something better
                 if kind := filetype.guess(self.body.getvalue()):
                     self.add_feature('mimetype', kind.mime)
 
-            if not hasattr(self, 'mimetype'):
+            if 'mimetype' not in self.features:
                 self.add_feature('mimetype', '')
 
             external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
@@ -335,8 +374,6 @@ class URLNode(HarTreeNode):
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
 
-            # FIXME: Deprecated, use generic_type directly. Keep for now for backward compat
-            self.add_feature(self.generic_type, True)
             if self.generic_type == 'unknown_mimetype':
                 if self.mimetype not in ['x-unknown']:
                     self.logger.warning(f'Unknown mimetype: {self.mimetype}')
@@ -461,7 +498,7 @@ class URLNode(HarTreeNode):
                 return None
             return href
 
-        if not hasattr(self, 'rendered_html') or not self.rendered_html:
+        if 'rendered_html' not in self.features or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
         urls: Set[str] = set()
         soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
@@ -492,9 +529,9 @@ class URLNode(HarTreeNode):
 
 class HostNode(HarTreeNode):
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str, name: Optional[str]=None):
         """Node of the Hostname Tree"""
-        super().__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid, name=name)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
 
@@ -563,7 +600,7 @@ class HostNode(HarTreeNode):
             # Only used when initializing the root node
             self.add_feature('name', url.hostname)
 
-        if hasattr(url, 'hostname_is_ip') and url.hostname_is_ip:
+        if 'hostname_is_ip' in url.features and url.hostname_is_ip:
             self.add_feature('hostname_is_ip', True)
 
         self.urls.append(url)
@@ -571,46 +608,48 @@ class HostNode(HarTreeNode):
         # Add to URLNode a reference to the HostNode UUID
         url.add_feature('hostnode_uuid', self.uuid)
 
-        if hasattr(url, 'rendered_html') or hasattr(url, 'downloaded_filename'):
+        if 'rendered_html' in url.features or 'downloaded_filename' in url.features:
             self.contains_rendered_urlnode = True
-            if hasattr(url, 'downloaded_filename'):
+            if 'downloaded_filename' in url.features:
                 self.add_feature('downloaded_filename', url.downloaded_filename)
 
-        if hasattr(url, 'cookies_sent'):
+        if 'cookies_sent' in url.features:
             # Keep a set of cookies sent: different URLs will send the same cookie
             self.cookies_sent.update(set(url.cookies_sent.keys()))
-        if hasattr(url, 'cookies_received'):
+        if 'cookies_received' in url.features:
             # Keep a set of cookies received: different URLs will receive the same cookie
             self.cookies_received.update({(domain, cookie, is_3rd_party)
                                           for domain, cookie, is_3rd_party in url.cookies_received})
-        if hasattr(url, 'js'):
-            self.js += 1
-        if hasattr(url, 'redirect'):
+        if 'redirect' in url.features:
             self.redirect += 1
-        if hasattr(url, 'redirect_to_nothing'):
+        if 'redirect_to_nothing' in url.features:
             self.redirect_to_nothing += 1
-        if hasattr(url, 'image'):
-            self.image += 1
-        if hasattr(url, 'css'):
-            self.css += 1
-        if hasattr(url, 'json'):
-            self.json += 1
-        if hasattr(url, 'html'):
-            self.html += 1
-        if hasattr(url, 'font'):
-            self.font += 1
-        if hasattr(url, 'octet_stream'):
-            self.octet_stream += 1
-        if hasattr(url, 'text'):
-            self.text += 1
-        if hasattr(url, 'pdf'):
-            self.pdf += 1  # FIXME: need icon
-        if hasattr(url, 'video') or hasattr(url, 'livestream') or hasattr(url, 'audio') or hasattr(url, 'flash'):
-            self.video += 1
-        if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
-            self.unknown_mimetype += 1
-        if hasattr(url, 'iframe'):
+        if 'iframe' in url.features:
             self.iframe += 1
+        if url.generic_type == 'js':
+            self.js += 1
+        elif url.generic_type == 'image':
+            self.image += 1
+        elif url.generic_type == 'css':
+            self.css += 1
+        elif url.generic_type == 'json':
+            self.json += 1
+        elif url.generic_type == 'html':
+            self.html += 1
+        elif url.generic_type == 'font':
+            self.font += 1
+        elif url.generic_type == 'octet_stream':
+            self.octet_stream += 1
+        elif url.generic_type == 'text':
+            self.text += 1
+        elif url.generic_type == 'pdf':
+            self.pdf += 1  # FIXME: need icon
+        elif url.generic_type in {'video', 'livestream', 'audio', 'flash'}:
+            self.video += 1
+        elif url.generic_type in {'unknown_mimetype', 'unset_mimetype'}:
+            self.unknown_mimetype += 1
+        else:
+            self.logger.warning(f'Unexpected generic type: {url.generic_type}')
 
         if url.name.startswith('http://'):
             self.http_content = True

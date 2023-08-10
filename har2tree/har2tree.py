@@ -303,20 +303,20 @@ class Har2Tree:
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
         self.initial_cookies: Dict[str, Dict[str, Any]] = {}
-        if hasattr(self._nodes_list[0], 'cookies_sent'):
+        if 'cookies_sent' in self._nodes_list[0].features:
             self.initial_cookies = {key: cookie for key, cookie in self._nodes_list[0].cookies_sent.items()}
 
         # Dictionary of all cookies received during the capture
         self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
         for n in self._nodes_list:
-            if hasattr(n, 'cookies_received'):
+            if 'cookies_received' in n.features:
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
         # Dictionary of all cookies sent during the capture
         self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
         for n in self._nodes_list:
-            if hasattr(n, 'cookies_sent'):
+            if 'cookies_sent' in n.features:
                 for c_sent in n.cookies_sent.keys():
                     self.cookies_sent[c_sent].append(n)
 
@@ -332,7 +332,7 @@ class Har2Tree:
         self.locally_created_not_sent: Dict[str, Dict[str, Any]] = self.locally_created.copy()
         # Cross reference the source of the cookie
         for n in self._nodes_list:
-            if hasattr(n, 'cookies_sent'):
+            if 'cookies_sent' in n.features:
                 for c_sent in n.cookies_sent:
                     # Remove cookie from list if sent during the capture.
                     self.locally_created_not_sent.pop(c_sent, None)
@@ -349,7 +349,7 @@ class Har2Tree:
 
         # Add context if urls are found in external_ressources
         for n in self._nodes_list:
-            if hasattr(n, 'external_ressources'):
+            if 'external_ressources' in n.features:
                 for type_ressource, urls in n.external_ressources.items():
                     for url in urls:
                         if url not in self.all_url_requests:
@@ -391,7 +391,7 @@ class Har2Tree:
     @property
     def initial_referer(self) -> Optional[str]:
         '''The referer passed to the first URL in the tree'''
-        if hasattr(self.url_tree, 'referer'):
+        if 'referer' in self.url_tree.features:
             return self.url_tree.referer
         return None
 
@@ -432,7 +432,7 @@ class Har2Tree:
     @property
     def redirects(self) -> List[str]:
         """List of redirects for this tree"""
-        return [a.name for a in reversed(self.rendered_node.get_ancestors())] + [self.rendered_node.name]
+        return [a.name for a in reversed(list(self.rendered_node.ancestors()))] + [self.rendered_node.name]
 
     @property
     def root_referer(self) -> Optional[str]:
@@ -462,7 +462,7 @@ class Har2Tree:
             h = hashlib.new(algorithm)
             h.update(urlnode.body.getbuffer())
             to_return[h.hexdigest()].append(urlnode)
-            if hasattr(urlnode, 'embedded_ressources'):
+            if 'embedded_ressources' in urlnode.features:
                 for _mimetype, blobs in urlnode.embedded_ressources.items():
                     for blob in blobs:
                         h = hashlib.new(algorithm)
@@ -505,22 +505,22 @@ class Har2Tree:
 
             n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
             n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
-            if hasattr(n, 'redirect_url'):
+            if 'redirect_url' in n.features:
                 self.all_redirects.append(n.redirect_url)
 
-            if hasattr(n, 'initiator_url'):
+            if 'initiator_url' in n.features:
                 # The HAR file was created by chrome/chromium and we got the _initiator key
                 self.all_initiator_url[n.initiator_url].append(n.name)
 
             if url_entry['startedDateTime'] in self.har.pages_start_times:
                 for page in self.har.pages_start_times[url_entry['startedDateTime']]:
-                    if hasattr(n, 'pageref') and page['id'] == n.pageref:
+                    if 'pageref' in n.features and page['id'] == n.pageref:
                         # This node is the root entry of a page. Can be used as a fallback when we build the tree
                         self.pages_root[n.pageref] = n.uuid
                         break
 
             # NOTE 2021-05-28: Ignore referer for first entry
-            if hasattr(n, 'referer') and i > 0:
+            if 'referer' in n.features and i > 0:
                 # NOTE 2021-05-14: referer to self are a real thing: url -> POST to self
                 if n.name != n.referer or ('method' in n.request and n.request['method'] == 'POST'):
                     self.all_referer[n.referer].append(n.name)
@@ -534,7 +534,7 @@ class Har2Tree:
             for page in pages:
                 if page['id'] not in self.pages_root:
                     for node in self._nodes_list:
-                        if not hasattr(node, 'pageref'):
+                        if 'pageref' not in node.features:
                             # 2022-11-19: No pageref for this node in the HAR file,
                             #             this is weird but we need it as a fallback.
                             node.add_feature('pageref', page['id'])
@@ -544,17 +544,16 @@ class Har2Tree:
 
     def get_host_node_by_uuid(self, uuid: str) -> HostNode:
         """Returns the node with this UUID from the HostNode tree"""
-        return self.hostname_tree.search_nodes(uuid=uuid)[0]
+        return self.hostname_tree.get_first_by_feature('uuid', uuid, expect_missing=False)
 
     def get_url_node_by_uuid(self, uuid: str) -> URLNode:
         """Returns the node with this UUID from the URLNode tree"""
-        return self.url_tree.search_nodes(uuid=uuid)[0]
+        return self.url_tree.get_first_by_feature('uuid', uuid, expect_missing=False)
 
     @property
     def rendered_node(self) -> URLNode:
-        node = self.url_tree.search_nodes(name=self.har.final_redirect)
-        if node:
-            return node[0]
+        if node := self.url_tree.get_first_by_feature('name', self.har.final_redirect, expect_missing=True):
+            return node
 
         if self.har.final_redirect:
             self.logger.warning(f'Final redirect URL from adress bar not in tree: {self.har.final_redirect}')
@@ -563,7 +562,7 @@ class Har2Tree:
             pass
         # Just try to get the best guess: first node after JS/HTTP redirects
         curnode = self.url_tree
-        while hasattr(curnode, 'redirect') and curnode.redirect:
+        while 'redirect' in curnode.features and curnode.redirect:
             for child in curnode.children:
                 if child.name == curnode.redirect_url:
                     curnode = child
@@ -599,7 +598,7 @@ class Har2Tree:
                     children_hostnames[child_node_url.hostname] = child_node_hostname
                 child_node_hostname.add_url(child_node_url)
 
-                if not child_node_url.is_leaf():
+                if not child_node_url.is_leaf:
                     sub_roots[child_node_hostname].append(child_node_url)
             for child_node_hostname, child_nodes_url in sub_roots.items():
                 self.make_hostname_tree(child_nodes_url, child_node_hostname)
@@ -633,13 +632,13 @@ class Har2Tree:
 
     @trace_make_subtree_fallback
     def _make_subtree_fallback(self, node: URLNode, dev_debug: bool=False) -> None:
-        if hasattr(node, 'referer'):
+        if 'referer' in node.features:
             # 2022-04-28: the node has a referer, but for some reason, it could't be attached to the tree
             #             Probable reason: the referer is a part of the URL (hostname)
             # FIXME: this is a very dirty fix, but I'm not sure we can do it any better
             if (referer_hostname := urlparse(node.referer).hostname):
                 # the referer has a hostname
-                if (nodes_with_hostname := self.url_tree.search_nodes(hostname=referer_hostname)):
+                if nodes_with_hostname := list(self.url_tree.search_nodes(hostname=referer_hostname)):
                     # the hostname has at least a node in the tree
                     for node_with_hostname in nodes_with_hostname:
                         if not node_with_hostname.empty_response:
@@ -662,14 +661,14 @@ class Har2Tree:
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
             self._make_subtree(page_root_node, [node])
-        elif self.url_tree.search_nodes(name=self.har.final_redirect):
+        elif final_node := self.url_tree.get_first_by_feature('name', self.har.final_redirect, expect_missing=True):
             # Generally, when we have a bunch of redirects, they do not branch out before the final landing page
             # *but* it is not always the case: some intermediary redirects will have calls to 3rd party pages.
             # Hopefully, this last case was taken care of in the branch above.
             # In this branch, we get the landing page after the redirects (if any), and attach the node to it.
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
-            self._make_subtree(self.url_tree.search_nodes(name=self.har.final_redirect)[0], [node])
+            self._make_subtree(final_node, [node])
         else:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
@@ -720,7 +719,7 @@ class Har2Tree:
         for unode in unodes:
             # NOTE: as we're calling the method recursively, a node containing URLs in its external_ressources will attach
             # the the subnodes to itself, even if the subnodes have a different referer. It will often be correct, but not always.
-            if hasattr(unode, 'redirect') and not hasattr(unode, 'redirect_to_nothing'):
+            if 'redirect' in unode.features and 'redirect_to_nothing' not in unode.features:
                 # If the subnode has a redirect URL set, we get all the requests matching this URL
                 # One may think the entry related to this redirect URL has a referer to the parent. One would be wrong.
                 # URL 1 has a referer, and redirects to URL 2. URL 2 has the same referer as URL 1.
@@ -757,7 +756,9 @@ class Har2Tree:
                 # The URL (unode.name) is in the list of known urls initiating calls
                 for u in self.all_initiator_url[unode.name]:
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
-                                     if url_node in self._nodes_list and hasattr(url_node, 'initiator_url') and url_node.initiator_url == unode.name]
+                                     if url_node in self._nodes_list
+                                     and 'initiator_url' in url_node.features
+                                     and url_node.initiator_url == unode.name]
                     self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                     if dev_debug:
                         self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
@@ -774,14 +775,16 @@ class Har2Tree:
                     matching_urls = []
                     for u in self.all_referer[ref]:
                         matching_urls += [url_node for url_node in self.all_url_requests[u]
-                                          if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == ref]
+                                          if url_node in self._nodes_list
+                                          and 'referer' in url_node.features
+                                          and url_node.referer == ref]
                         self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                         if dev_debug:
                             self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
                     # 2022-04-27: build subtrees recursively *after* we find all the best referer matches
                     self._make_subtree(unode, matching_urls)
 
-            if hasattr(unode, 'external_ressources'):
+            if 'external_ressources' in unode.features:
                 # the url loads external things, and some of them have no referer....
                 for external_tag, links in unode.external_ressources.items():
                     for link in links:
