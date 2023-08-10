@@ -2,7 +2,7 @@ name: Python application
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, ete4 ]
   pull_request:
     branches: [ main ]
 
@@ -38,6 +38,8 @@ jobs:
     - name: Run MyPy
       run: |
         poetry install -vvv --no-cache
+        git clone https://github.com/etetoolkit/ete.git ../ete
+        poetry run pip install -e ../ete/
         poetry run mypy .
 
     - name: Test with pytest
