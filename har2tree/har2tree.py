@@ -94,16 +94,23 @@ class HarFile():
         try:
             self.har: Dict[str, Any]
             if self.path.suffix == '.gz':
+                self.is_compressed = True
                 with gzip.open(self.path, 'rb') as f:
                     self.har = json.load(f)
             else:
+                self.is_compressed = False
                 with self.path.open() as f:
                     self.har = json.load(f)
         except json.decoder.JSONDecodeError as e:
             raise Har2TreeError(f'HAR file is not a valid JSON file: {e}')
 
+        root_name = self.path.stem
+        if self.is_compressed:
+            # we have .har.gz, and we want what comes *before* that
+            root_name = Path(root_name).stem
+
         # I mean it, that's the last URL the browser was on
-        last_redirect_file = self.path.parent / f'{self.path.stem}.last_redirect.txt'
+        last_redirect_file = self.path.parent / f'{root_name}.last_redirect.txt'
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
                 self.final_redirect: str = unquote_plus(_lr.read())
@@ -112,7 +119,7 @@ class HarFile():
             self.logger.debug('No last_redirect file available.')
             self.final_redirect = ''
 
-        cookiefile = self.path.parent / f'{self.path.stem}.cookies.json'
+        cookiefile = self.path.parent / f'{root_name}.cookies.json'
         if cookiefile.is_file():
             with cookiefile.open() as c:
                 self.cookies: List[Dict[str, Any]] = json.load(c)
@@ -120,8 +127,8 @@ class HarFile():
             self.logger.debug('No cookies file available.')
             self.cookies = []
 
-        dlfile = self.path.parent / f'{self.path.stem}.data'
-        dlfilename = self.path.parent / f'{self.path.stem}.data.filename'
+        dlfile = self.path.parent / f'{root_name}.data'
+        dlfilename = self.path.parent / f'{root_name}.data.filename'
         self.downloaded_file: Optional[BytesIO]
         self.downloaded_filename: str
         if dlfile.is_file() and dlfilename.is_file():
@@ -134,7 +141,7 @@ class HarFile():
             self.downloaded_file = None
             self.downloaded_filename = ''
 
-        htmlfile = self.path.parent / f'{self.path.stem}.html'
+        htmlfile = self.path.parent / f'{root_name}.html'
         self.html_content: Optional[BytesIO]
         if htmlfile.is_file():
             with htmlfile.open('rb') as _h:
