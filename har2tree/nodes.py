@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 
-from pathlib import Path
-from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict
+import binascii
+import copy
+import hashlib
+import ipaddress
+import json
 import logging
 import uuid
-import json
-from .helper import find_external_ressources, rebuild_url
-from io import BytesIO
-from urllib.parse import unquote_plus, urlparse, urljoin
-from datetime import datetime, timedelta
-import ipaddress
-from base64 import b64decode
-import hashlib
 import re
-from functools import lru_cache
 
-from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
+from base64 import b64decode
+from datetime import datetime, timedelta
+from functools import lru_cache
+from io import BytesIO
+from pathlib import Path
+from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict
+from urllib.parse import unquote_plus, urlparse, urljoin
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
@@ -23,6 +23,9 @@ from ete3 import TreeNode  # type: ignore
 from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
+
+from .helper import find_external_ressources, rebuild_url
+from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
 
 
 @lru_cache(64)
@@ -94,6 +97,22 @@ class URLNode(HarTreeNode):
             downloaded_filename, downloaded_file_data = downloaded_file
             self.add_feature('downloaded_file', downloaded_file_data)
             self.add_feature('downloaded_filename', downloaded_filename)
+
+    def _dirty_safe_b64decode(self, to_decode: Union[str, bytes]) -> bytes:
+        if isinstance(to_decode, str):
+            # make it bytes
+            _to_decode = to_decode.encode()
+        else:
+            # Make sure we're not modifying it
+            _to_decode = copy.copy(to_decode)
+        # Make sure the padding is right
+        if len(_to_decode) % 4:
+            _to_decode += b'==='
+
+        if any(altchar in _to_decode for altchar in [b'-', b'_']):
+            # Emulate urlsafe b64decode
+            return b64decode(_to_decode, altchars=b'-_', validate=True)
+        return b64decode(_to_decode, validate=True)
 
     def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
         """Load one entry of the HAR file, initialize most of the features of the node"""
@@ -169,78 +188,86 @@ class URLNode(HarTreeNode):
         if 'method' in self.request and self.request['method'] == 'POST' and 'postData' in self.request:
             # If the content is empty, we don't care
             if self.request['postData']['text']:
-                # We have a POST request, the data can be base64 encoded or urlencoded
-                posted_data: Union[str, bytes] = self.request['postData']['text']
-                if 'encoding' in self.request['postData']:
-                    if self.request['postData']['encoding'] == 'base64':
-                        if len(posted_data) % 4:
-                            # a this point, we have a string for sure
-                            posted_data += '==='  # type: ignore
-                        posted_data = b64decode(posted_data)
-                    else:
-                        self.logger.warning(f'Unexpected encoding: {self.request["postData"]["encoding"]}')
-
+                _posted_data: str = self.request['postData']['text']
+                decoded_posted_data: Union[str, bytes, int, float, bool]
+                # NOTE 2023-08-22: Blind attempt to base64 decode the data
+                try:
+                    decoded_posted_data = self._dirty_safe_b64decode(_posted_data)
+                except binascii.Error:
+                    decoded_posted_data = _posted_data
                 if 'mimeType' in self.request['postData']:
-                    if self.request['postData']['mimeType'].startswith('application/x-www-form-urlencoded'):
+                    # make it easier to compare.
+                    mimetype_lower = self.request['postData']['mimeType'].lower()
+                    if mimetype_lower.startswith('application/x-www-form-urlencoded'):
                         # 100% sure there will be websites where decode will fail
-                        if isinstance(posted_data, bytes):
-                            try:
-                                posted_data = posted_data.decode()
-                            except Exception:
-                                self.logger.debug(f'Expected urlencoded, got garbage: {posted_data!r}')
-                        if isinstance(posted_data, str):
-                            posted_data = unquote_plus(posted_data)
-                    elif (self.request['postData']['mimeType'].startswith('application/json')
-                          or self.request['postData']['mimeType'].startswith('application/csp-report')
-                          or self.request['postData']['mimeType'].startswith('application/x-amz-json-1.1')
-                          or self.request['postData']['mimeType'].startswith('application/x-json-stream')
-                          or self.request['postData']['mimeType'].startswith('application/reports+json')
-                          ):
                         try:
-                            # it is relatively common that the supposedly json blob is base64 encoded but the encoding wasn't set properly, let's try to decode anyway.
-                            posted_data = b64decode(posted_data)
-                            self.logger.debug("Contains a sneakily base64 encoded json blob.")
-                        except Exception:
-                            pass
-
-                        if posted_data:
+                            if isinstance(decoded_posted_data, bytes):
+                                decoded_posted_data = decoded_posted_data.decode()
+                            if isinstance(decoded_posted_data, str):
+                                decoded_posted_data = unquote_plus(decoded_posted_data)
+                        except Exception as e:
+                            self.logger.warning(f'Unable to unquote form data "{decoded_posted_data!r}": {e}')
+                    elif (mimetype_lower.startswith('application/json')
+                          or mimetype_lower.startswith('application/csp-report')
+                          or mimetype_lower.startswith('application/x-amz-json-1.1')
+                          or mimetype_lower.startswith('application/x-json-stream')
+                          or mimetype_lower.startswith('application/reports+json')
+                          ):
+                        if isinstance(decoded_posted_data, (str, bytes)):
+                            # at this stage, it will always be bytes or str
                             try:
-                                posted_data = json.loads(posted_data)
+                                # NOTE 2023-08-22: loads here may give us a int, float or a bool.
+                                decoded_posted_data = json.loads(decoded_posted_data)
                             except Exception:
-                                self.logger.debug(f"Expected json, got garbage: {self.request['postData']['mimeType']} - {posted_data[:20]!r}[...]")
+                                if isinstance(decoded_posted_data, (str, bytes)):
+                                    self.logger.debug(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
+                                else:
+                                    self.logger.debug(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
 
-                    elif self.request['postData']['mimeType'].startswith('multipart/form-data'):
+                    elif mimetype_lower.startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
                         pass
-                    elif self.request['postData']['mimeType'].startswith('application/x-protobuffer'):
+                    elif mimetype_lower.startswith('application/x-protobuf'):
                         # FIXME If possible, decode?
                         pass
-                    elif self.request['postData']['mimeType'].startswith('text'):
-                        # We got text, keep what we already have
+                    elif mimetype_lower.startswith('text'):
+                        try:
+                            # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
+                            # loads here may give us a int, float or a bool.
+                            decoded_posted_data = json.loads(decoded_posted_data)
+                        except Exception:
+                            # keep it as it is otherwise.
+                            pass
+                    elif mimetype_lower.endswith('javascript'):
+                        # keep it as it is
                         pass
-                    elif self.request['postData']['mimeType'] == '?':
+                    elif mimetype_lower == '?':
                         # Just skip it, no need to go in the warnings
                         pass
-                    elif self.request['postData']['mimeType'] in ['application/octet-stream']:
-                        # Should flag it.
+                    elif mimetype_lower in ['application/octet-stream', 'application/binary']:
+                        # Should flag it, maybe?
+                        pass
+                    elif mimetype_lower in ['application/unknown', 'application/grpc-web+proto']:
+                        # Weird but already seen stuff
                         pass
                     else:
-                        # Weird stuff: Image/GIF application/unknown application/grpc-web+proto
-                        self.logger.warning(f'Unexpected mime type: {self.request["postData"]["mimeType"]}')
+                        self.logger.warning(f'Unexpected mime type: {mimetype_lower}')
 
-                # The data may be json, try to load it
-                try:
-                    posted_data = json.loads(posted_data)
-                except Exception:
-                    pass
-
-                if isinstance(posted_data, bytes):
-                    # Try to decode it as utf-8
+                # NOTE 2023-08-22: Blind attempt to process the data as json
+                if isinstance(decoded_posted_data, (str, bytes)):
                     try:
-                        posted_data = posted_data.decode('utf-8')
+                        decoded_posted_data = json.loads(decoded_posted_data)
                     except Exception:
                         pass
-                self.add_feature('posted_data', posted_data)
+
+                if isinstance(decoded_posted_data, bytes):
+                    # NOTE 2023-08-22: Blind attempt to decode the bytes
+                    # Try to decode it as utf-8
+                    try:
+                        decoded_posted_data = decoded_posted_data.decode('utf-8')
+                    except Exception:
+                        pass
+                self.add_feature('posted_data', decoded_posted_data)
 
         self.add_feature('response', har_entry['response'])
         try:
@@ -289,7 +316,10 @@ class URLNode(HarTreeNode):
         else:
             self.add_feature('empty_response', False)
             if self.response['content'].get('encoding') == 'base64':
-                self.add_feature('body', BytesIO(b64decode(self.response['content']['text'])))
+                try:
+                    self.add_feature('body', BytesIO(self._dirty_safe_b64decode(self.response['content']['text'])))
+                except binascii.Error:
+                    self.add_feature('body', BytesIO(self.response['content']['text'].encode()))
             else:
                 self.add_feature('body', BytesIO(self.response['content']['text'].encode()))
 
