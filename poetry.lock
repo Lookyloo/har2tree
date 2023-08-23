@@ -1013,13 +1013,13 @@ jupyter-server = ">=1.1.2"
 
 [[package]]
 name = "jupyter-server"
-version = "2.7.1"
+version = "2.7.2"
 description = "The backend—i.e. core services, APIs, and REST endpoints—to Jupyter web applications."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "jupyter_server-2.7.1-py3-none-any.whl", hash = "sha256:59838bf20759354e2b4222fed702948a934cb21a503e21cd5b03706a456391d9"},
-    {file = "jupyter_server-2.7.1.tar.gz", hash = "sha256:76b4ae0b568c331acc9aa904fc4a1194ef9bdefa69f232deb3f3cae802528c05"},
+    {file = "jupyter_server-2.7.2-py3-none-any.whl", hash = "sha256:98a375347b580e837e7016007c24680a4261ed8ad7cd35196ac087d229f48e5a"},
+    {file = "jupyter_server-2.7.2.tar.gz", hash = "sha256:d64fb4e593907290e5df916e3c9399c15ab2cd7bdb71cbcd1d36452dbfb30523"},
 ]
 
 [package.dependencies]
@@ -2317,13 +2317,13 @@ test = ["cython", "filelock", "html5lib", "pytest (>=4.6)"]
 
 [[package]]
 name = "sphinx"
-version = "7.2.0"
+version = "7.2.2"
 description = "Python documentation generator"
 optional = true
 python-versions = ">=3.9"
 files = [
-    {file = "sphinx-7.2.0-py3-none-any.whl", hash = "sha256:93f235913abd52a4544e14457880d4964b2b8efa40eadad445816cd2449842df"},
-    {file = "sphinx-7.2.0.tar.gz", hash = "sha256:da9a84f7456885622bb30ebac42467168396ac2e494182c60dd864aa27405ba3"},
+    {file = "sphinx-7.2.2-py3-none-any.whl", hash = "sha256:ed33bc597dd8f05cd37118f64cbac0b8bf773389a628ddfe95ab9e915c9308dc"},
+    {file = "sphinx-7.2.2.tar.gz", hash = "sha256:1c0abe6d4de7a6b2c2b109a2e18387bf27b240742e1b34ea42ac3ed2ac99978c"},
 ]
 
 [package.dependencies]
@@ -2513,13 +2513,13 @@ test = ["pytest"]
 
 [[package]]
 name = "sphinxcontrib-serializinghtml"
-version = "1.1.8"
+version = "1.1.9"
 description = "sphinxcontrib-serializinghtml is a sphinx extension which outputs \"serialized\" HTML files (json and pickle)"
 optional = true
 python-versions = ">=3.9"
 files = [
-    {file = "sphinxcontrib_serializinghtml-1.1.8-py3-none-any.whl", hash = "sha256:27849e7227277333d3d32f17c138ee148a51fa01f888a41cd6d4e73bcabe2d06"},
-    {file = "sphinxcontrib_serializinghtml-1.1.8.tar.gz", hash = "sha256:aaf3026335146e688fd209b72320314b1b278320cf232e3cda198f873838511a"},
+    {file = "sphinxcontrib_serializinghtml-1.1.9-py3-none-any.whl", hash = "sha256:9b36e503703ff04f20e9675771df105e58aa029cfcbc23b8ed716019b7416ae1"},
+    {file = "sphinxcontrib_serializinghtml-1.1.9.tar.gz", hash = "sha256:0c64ff898339e1fac29abd2bf5f11078f3ec413cfe9c046d3120d7ca65530b54"},
 ]
 
 [package.dependencies]
@@ -2749,17 +2749,17 @@ files = [
 
 [[package]]
 name = "websocket-client"
-version = "1.6.1"
+version = "1.6.2"
 description = "WebSocket client for Python with low level API options"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "websocket-client-1.6.1.tar.gz", hash = "sha256:c951af98631d24f8df89ab1019fc365f2227c0892f12fd150e935607c79dd0dd"},
-    {file = "websocket_client-1.6.1-py3-none-any.whl", hash = "sha256:f1f9f2ad5291f0225a49efad77abf9e700b6fef553900623060dad6e26503b9d"},
+    {file = "websocket-client-1.6.2.tar.gz", hash = "sha256:53e95c826bf800c4c465f50093a8c4ff091c7327023b10bfaff40cf1ef170eaa"},
+    {file = "websocket_client-1.6.2-py3-none-any.whl", hash = "sha256:ce54f419dfae71f4bdba69ebe65bf7f0a93fe71bc009ad3a010aacc3eebad537"},
 ]
 
 [package.extras]
-docs = ["Sphinx (>=3.4)", "sphinx-rtd-theme (>=0.5)"]
+docs = ["Sphinx (>=6.0)", "sphinx-rtd-theme (>=1.1.0)"]
 optional = ["python-socks", "wsaccel"]
 test = ["websockets"]
 
