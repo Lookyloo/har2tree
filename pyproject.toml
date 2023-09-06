@@ -29,8 +29,8 @@ beautifulsoup4 = {version= "^4.12.2", extras = ["lxml"]}
 publicsuffixlist = "^0.10.0.20230828"
 filetype = "^1.2.0"
 numpy = [
-    { version = "1.23.3", python = "<3.10" },
-    { version = "^1.23.4", python = ">=3.10" }
+    { version = "<1.25", python = "<3.9" },
+    { version = "^1.25.2", python = ">=3.9" }
 ]
 w3lib = "^2.1.2"
 Sphinx = [
