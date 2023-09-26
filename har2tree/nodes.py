@@ -93,7 +93,7 @@ class URLNode(HarTreeNode):
                 self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
-        elif downloaded_file:
+        if downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
             self.add_feature('downloaded_file', downloaded_file_data)
             self.add_feature('downloaded_filename', downloaded_filename)

@@ -628,10 +628,15 @@ class Har2Tree:
                 self._nodes_list = []
 
         # 2022-08-25: We now have a tree, we have a self.rendered_node, attach the features.
-        if self.har.html_content:
-            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()), rendered_html=self.har.html_content)
-        elif self.har.downloaded_file and self.har.downloaded_filename:
-            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()), downloaded_file=(self.har.downloaded_filename, self.har.downloaded_file))
+        # 2023-09-26: Turns out we can have a download *and* a rendered HTML if the JS on the page triggers a download
+        downloaded_file = None
+        if self.har.downloaded_filename and self.har.downloaded_file:
+            downloaded_file = (self.har.downloaded_filename if self.har.downloaded_filename else '',
+                               self.har.downloaded_file if self.har.downloaded_file else None)
+
+        self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()),
+                                                 rendered_html=self.har.html_content if self.har.html_content else None,
+                                                 downloaded_file=downloaded_file)
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
