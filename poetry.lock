@@ -1742,13 +1742,13 @@ files = [
 
 [[package]]
 name = "publicsuffixlist"
-version = "0.10.0.20230920"
+version = "0.10.0.20230927"
 description = "publicsuffixlist implement"
 optional = false
 python-versions = ">=2.6"
 files = [
-    {file = "publicsuffixlist-0.10.0.20230920-py2.py3-none-any.whl", hash = "sha256:3ef6fabdbde3bbdb2d0a340496552ddb78343b49e1504bd405f19409d21e2639"},
-    {file = "publicsuffixlist-0.10.0.20230920.tar.gz", hash = "sha256:e12a7cbb224027e4a0d30bfa4e336430e08a94bfdcff64e858fd5bc86d8166d1"},
+    {file = "publicsuffixlist-0.10.0.20230927-py2.py3-none-any.whl", hash = "sha256:a69728f6fea169815607e029b30ad28cedc242d7eb049a867ea7aea47aaac01e"},
+    {file = "publicsuffixlist-0.10.0.20230927.tar.gz", hash = "sha256:1a60e79b6a84a5fdd12f4f2d9a2c985548a3f628daf2ac7c7f9af47b6492b403"},
 ]
 
 [package.extras]
@@ -2792,4 +2792,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "a079ed2ad8bfa1db92d0a8207c922943dab7802c1b7c24fef6fbd1514bf1ba13"
+content-hash = "094107da735844d3bde223ae503f1c5fd84e6b5bdf8451f923d9c19c1141b404"
