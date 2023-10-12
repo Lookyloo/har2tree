@@ -183,7 +183,7 @@ class SimpleTest(unittest.TestCase):
         self.assertNotEqual(self.cookie_ct.root_hartree.har.final_redirect, self.no_cookie_ct.root_hartree.har.final_redirect)
 
     def test_urls_in_rendered_page(self) -> None:
-        self.assertEquals
+        self.assertEqual
         (
             self.cookie_ct.root_hartree.rendered_node.urls_in_rendered_page,
             ['https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DiwGFalTRHDA&gae=cb-23983172&hl=en',
