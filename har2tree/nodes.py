@@ -115,7 +115,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def add_rendered_features(self, all_requests: List[str], rendered_html: Optional[BytesIO]=None, downloaded_file: Tuple[str, Optional[BytesIO]]=('', None)) -> None:
+    def add_rendered_features(self, all_requests: List[str], rendered_html: Optional[BytesIO]=None, downloaded_file: Optional[Tuple[str, Optional[BytesIO]]]=None) -> None:
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
             rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
@@ -131,7 +131,7 @@ class URLNode(HarTreeNode):
                 self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
-        elif downloaded_file:
+        if downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
             self.add_feature('downloaded_file', downloaded_file_data)
             self.add_feature('downloaded_filename', downloaded_filename)
