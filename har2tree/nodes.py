@@ -167,6 +167,15 @@ class URLNode(HarTreeNode):
             # Not an IP
             pass
 
+        if not hasattr(self, 'hostname_is_ip'):
+            try:
+                # attempt to decode if the hostname is idna encoded
+                idna_decoded = self.hostname.encode().decode('idna')
+                if idna_decoded != self.hostname:
+                    self.add_feature('idna', idna_decoded)
+            except UnicodeError:
+                pass
+
         if not hasattr(self, 'hostname_is_ip') and not hasattr(self, 'file_on_disk'):
             tld = get_public_suffix_list().publicsuffix(self.hostname)
             if tld:
@@ -590,8 +599,9 @@ class HostNode(HarTreeNode):
     def add_url(self, url: URLNode) -> None:
         """Add a URL node to the Host node, initialize/update the features"""
         if not self.name:
-            # Only used when initializing the root node
             self.add_feature('name', url.hostname)
+            if hasattr(url, 'idna'):
+                self.add_feature('idna', url.idna)
 
         if hasattr(url, 'hostname_is_ip') and url.hostname_is_ip:
             self.add_feature('hostname_is_ip', True)
