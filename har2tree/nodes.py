@@ -205,7 +205,7 @@ class URLNode(HarTreeNode):
             # Not an IP
             pass
 
-        if 'hostname_is_ip' not in self.features and not self.hostname_is_ip:
+        if 'hostname_is_ip' not in self.features or not self.hostname_is_ip:
             try:
                 # attempt to decode if the hostname is idna encoded
                 idna_decoded = self.hostname.encode().decode('idna')
