@@ -598,15 +598,20 @@ class Har2Tree:
                 if child_node_url.hostname is None:
                     self.logger.warning(f'Fucked up URL: {child_node_url}')
                     continue
-                if child_node_url.hostname in children_hostnames:
-                    child_node_hostname = children_hostnames[child_node_url.hostname]
-                else:
-                    child_node_hostname = root_node_hostname.add_child(HostNode(capture_uuid=self.har.capture_uuid, name=child_node_url.hostname))
+                # Attempt to find an existing HostNode with the same hostname
+                if child_node_url.hostname not in children_hostnames:
+                    # create a new hostnode, add it in the tree
+                    child_node_hostname = HostNode(capture_uuid=self.har.capture_uuid)
+                    root_node_hostname.add_child(child_node_hostname)
                     children_hostnames[child_node_url.hostname] = child_node_hostname
+                else:
+                    child_node_hostname = children_hostnames[child_node_url.hostname]
+
                 child_node_hostname.add_url(child_node_url)
 
                 if not child_node_url.is_leaf:
                     sub_roots[child_node_hostname].append(child_node_url)
+
             for child_node_hostname, child_nodes_url in sub_roots.items():
                 self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
