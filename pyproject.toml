@@ -46,7 +46,7 @@ ipython = [
 ]
 jupyterlab = "^4.0.10"
 pytest-cov = "^4.1.0"
-types-beautifulsoup4 = "^4.12.0.7"
+types-beautifulsoup4 = "^4.12.0.20240106"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "myst-parser"]
