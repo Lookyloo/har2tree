@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import binascii
 import hashlib
 import logging
@@ -41,7 +43,7 @@ class HHHashNote(Har2TreeError):
     pass
 
 
-def make_hhhash(entry: Dict[str, Any]) -> str:
+def make_hhhash(entry: dict[str, Any]) -> str:
     """Generate a HTTP Headers Hash following as described: https://github.com/adulau/HHHash"""
     # NOTES:
     #   * Even if the headers are in a list, some implementations of HTTP Archive will sort
@@ -52,7 +54,7 @@ def make_hhhash(entry: Dict[str, Any]) -> str:
     #     It makes senses for cookies but breaks the hashes. In this implementation,
     #     we remove from the headers names with the same name if they follow eachother.
     #     Example: [Date, Date, Cache-Control] becomes [Date, Cache-Control]
-    prec: Optional[str] = None
+    prec: str | None = None
     to_hash: str = ''
     for header in entry['headers']:
         if prec is None:
@@ -77,7 +79,7 @@ def make_hhhash(entry: Dict[str, Any]) -> str:
     raise HHHashError(f'Unable to generate HHHash: invalid http version ({entry["httpVersion"]})')
 
 
-def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
+def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
     if not uri.startswith('data:'):
         return None
     uri = uri[5:]
@@ -113,7 +115,7 @@ def parse_data_uri(uri: str) -> Optional[Tuple[str, str, bytes]]:
     return mime, mimeparams, data
 
 
-def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
+def rebuild_url(base_url: str, partial: str, known_urls: list[str]) -> str:
     """
     The last part of a URL can be reconnected to its base in plenty different ways.
     This method aims to do that in a generic manner.
@@ -187,11 +189,11 @@ def rebuild_url(base_url: str, partial: str, known_urls: List[str]) -> str:
     return final_url
 
 
-def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_requests: List[str]) -> Dict[str, List[str]]:
+def url_cleanup(dict_to_clean: Mapping[str, list[str]], base_url: str, all_requests: list[str]) -> dict[str, list[str]]:
     """
     Standalone methods to cleanup URLs extracted from an HTML blob.
     """
-    to_return: Dict[str, List[str]] = {}
+    to_return: dict[str, list[str]] = {}
     for key, urls in dict_to_clean.items():
         to_return[key] = []
         for url in urls:
@@ -219,7 +221,7 @@ def url_cleanup(dict_to_clean: Mapping[str, List[str]], base_url: str, all_reque
     return to_return
 
 
-def _unpack_data_uri(data: str) -> Optional[Tuple[str, str, BytesIO]]:
+def _unpack_data_uri(data: str) -> tuple[str, str, BytesIO] | None:
     try:
         parsed_uri = parse_data_uri(data)
         if parsed_uri:
@@ -240,7 +242,7 @@ def _unpack_data_uri(data: str) -> Optional[Tuple[str, str, BytesIO]]:
     return None
 
 
-def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[str], full_text_search: bool=True) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, BytesIO]]]]:
+def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
@@ -253,7 +255,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
     # source: https://www.w3schools.com/TAGs/tag_source.asp -> src srcset
     # link: https://www.w3schools.com/TAGs/tag_link.asp -> href
     # object: https://www.w3schools.com/TAGs/tag_object.asp -> data
-    external_ressources: Dict[str, List[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
+    external_ressources: dict[str, list[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
                                                  'iframe': [], 'embed': [], 'source': [],
                                                  'link': [],
                                                  'object': [],
@@ -262,7 +264,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
                                                  'javascript': [],
                                                  'meta_refresh': []}
 
-    embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = defaultdict(list)
+    embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = defaultdict(list)
 
     # make BS4 life easier and avoid it to attempt to decode
     doc_as_str = str(from_bytes(html_doc).best())
@@ -364,9 +366,9 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: List[
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
 
 
-class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore
+class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore[type-arg]
     """
     Prepend log entry with the UUID of the capture
     """
-    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
-        return '[{}] {}'.format(self.extra['uuid'], msg), kwargs
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
+        return '[{}] {}'.format(self.extra['uuid'], msg), kwargs  # type: ignore[index]

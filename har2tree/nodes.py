@@ -35,7 +35,7 @@ def get_public_suffix_list() -> PublicSuffixList:
     return PublicSuffixList()
 
 
-class HarTreeNode(TreeNode):
+class HarTreeNode(TreeNode):  # type: ignore[misc]
 
     def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node dumpable in json to display with d3js"""
@@ -65,6 +65,8 @@ class HarTreeNode(TreeNode):
 
 
 class URLNode(HarTreeNode):
+
+    start_time: datetime
 
     def __init__(self, capture_uuid: str, **kwargs: Any):
         """Node of the URL Tree"""
