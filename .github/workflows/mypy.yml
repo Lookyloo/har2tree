@@ -1,4 +1,4 @@
-name: Pytest
+name: MyPy checks
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -28,10 +28,6 @@ jobs:
         pipx install poetry
         poetry install
 
-    - name: Test with pytest
+    - name: Run MyPy
       run: |
-        poetry run pytest --cov=har2tree tests/test.py
-        poetry run pytest --cov=har2tree tests/simple_test.py
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+        poetry run mypy .
