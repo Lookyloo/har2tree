@@ -225,6 +225,7 @@ class URLNode(HarTreeNode):
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
                           or mimetype_lower.startswith('application/x-json-stream')
                           or mimetype_lower.startswith('application/reports+json')
+                          or mimetype_lower.endswith('json')
                           ):
                         if isinstance(decoded_posted_data, (str, bytes)):
                             # at this stage, it will always be bytes or str
