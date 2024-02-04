@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import binascii
 import copy
 import hashlib
@@ -14,7 +16,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional, Union, Tuple, Set, MutableMapping, Any, Dict, overload, Literal
+from typing import MutableMapping, Any, overload, Literal
 from urllib.parse import unquote_plus, urlparse, urljoin
 
 import filetype  # type: ignore
@@ -35,9 +37,9 @@ def get_public_suffix_list() -> PublicSuffixList:
     return PublicSuffixList()
 
 
-class HarTreeNode(Tree):
+class HarTreeNode(Tree):  # type: ignore[misc]
 
-    def __init__(self, capture_uuid: str, name: Optional[str]=None):
+    def __init__(self, capture_uuid: str, name: str | None=None):
         """Node dumpable in json to display with d3js"""
         super().__init__()
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
@@ -45,7 +47,7 @@ class HarTreeNode(Tree):
         self.add_feature('uuid', str(uuid.uuid4()))
         if name:
             self.add_feature('name', name)
-        self.features_to_skip: Set[str] = set()
+        self.features_to_skip: set[str] = set()
 
     def add_feature(self, feature_name: str, feature_value: Any) -> None:
         self.add_prop(feature_name, feature_value)
@@ -64,18 +66,18 @@ class HarTreeNode(Tree):
             return self.props[attribute]
 
     @property
-    def features(self) -> Set[str]:
+    def features(self) -> set[str]:
         return set(self.props.keys())
 
     @overload
-    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[True]=True) -> Optional['HarTreeNode']:
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[True]=True) -> HarTreeNode | None:
         ...
 
     @overload
-    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[False]) -> 'HarTreeNode':
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: Literal[False]) -> HarTreeNode:
         ...
 
-    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: bool=False) -> Optional['HarTreeNode']:
+    def get_first_by_feature(self, feature_name: str, value: str, /, *, expect_missing: bool=False) -> HarTreeNode | None:
         try:
             return next(self.search_nodes(**{feature_name: value}))
         except StopIteration:
@@ -103,6 +105,7 @@ class HarTreeNode(Tree):
 
 
 class URLNode(HarTreeNode):
+    start_time: datetime
 
     def __init__(self, capture_uuid: str, name: str):
         """Node of the URL Tree"""
@@ -115,20 +118,20 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
-    def add_rendered_features(self, all_requests: List[str], rendered_html: Optional[BytesIO]=None, downloaded_file: Optional[Tuple[str, Optional[BytesIO]]]=None) -> None:
+    def add_rendered_features(self, all_requests: list[str], rendered_html: BytesIO | None=None, downloaded_file: tuple[str, BytesIO | None] | None=None) -> None:
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
             rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
             if 'external_ressources' in self.features:
                 # for the external ressources, the keys are always the same
-                self.external_ressources: Dict[str, List[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
+                self.external_ressources: dict[str, list[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
             else:
                 self.add_feature('external_ressources', rendered_external)
 
             if 'embedded_ressources' in self.features:
                 # for the embedded ressources, the keys are the mimetypes, they may not overlap
                 mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
-                self.embedded_ressources: Dict[str, List[Tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
+                self.embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
         if downloaded_file:
@@ -136,7 +139,7 @@ class URLNode(HarTreeNode):
             self.add_feature('downloaded_file', downloaded_file_data)
             self.add_feature('downloaded_filename', downloaded_filename)
 
-    def _dirty_safe_b64decode(self, to_decode: Union[str, bytes]) -> bytes:
+    def _dirty_safe_b64decode(self, to_decode: str | bytes) -> bytes:
         if isinstance(to_decode, str):
             # make it bytes
             _to_decode = to_decode.encode()
@@ -152,7 +155,7 @@ class URLNode(HarTreeNode):
             return b64decode(_to_decode, altchars=b'-_', validate=True)
         return b64decode(_to_decode, validate=True)
 
-    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: List[str]) -> None:
+    def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: list[str]) -> None:
         """Load one entry of the HAR file, initialize most of the features of the node"""
         if not self.name:
             # We're in the actual root node
@@ -236,7 +239,7 @@ class URLNode(HarTreeNode):
             # If the content is empty, we don't care
             if self.request['postData']['text']:
                 _posted_data: str = self.request['postData']['text']
-                decoded_posted_data: Union[str, bytes, int, float, bool]
+                decoded_posted_data: str | bytes | int | float | bool
                 # NOTE 2023-08-22: Blind attempt to base64 decode the data
                 try:
                     decoded_posted_data = self._dirty_safe_b64decode(_posted_data)
@@ -259,6 +262,7 @@ class URLNode(HarTreeNode):
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
                           or mimetype_lower.startswith('application/x-json-stream')
                           or mimetype_lower.startswith('application/reports+json')
+                          or mimetype_lower.endswith('json')
                           ):
                         if isinstance(decoded_posted_data, (str, bytes)):
                             # at this stage, it will always be bytes or str
@@ -470,9 +474,11 @@ class URLNode(HarTreeNode):
 
     @property
     def generic_type(self) -> str:
-        if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype:
+        if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype or self.mimetype.startswith('js'):
             return 'js'
-        elif self.mimetype.startswith('image'):
+        elif (self.mimetype.startswith('image')
+              or self.mimetype.startswith('img')
+              or 'webp' in self.mimetype):
             return 'image'
         elif self.mimetype.startswith('text/css'):
             return 'css'
@@ -480,31 +486,51 @@ class URLNode(HarTreeNode):
             return 'json'
         elif 'html' in self.mimetype:
             return 'html'
-        elif 'font' in self.mimetype or 'woff' in self.mimetype:
+        elif ('font' in self.mimetype
+                or 'woff' in self.mimetype
+                or 'opentype' in self.mimetype):
             return 'font'
-        elif 'octet-stream' in self.mimetype:
+        elif ('octet-stream' in self.mimetype
+                or 'application/x-protobuf' in self.mimetype
+                or 'application/pkix-cert' in self.mimetype
+                or 'application/x-123' in self.mimetype
+                or 'application/x-binary' in self.mimetype
+                or 'application/x-msdownload' in self.mimetype
+                or 'application/x-thrift' in self.mimetype
+                or 'application/x-troff-man' in self.mimetype
+                or 'application/x-typekit-augmentation' in self.mimetype
+                or 'application/grpc-web' in self.mimetype
+                or 'model/gltf-binary' in self.mimetype
+                or 'model/obj' in self.mimetype
+                or 'application/wasm' in self.mimetype):
             return 'octet-stream'
-        elif ('text/plain' in self.mimetype or 'xml' in self.mimetype
+        elif ('text' in self.mimetype or 'xml' in self.mimetype
+                or self.mimetype.startswith('multipart')
+                or self.mimetype.startswith('message')
                 or 'application/x-www-form-urlencoded' in self.mimetype
                 or 'application/vnd.oasis.opendocument.formula-template' in self.mimetype):
             return 'text'
         elif 'video' in self.mimetype:
             return 'video'
-        elif 'audio' in self.mimetype:
+        elif ('audio' in self.mimetype or 'ogg' in self.mimetype):
             return 'audio'
-        elif 'mpegurl' in self.mimetype.lower():
+        elif ('mpegurl' in self.mimetype
+                or 'application/vnd.yt-ump' in self.mimetype):
             return 'livestream'
         elif ('application/x-shockwave-flash' in self.mimetype
                 or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
             return 'flash'
         elif 'application/pdf' in self.mimetype:
             return 'pdf'
-        elif not self.mimetype:
+        elif ('application/gzip' in self.mimetype
+                or 'application/zip' in self.mimetype):
+            return 'archive'
+        elif not self.mimetype or self.mimetype == 'none':
             return 'unset_mimetype'
         else:
             return 'unknown_mimetype'
 
-    def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> Optional[str]:
+    def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> str | None:
         # Because everything is terrible, and the call stack can have parents
         if stack['callFrames']:
             return unquote_plus(stack['callFrames'][0]['url'])
@@ -513,7 +539,7 @@ class URLNode(HarTreeNode):
         return None
 
     @property
-    def resources_hashes(self) -> Set[str]:
+    def resources_hashes(self) -> set[str]:
         all_ressources_hashes = set()
         if 'body_hash' in self.features:
             all_ressources_hashes.add(self.body_hash)
@@ -523,9 +549,9 @@ class URLNode(HarTreeNode):
         return all_ressources_hashes
 
     @property
-    def urls_in_rendered_page(self) -> List[str]:
+    def urls_in_rendered_page(self) -> list[str]:
 
-        def _sanitize(maybe_url: str) -> Optional[str]:
+        def _sanitize(maybe_url: str) -> str | None:
             href = strip_html5_whitespace(maybe_url)
             href = safe_url_string(href)
 
@@ -539,7 +565,7 @@ class URLNode(HarTreeNode):
 
         if 'rendered_html' not in self.features or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
-        urls: Set[str] = set()
+        urls: set[str] = set()
         soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
 
         # The simple ones: the links.
@@ -568,7 +594,7 @@ class URLNode(HarTreeNode):
 
 class HostNode(HarTreeNode):
 
-    def __init__(self, capture_uuid: str, name: Optional[str]=None):
+    def __init__(self, capture_uuid: str, name: str | None =None):
         """Node of the Hostname Tree"""
         super().__init__(capture_uuid=capture_uuid, name=name)
         # Do not add the URLs in the json dump
@@ -593,8 +619,8 @@ class HostNode(HarTreeNode):
         self.add_feature('http_content', False)
         self.add_feature('https_content', False)
         self.add_feature('contains_rendered_urlnode', False)
-        self.cookies_sent: Set[str] = set()
-        self.cookies_received: Set[Tuple[str, str, bool]] = set()
+        self.cookies_sent: set[str] = set()
+        self.cookies_received: set[tuple[str, str, bool]] = set()
 
     def to_dict(self) -> MutableMapping[str, Any]:
         """Make a dictionary that is json dumpable for d3js"""
@@ -697,6 +723,6 @@ class HostNode(HarTreeNode):
             self.https_content = True
 
 
-def harnode_json_default(obj: 'HarTreeNode') -> MutableMapping[str, Any]:
+def harnode_json_default(obj: HarTreeNode) -> MutableMapping[str, Any]:
     if isinstance(obj, HarTreeNode):
         return obj.to_dict()

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import gzip
 import hashlib
 import json
@@ -11,7 +13,7 @@ from functools import wraps, lru_cache
 from io import BytesIO
 from operator import itemgetter
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Set, Union, Callable
+from typing import Any, Callable
 from urllib.parse import unquote_plus, urlparse
 
 from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
@@ -56,7 +58,7 @@ def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., No
 
 def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
     @wraps(method)
-    def _impl(self: Any, root: URLNode, nodes_to_attach: Optional[List[URLNode]]=None, dev_debug: bool=False) -> None:
+    def _impl(self: Any, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
         if dev_debug_mode:
             __load_debug_files()
             if dev_debug_url and root.name == dev_debug_url or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.name == dev_debug_url):
@@ -92,7 +94,7 @@ class HarFile():
         self.path = harfile
 
         try:
-            self.har: Dict[str, Any]
+            self.har: dict[str, Any]
             if self.path.suffix == '.gz':
                 self.is_compressed = True
                 with gzip.open(self.path, 'rb') as f:
@@ -122,14 +124,14 @@ class HarFile():
         cookiefile = self.path.parent / f'{root_name}.cookies.json'
         if cookiefile.is_file():
             with cookiefile.open() as c:
-                self.cookies: List[Dict[str, Any]] = json.load(c)
+                self.cookies: list[dict[str, Any]] = json.load(c)
         else:
             self.logger.debug('No cookies file available.')
             self.cookies = []
 
         dlfile = self.path.parent / f'{root_name}.data'
         dlfilename = self.path.parent / f'{root_name}.data.filename'
-        self.downloaded_file: Optional[BytesIO]
+        self.downloaded_file: BytesIO | None
         self.downloaded_filename: str
         if dlfile.is_file() and dlfilename.is_file():
             with dlfilename.open('r') as _fn:
@@ -142,7 +144,7 @@ class HarFile():
             self.downloaded_filename = ''
 
         htmlfile = self.path.parent / f'{root_name}.html'
-        self.html_content: Optional[BytesIO]
+        self.html_content: BytesIO | None
         if htmlfile.is_file():
             with htmlfile.open('rb') as _h:
                 self.html_content = BytesIO(_h.read())
@@ -156,7 +158,7 @@ class HarFile():
 
         # Used to find the root entry of a page in the capture
         # NOTE 2020-05-19: Turns out multiple pages can have the exact same timestamp...
-        self.pages_start_times: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self.pages_start_times: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for page in self.har['log']['pages']:
             self.pages_start_times[page['startedDateTime']].append(page)
         # The first entry has a different start time as the one from the list, add that
@@ -211,7 +213,7 @@ class HarFile():
         return '-'
 
     @property
-    def entries(self) -> List[Dict[str, Any]]:
+    def entries(self) -> list[dict[str, Any]]:
         """List of all the entries in the capture"""
         if not self.har['log']['entries']:
             raise Har2TreeError('Empty HAR file (no entries), invalid capture.')
@@ -222,7 +224,7 @@ class HarFile():
         """First URL of the capture"""
         return self.entries[0]['request']['url']
 
-    def __find_header_value(self, har_entry: Dict[str, Any], header_name: str) -> Optional[str]:
+    def __find_header_value(self, har_entry: dict[str, Any], header_name: str) -> str | None:
         """Get the value of a specific header"""
         for header_entry in har_entry['request']['headers']:
             if header_entry['name'].lower() == header_name.lower():
@@ -236,7 +238,7 @@ class HarFile():
         return self.entries[0]['request']['url'] != self.final_redirect
 
     @property
-    def initial_redirects(self) -> List[str]:
+    def initial_redirects(self) -> list[str]:
         '''All the initial redirects from the URL given by the user (if they can be found without building the tree)'''
         to_return = []
         if self.has_initial_redirects:
@@ -272,12 +274,12 @@ class HarFile():
         return to_return
 
     @property
-    def root_referrer(self) -> Optional[str]:
+    def root_referrer(self) -> str | None:
         '''Get the referer if the first entry. Only relevant when there are multiple tree to attach together'''
         return self.__find_header_value(self.entries[0], 'Referer')
 
     @property
-    def root_user_agent(self) -> Optional[str]:
+    def root_user_agent(self) -> str | None:
         '''Get the User Agent of the first entry'''
         return self.__find_header_value(self.entries[0], 'User-Agent')
 
@@ -296,39 +298,39 @@ class Har2Tree:
         self.har = HarFile(har_path, capture_uuid)
         self.hostname_tree = HostNode(capture_uuid=self.har.capture_uuid)
 
-        self._nodes_list: List[URLNode] = []
-        self.all_url_requests: Dict[str, List[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
+        self._nodes_list: list[URLNode] = []
+        self.all_url_requests: dict[str, list[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
 
         # Format: pageref: node UUID
-        self.pages_root: Dict[str, str] = {}
+        self.pages_root: dict[str, str] = {}
 
-        self.all_redirects: List[str] = []
-        self.all_referer: Dict[str, List[str]] = defaultdict(list)
-        self.all_initiator_url: Dict[str, List[str]] = defaultdict(list)
+        self.all_redirects: list[str] = []
+        self.all_referer: dict[str, list[str]] = defaultdict(list)
+        self.all_initiator_url: dict[str, list[str]] = defaultdict(list)
         self._load_url_entries()
 
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
-        self.initial_cookies: Dict[str, Dict[str, Any]] = {}
+        self.initial_cookies: dict[str, dict[str, Any]] = {}
         if 'cookies_sent' in self._nodes_list[0].features:
             self.initial_cookies = {key: cookie for key, cookie in self._nodes_list[0].cookies_sent.items()}
 
         # Dictionary of all cookies received during the capture
-        self.cookies_received: Dict[str, List[Tuple[str, URLNode, bool]]] = defaultdict(list)
+        self.cookies_received: dict[str, list[tuple[str, URLNode, bool]]] = defaultdict(list)
         for n in self._nodes_list:
             if 'cookies_received' in n.features:
                 for domain, c_received, is_3rd_party in n.cookies_received:
                     self.cookies_received[c_received].append((domain, n, is_3rd_party))
 
         # Dictionary of all cookies sent during the capture
-        self.cookies_sent: Dict[str, List[URLNode]] = defaultdict(list)
+        self.cookies_sent: dict[str, list[URLNode]] = defaultdict(list)
         for n in self._nodes_list:
             if 'cookies_sent' in n.features:
                 for c_sent in n.cookies_sent.keys():
                     self.cookies_sent[c_sent].append(n)
 
         # NOTE: locally_created contains all cookies not present in a response, and not passed at the begining of the capture to splash
-        self.locally_created: Dict[str, Dict[str, Any]] = {}
+        self.locally_created: dict[str, dict[str, Any]] = {}
         for c in self.har.cookies:
             c_identifier = f'{c["name"]}={c["value"]}'
             if (c_identifier not in self.cookies_received
@@ -336,7 +338,7 @@ class Har2Tree:
                 self.locally_created[f'{c["name"]}={c["value"]}'] = c
 
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
-        self.locally_created_not_sent: Dict[str, Dict[str, Any]] = self.locally_created.copy()
+        self.locally_created_not_sent: dict[str, dict[str, Any]] = self.locally_created.copy()
         # Cross reference the source of the cookie
         for n in self._nodes_list:
             if 'cookies_sent' in n.features:
@@ -396,7 +398,7 @@ class Har2Tree:
         self.url_tree = self._nodes_list.pop(0)
 
     @property
-    def initial_referer(self) -> Optional[str]:
+    def initial_referer(self) -> str | None:
         '''The referer passed to the first URL in the tree'''
         if 'referer' in self.url_tree.features:
             return self.url_tree.referer
@@ -411,15 +413,15 @@ class Har2Tree:
         return sum(urlnode.body.getbuffer().nbytes for urlnode in self.url_tree.traverse() if not urlnode.empty_response)
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Statistics about the capture"""
-        to_return: Dict[str, Any] = {'total_hostnames': 0}
+        to_return: dict[str, Any] = {'total_hostnames': 0}
         to_return['total_urls'] = sum(1 for _ in self.url_tree.traverse())
         to_return['total_unique_urls'] = len({node.name for node in self.url_tree.traverse()})
 
-        all_cookies_sent: Set[str] = set()
-        all_cookies_received: Set[Tuple[str, str, bool]] = set()
-        all_hostnames: Set[str] = set()
+        all_cookies_sent: set[str] = set()
+        all_cookies_received: set[tuple[str, str, bool]] = set()
+        all_hostnames: set[str] = set()
         for host_node in self.hostname_tree.traverse():
             to_return['total_hostnames'] += 1
             all_hostnames.add(host_node.name)
@@ -437,12 +439,12 @@ class Har2Tree:
         return to_return
 
     @property
-    def redirects(self) -> List[str]:
+    def redirects(self) -> list[str]:
         """List of redirects for this tree"""
         return [a.name for a in reversed(list(self.rendered_node.ancestors()))] + [self.rendered_node.name]
 
     @property
-    def root_referer(self) -> Optional[str]:
+    def root_referer(self) -> str | None:
         '''Referer if the first entry. Only relevant when there are multiple tree to attach together'''
         return self.har.root_referrer
 
@@ -457,12 +459,12 @@ class Har2Tree:
         return self.url_tree.start_time
 
     @lru_cache
-    def build_all_hashes(self, algorithm: str='sha1') -> Dict[str, List[URLNode]]:
+    def build_all_hashes(self, algorithm: str='sha1') -> dict[str, list[URLNode]]:
         '''Build on demand hashes for all the ressources of the tree, in the alorighm provided by the user'''
         if algorithm not in hashlib.algorithms_available:
             raise Har2TreeError(f'Invalid algorithm ({algorithm}), only the following are supported: {hashlib.algorithms_available}')
 
-        to_return: Dict[str, List[URLNode]] = defaultdict(list)
+        to_return: dict[str, list[URLNode]] = defaultdict(list)
         for urlnode in self.url_tree.traverse():
             if urlnode.empty_response:
                 continue
@@ -487,9 +489,9 @@ class Har2Tree:
         # loading a specific URL, and we often have an other entry requesting the same URL (but not always)
         # * If we have an other query to the same URL in the list, discard the one with a status code to 0
         # * If we don't, use the entry in the tree.
-        entries_with_0_status: Dict[str, List[int]] = defaultdict(list)
-        entries_with_negative_status: Dict[str, List[int]] = defaultdict(list)
-        ignore: List[int] = []
+        entries_with_0_status: dict[str, list[int]] = defaultdict(list)
+        entries_with_negative_status: dict[str, list[int]] = defaultdict(list)
+        ignore: list[int] = []
         for i, url_entry in enumerate(self.har.entries):
             url = unquote_plus(url_entry["request"]["url"])
             if url_entry['response']['status'] == 0:
@@ -585,15 +587,15 @@ class Har2Tree:
         """Dump the whole HostNode tree to json (for d3js)"""
         return self.hostname_tree.to_json()
 
-    def make_hostname_tree(self, root_nodes_url: Union[URLNode, List[URLNode]], root_node_hostname: HostNode) -> None:
+    def make_hostname_tree(self, root_nodes_url: URLNode | list[URLNode], root_node_hostname: HostNode) -> None:
         """ Groups all the URLs by domain in the HostNode tree.
         `root_node_url` can be a list of nodes called by the same `root_node_hostname`
         """
         if not isinstance(root_nodes_url, list):
             root_nodes_url = [root_nodes_url]
         for root_node_url in root_nodes_url:
-            children_hostnames: Dict[str, HostNode] = {}
-            sub_roots: Dict[HostNode, List[URLNode]] = defaultdict(list)
+            children_hostnames: dict[str, HostNode] = {}
+            sub_roots: dict[HostNode, list[URLNode]] = defaultdict(list)
             for child_node_url in root_node_url.get_children():
                 if child_node_url.hostname is None:
                     self.logger.warning(f'Fucked up URL: {child_node_url}')
@@ -710,9 +712,9 @@ class Har2Tree:
             self._make_subtree(page_root_node, [node])
 
     @trace_make_subtree
-    def _make_subtree(self, root: URLNode, nodes_to_attach: Optional[List[URLNode]]=None, dev_debug: bool=False) -> None:
+    def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
         """Recursive method building each level of the tree"""
-        matching_urls: List[URLNode]
+        matching_urls: list[URLNode]
         if nodes_to_attach is None:
             # We're in the actual root node
             unodes = [self.url_tree]
@@ -783,7 +785,7 @@ class Har2Tree:
 
             # 2022-04-27: Referers are supposed to be the complete URL, but they can also be only part of it.
             #             what we do here is going from best to worse in the hope one of them matches
-            _referer_strings: List[str] = [
+            _referer_strings: list[str] = [
                 unode.name,  # full URL
                 unode.alternative_url_for_referer,  # URL up to the first `#`
             ]
