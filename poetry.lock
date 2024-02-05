@@ -2940,4 +2940,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.13"
-content-hash = "78fc925395e7325261a4a87366ada5b76a49e3c1d6d13b34993c5deded0eae20"
+content-hash = "5cf0c237b35ce5cf14689593c971f6b9a9659849b1263257256f5827894290b4"
