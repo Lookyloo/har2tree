@@ -274,6 +274,16 @@ def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
                     to_return['recaptcha'] += sitekey
                 else:
                     to_return['recaptcha'].append(sitekey)
+
+    if recaptchas := soup.select(".h-captcha"):
+        # We should have only one recaptcha per page, but have you seen the web?
+        for recaptcha in recaptchas:
+            if sitekey := recaptcha.get('data-sitekey'):
+                if isinstance(sitekey, list):
+                    # Should not happen, but once again...
+                    to_return['hcaptcha'] += sitekey
+                else:
+                    to_return['hcaptcha'].append(sitekey)
     return to_return
 
 
