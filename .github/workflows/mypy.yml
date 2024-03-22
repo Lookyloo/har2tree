@@ -27,9 +27,6 @@ jobs:
         git submodule update --init --recursive
         pipx install poetry
         poetry install
-        git clone https://github.com/etetoolkit/ete.git ../ete
-        poetry run pip install -e ../ete/
-
 
     - name: Run MyPy
       run: |
