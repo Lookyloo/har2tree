@@ -26,7 +26,7 @@ from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
-from .helper import find_external_ressources, rebuild_url
+from .helper import find_external_ressources, rebuild_url, find_identifiers
 from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
 
 
@@ -134,6 +134,10 @@ class URLNode(HarTreeNode):
                 self.embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
+
+            if identifiers := find_identifiers(rendered_html.getvalue()):
+                self.add_feature('identifiers', identifiers)
+
         if downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
             self.add_feature('downloaded_file', downloaded_file_data)

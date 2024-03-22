@@ -9,9 +9,9 @@ import os
 import re
 import warnings
 
-from charset_normalizer import from_bytes
 from base64 import b64decode
 from collections import defaultdict
+from functools import lru_cache
 from io import BytesIO
 from logging import LoggerAdapter
 from typing import Mapping, MutableMapping, Any
@@ -20,6 +20,7 @@ from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 import filetype  # type: ignore
 
 from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
+from charset_normalizer import from_bytes
 
 warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 
@@ -242,6 +243,43 @@ def _unpack_data_uri(data: str) -> tuple[str, str, BytesIO] | None:
     return None
 
 
+@lru_cache(maxsize=5)
+def init_bs4(html_doc: bytes) -> BeautifulSoup | None:
+    # make BS4 life easier and avoid it to attempt to decode
+    doc_as_str = str(from_bytes(html_doc).best())
+    if not doc_as_str:
+        # no need to bother.
+        return None
+    if doc_as_str.startswith('<?xml'):
+        return BeautifulSoup(doc_as_str, 'lxml-xml')
+    else:
+        return BeautifulSoup(doc_as_str, 'lxml')
+
+
+def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
+    ''' Extracts the identifiers from the HTML blob.
+    The identifier we extract now is the recapthca site key, but there will be more.
+    '''
+    soup = init_bs4(html_doc)
+    if soup is None:
+        return None
+    to_return: dict[str, list[str]] = defaultdict(list)
+
+    default_captchas = ['g-recaptcha', 'h-captcha', 'cf-turnstile']
+    for captcha in default_captchas:
+        if captchas := soup.select(f".{captcha}"):
+            # We should have only one captcha per page, but have you seen the web?
+            for c in captchas:
+                if sitekey := c.get('data-sitekey'):
+                    if isinstance(sitekey, list):
+                        # Should not happen, but once again...
+                        to_return[captcha] += sitekey
+                    else:
+                        to_return[captcha].append(sitekey)
+
+    return to_return
+
+
 def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
@@ -265,16 +303,9 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
                                                  'meta_refresh': []}
 
     embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = defaultdict(list)
-
-    # make BS4 life easier and avoid it to attempt to decode
-    doc_as_str = str(from_bytes(html_doc).best())
-    if not doc_as_str:
-        # no need to bother.
+    soup = init_bs4(html_doc)
+    if soup is None:
         return external_ressources, embedded_ressources
-    if doc_as_str.startswith('<?xml'):
-        soup = BeautifulSoup(doc_as_str, 'lxml-xml')
-    else:
-        soup = BeautifulSoup(doc_as_str, 'lxml')
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed',
                                'source', 'link', 'object']):
         uri = None
