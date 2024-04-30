@@ -15,6 +15,12 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-    # retrieve your distributions here
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+      - name: Build artifacts
+        run: poetry build
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
