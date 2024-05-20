@@ -283,7 +283,7 @@ def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
     if google_tag_ids := set(re.findall(rb"(?:G-|AW-|GA-|UA-)\w{9,13}", html_doc)):
         blocklist = {b'UA-Compatible'}
         google_tag_ids -= blocklist
-        to_return['google_tag_ids'] = list(google_tag_ids)
+        to_return['google_tag_ids'] = [i.decode() for i in google_tag_ids]
 
     return to_return
 
