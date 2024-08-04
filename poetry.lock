@@ -3110,9 +3110,9 @@ doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linke
 test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy", "pytest-ruff (>=0.2.1)"]
 
 [extras]
-docs = ["Sphinx", "Sphinx", "Sphinx"]
+docs = ["Sphinx", "Sphinx", "Sphinx", "six"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.13"
-content-hash = "22d2863e2cc2a84d4c15934c4af461e286bd7e9633d51834ec02756db7792eb5"
+content-hash = "77ad25da2ebe2414fd4f150e426adf4c0761d679d088d73cd57a221b00174f00"
