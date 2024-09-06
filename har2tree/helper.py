@@ -88,7 +88,7 @@ def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
         mime, b64data = uri.split(';base64', 1)
         if not b64data or b64data[0] != ',':
             return None
-        b64data = b64data[1:].strip()
+        b64data = b64data[1:].strip().replace('\n', '')
         if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
             return None
         if len(b64data) % 4:
