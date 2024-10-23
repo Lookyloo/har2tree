@@ -11,7 +11,6 @@ import warnings
 
 from base64 import b64decode
 from collections import defaultdict
-from functools import lru_cache
 from io import BytesIO
 from logging import LoggerAdapter
 from typing import Mapping, MutableMapping, Any
@@ -20,7 +19,6 @@ from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 import filetype  # type: ignore
 
 from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
-from charset_normalizer import from_bytes
 
 warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 
@@ -243,26 +241,10 @@ def _unpack_data_uri(data: str) -> tuple[str, str, BytesIO] | None:
     return None
 
 
-@lru_cache(maxsize=5)
-def init_bs4(html_doc: bytes) -> BeautifulSoup | None:
-    # make BS4 life easier and avoid it to attempt to decode
-    doc_as_str = str(from_bytes(html_doc).best())
-    if not doc_as_str:
-        # no need to bother.
-        return None
-    if doc_as_str.startswith('<?xml'):
-        return BeautifulSoup(doc_as_str, 'lxml-xml')
-    else:
-        return BeautifulSoup(doc_as_str, 'lxml')
-
-
-def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
+def find_identifiers(soup: BeautifulSoup) -> dict[str, list[str]] | None:
     ''' Extracts the identifiers from the HTML blob.
     The identifier we extract now is the recapthca site key, but there will be more.
     '''
-    soup = init_bs4(html_doc)
-    if soup is None:
-        return None
     to_return: dict[str, list[str]] = defaultdict(list)
 
     default_captchas = ['g-recaptcha', 'h-captcha', 'cf-turnstile']
@@ -280,15 +262,16 @@ def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
     # This is beta and kinda fragile, but it's going to find (most) of the google tag IDs
     # https://support.google.com/google-ads/answer/12326985?hl=en_us_us
     # NOTE: the doc says 9 X, but all the examples I found have 10 X so we cannot trust it
-    if google_tag_ids := set(re.findall(rb"(?:G-|AW-|GA-|UA-)\w{9,13}", html_doc)):
-        blocklist = {b'UA-Compatible'}
+    if google_tag_ids := set(re.findall(r"(?:G-|AW-|GA-|UA-)\w{9,13}", str(soup))):
+        blocklist = {'UA-Compatible'}
         google_tag_ids -= blocklist
-        to_return['google_tag_ids'] = [i.decode() for i in google_tag_ids]
+        if google_tag_ids:
+            to_return['google_tag_ids'] = list(google_tag_ids)
 
     return to_return
 
 
-def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
+def find_external_ressources(soup: BeautifulSoup, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
@@ -311,8 +294,9 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
                                                  'meta_refresh': []}
 
     embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = defaultdict(list)
-    soup = init_bs4(html_doc)
-    if soup is None:
+    string_soup = str(soup)
+    if not string_soup:
+        # Empty HTML document, nothing to do
         return external_ressources, embedded_ressources
     for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed',
                                'source', 'link', 'object']):
@@ -359,12 +343,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
             external_ressources['meta_refresh'].append(content)
 
     # external stuff loaded from css content, because reasons.
-    for u in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc):
-        try:
-            url = u.decode()
-        except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode ressource in CSS {u[:20]}[...]: {e}')
-            continue
+    for url in re.findall(r'url\((?:[\'"])?(.*?)(?:[\'"])?\)', string_soup):
         if url.startswith('data:'):
             unpacked = _unpack_data_uri(url)
             if unpacked:
@@ -375,18 +354,13 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
 
     # Javascript changing the current page
     # I never found a website where it matched anything useful
-    for u in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc):
-        try:
-            url = u.decode()
-        except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode ressource in JS {u[:20]}[...]: {e}')
-            continue
+    for url in re.findall('(?:window|self|top).location(?:.*)\"(.*?)\"', string_soup):
         external_ressources['javascript'].append(url)
     # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
     # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
     # Just in case, there is sometimes an unescape call in JS code
-    for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc):
+    for to_unescape in re.findall(r'unescape\(\'(.*)\'\)', string_soup):
         unescaped = unquote_to_bytes(to_unescape)
         kind = filetype.guess(unescaped)
         if kind:
@@ -399,7 +373,7 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
 
     if full_text_search:
         # Just regex in the whole blob, because we can
-        external_ressources['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc)]
+        external_ressources['full_regex'] = re.findall(r'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', str(soup))
         # print("################ REGEXES ", external_ressources['full_regex'])
     # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources

@@ -12,8 +12,10 @@ import uuid
 import re
 
 from base64 import b64decode
+from charset_normalizer import from_bytes
 from datetime import datetime, timedelta
-from functools import lru_cache
+from functools import lru_cache, cached_property, cache
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from typing import MutableMapping, Any
@@ -81,10 +83,14 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
+    def _compute_domhash(self) -> str:
+        to_hash = "|".join(t.name for t in self.rendered_soup.findAll()).encode()
+        return sha256(to_hash).hexdigest()[:32]
+
     def add_rendered_features(self, all_requests: list[str], rendered_html: BytesIO | None=None, downloaded_file: tuple[str, BytesIO | None] | None=None) -> None:
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
-            rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
+            rendered_external, rendered_embedded = find_external_ressources(self.rendered_soup, self.name, all_requests)
             if hasattr(self, 'external_ressources'):
                 # for the external ressources, the keys are always the same
                 self.external_ressources: dict[str, list[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
@@ -98,8 +104,12 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
 
-            if identifiers := find_identifiers(rendered_html.getvalue()):
+            if identifiers := find_identifiers(self.rendered_soup):
                 self.add_feature('identifiers', identifiers)
+
+            if domhash := self._compute_domhash():
+                print(domhash)
+                self.add_feature('domhash', domhash)
 
         if downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
@@ -355,7 +365,8 @@ class URLNode(HarTreeNode):
             if not hasattr(self, 'mimetype'):
                 self.add_feature('mimetype', '')
 
-            external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
+            soup = self._make_soup(self.body.getvalue())
+            external_ressources, embedded_ressources = find_external_ressources(soup, self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
 
@@ -534,10 +545,9 @@ class URLNode(HarTreeNode):
         if not hasattr(self, 'rendered_html') or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
         urls: set[str] = set()
-        soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
 
         # The simple ones: the links.
-        for a_tag in soup.find_all(["a", "area"]):
+        for a_tag in self.rendered_soup.find_all(["a", "area"]):
             href = a_tag.attrs.get("href")
             if not href:
                 continue
@@ -545,7 +555,7 @@ class URLNode(HarTreeNode):
                 urls.add(href)
 
         # The rest of the mess
-        for tag in soup.find_all(True):
+        for tag in self.rendered_soup.find_all(True):
             if tag.name in ["a", "area", 'img', 'script', 'video', 'audio', 'iframe', 'embed',
                             'source', 'link', 'object']:
                 # processed either above or as external resources
@@ -558,6 +568,21 @@ class URLNode(HarTreeNode):
                         urls.add(href)
 
         return sorted(urls)
+
+    @cache
+    def _make_soup(self, html: bytes) -> BeautifulSoup:
+        # make BS4 life easier and avoid it to attempt to decode
+        doc_as_str = str(from_bytes(html).best())
+        if doc_as_str.startswith('<?xml'):
+            return BeautifulSoup(doc_as_str, 'lxml-xml')
+        else:
+            return BeautifulSoup(doc_as_str, 'lxml')
+
+    @cached_property
+    def rendered_soup(self) -> BeautifulSoup:
+        if not hasattr(self, 'rendered_html') or not self.rendered_html:
+            raise Har2TreeError('Not the node of a page rendered, invalid request.')
+        return self._make_soup(self.rendered_html.getvalue())
 
 
 class HostNode(HarTreeNode):
