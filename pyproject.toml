@@ -32,10 +32,12 @@ numpy = [
     { version = "^2.1", python = ">=3.10" }
 ]
 w3lib = "^2.2.1"
+charset-normalizer = "^3.4.0"
+
 Sphinx = [
     {version = "^8", python = ">=3.10", optional = true}
 ]
-charset-normalizer = "^3.4.0"
+six = {version = "^1.16.0", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.13.0"
@@ -53,7 +55,7 @@ anyio = [
 types-beautifulsoup4 = "^4.12.0.20241020"
 
 [tool.poetry.extras]
-docs = ["Sphinx", "myst-parser"]
+docs = ["Sphinx", "myst-parser", "six"]
 
 [build-system]
 requires = ["poetry_core"]

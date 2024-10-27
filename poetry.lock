@@ -2968,9 +2968,9 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 type = ["pytest-mypy"]
 
 [extras]
-docs = ["Sphinx"]
+docs = ["Sphinx", "six"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.13"
-content-hash = "a24b00212eb32b2dc0fd36603cc9a836fe2fd4eb4b7456f29ee202436bcf936f"
+content-hash = "57ec01c63f3ab70a9e26298a6259656237be9e0bc913583dc9a65048fe837f68"
