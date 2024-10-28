@@ -39,6 +39,16 @@ Sphinx = [
 ]
 six = {version = "^1.16.0", optional = true}
 
+# Temp entry to allow markupsafe 3+ until we get rid of python3.8
+
+markupsafe = [
+    {version = "<3", python = "<3.9"},
+    {version = "^3.0.0", python = ">=3.9"}
+]
+
+[tool.poetry.group.dev]
+optional = true
+
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.13.0"
 ipython = [
