@@ -14,7 +14,7 @@ import re
 from base64 import b64decode
 from charset_normalizer import from_bytes
 from datetime import datetime, timedelta
-from functools import lru_cache, cached_property, cache
+from functools import lru_cache, cached_property
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -569,7 +569,6 @@ class URLNode(HarTreeNode):
 
         return sorted(urls)
 
-    @cache
     def _make_soup(self, html: bytes) -> BeautifulSoup:
         # make BS4 life easier and avoid it to attempt to decode
         doc_as_str = str(from_bytes(html).best())
