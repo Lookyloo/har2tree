@@ -18,7 +18,8 @@ from functools import lru_cache, cached_property
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import MutableMapping, Any
+from typing import Any
+from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin
 
 import filetype  # type: ignore

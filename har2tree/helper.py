@@ -13,7 +13,8 @@ from base64 import b64decode
 from collections import defaultdict
 from io import BytesIO
 from logging import LoggerAdapter
-from typing import Mapping, MutableMapping, Any
+from typing import Any
+from collections.abc import Mapping, MutableMapping
 from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 
 import filetype  # type: ignore
