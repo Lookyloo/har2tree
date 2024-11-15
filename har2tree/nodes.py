@@ -109,7 +109,6 @@ class URLNode(HarTreeNode):
                 self.add_feature('identifiers', identifiers)
 
             if domhash := self._compute_domhash():
-                print(domhash)
                 self.add_feature('domhash', domhash)
 
         if downloaded_file:
