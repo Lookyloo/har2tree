@@ -724,7 +724,6 @@ class Har2Tree:
             for unode in nodes_to_attach:
                 if dev_debug:
                     self.logger.warning(f'Attaching URLNode {unode.name} to {root.name}.')
-
                 unodes.append(root.add_child(unode))
 
         if dev_debug:
@@ -791,14 +790,13 @@ class Har2Tree:
             for ref in _referer_strings:
                 if self.all_referer.get(ref):
                     matching_urls = []
+                    # 2024-11-20: Referers are kinda weak, we can have multiple URLs with the same referer even one of the nodes should be attached somewhere else.
+                    #             Let's attach the nodes one by one there (if they've not been attached recursively)
                     for u in self.all_referer[ref]:
-                        matching_urls += [url_node for url_node in self.all_url_requests[u]
-                                          if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == ref]
-                        self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
-                        if dev_debug:
-                            self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
-                    # 2022-04-27: build subtrees recursively *after* we find all the best referer matches
-                    self._make_subtree(unode, matching_urls)
+                        for url_node in self.all_url_requests[u]:
+                            if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == ref:
+                                self._nodes_list = [node for node in self._nodes_list if node != url_node]
+                                self._make_subtree(unode, [url_node])
 
             if hasattr(unode, 'external_ressources'):
                 # the url loads external things, and some of them have no referer....
