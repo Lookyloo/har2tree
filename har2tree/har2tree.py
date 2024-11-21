@@ -806,7 +806,11 @@ class Har2Tree:
                             # We have a lot of false positives
                             # 2021-06-19: or the URL of the final redirect is somewhere in an embeded content. In that case, we don't want to attach to the sub-node.
                             continue
-                        matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self._nodes_list]
+                        # 2024-11-21: if the node with that URL has a referer, it will be processed in the referer section.
+                        #             we can land in this situation if a node with a referer set attempts to attach child nodes based on external ressources URLs
+                        matching_urls = [url_node for url_node in self.all_url_requests[link]
+                                         if url_node in self._nodes_list
+                                         and not hasattr(url_node, 'referer')]
                         self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                         if dev_debug:
                             self.logger.warning(f'Found from {unode.name} via external ressources ({external_tag}): {matching_urls}.')
