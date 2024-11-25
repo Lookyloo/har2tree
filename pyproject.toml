@@ -24,7 +24,7 @@ classifiers = [
 python = ">=3.9,<3.14"
 ete3 = "^3.1.3"
 beautifulsoup4 = {version= "^4.12.3", extras = ["lxml", "charset_normalizer"]}
-publicsuffixlist = "^1.0.2.20241121"
+publicsuffixlist = "^1.0.2.20241124"
 filetype = "^1.2.0"
 numpy = [
     { version = "<2.1", python = "<3.10" },
@@ -52,7 +52,7 @@ ipython = [
 ]
 jupyterlab = "^4.3.1"
 pytest-cov = "^6.0.0"
-coverage = "^7.6.7"
+coverage = "^7.6.8"
 types-beautifulsoup4 = "^4.12.0.20241020"
 
 [tool.poetry.extras]
