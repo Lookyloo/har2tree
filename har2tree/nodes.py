@@ -394,12 +394,6 @@ class URLNode(HarTreeNode):
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
 
-            # FIXME: Deprecated, use generic_type directly. Keep for now for backward compat
-            self.add_feature(self.generic_type, True)
-            if self.generic_type == 'unknown_mimetype':
-                if self.mimetype not in ['x-unknown']:
-                    self.logger.warning(f'Unknown mimetype: {self.mimetype}')
-
         # NOTE: Chrome/Chromium/Playwright only feature
         if har_entry.get('serverIPAddress'):
             # check ipv6 format
@@ -450,64 +444,6 @@ class URLNode(HarTreeNode):
                     original_url=self.name,
                     original_redirect=self.response['redirectURL'],
                     modified_redirect=redirect_url))
-
-    @property
-    def generic_type(self) -> str:
-        if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype or self.mimetype.startswith('js'):
-            return 'js'
-        elif (self.mimetype.startswith('image')
-              or self.mimetype.startswith('img')
-              or 'webp' in self.mimetype):
-            return 'image'
-        elif self.mimetype.startswith('text/css'):
-            return 'css'
-        elif 'json' in self.mimetype:
-            return 'json'
-        elif 'html' in self.mimetype:
-            return 'html'
-        elif ('font' in self.mimetype
-                or 'woff' in self.mimetype
-                or 'opentype' in self.mimetype):
-            return 'font'
-        elif ('octet-stream' in self.mimetype
-                or 'application/x-protobuf' in self.mimetype
-                or 'application/pkix-cert' in self.mimetype
-                or 'application/x-123' in self.mimetype
-                or 'application/x-binary' in self.mimetype
-                or 'application/x-msdownload' in self.mimetype
-                or 'application/x-thrift' in self.mimetype
-                or 'application/x-troff-man' in self.mimetype
-                or 'application/x-typekit-augmentation' in self.mimetype
-                or 'application/grpc-web' in self.mimetype
-                or 'model/gltf-binary' in self.mimetype
-                or 'model/obj' in self.mimetype
-                or 'application/wasm' in self.mimetype):
-            return 'octet-stream'
-        elif ('text' in self.mimetype or 'xml' in self.mimetype
-                or self.mimetype.startswith('multipart')
-                or self.mimetype.startswith('message')
-                or 'application/x-www-form-urlencoded' in self.mimetype
-                or 'application/vnd.oasis.opendocument.formula-template' in self.mimetype):
-            return 'text'
-        elif 'video' in self.mimetype:
-            return 'video'
-        elif ('audio' in self.mimetype or 'ogg' in self.mimetype):
-            return 'audio'
-        elif ('mpegurl' in self.mimetype
-                or 'application/vnd.yt-ump' in self.mimetype):
-            return 'livestream'
-        elif ('application/x-shockwave-flash' in self.mimetype
-                or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
-            return 'flash'
-        elif 'application/pdf' in self.mimetype:
-            return 'pdf'
-        elif ('application/gzip' in self.mimetype
-                or 'application/zip' in self.mimetype):
-            return 'archive'
-        elif not self.mimetype or self.mimetype == 'none':
-            return 'unset_mimetype'
-        else:
-            return 'unknown_mimetype'
 
     def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> str | None:
         # Because everything is terrible, and the call stack can have parents
