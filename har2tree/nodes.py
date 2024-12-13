@@ -12,7 +12,6 @@ import uuid
 import re
 
 from base64 import b64decode
-from charset_normalizer import from_bytes
 from datetime import datetime, timedelta
 from functools import lru_cache, cached_property
 from hashlib import sha256
@@ -29,7 +28,7 @@ from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
-from .helper import find_external_ressources, rebuild_url, find_identifiers
+from .helper import find_external_ressources, rebuild_url, find_identifiers, make_soup
 from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
 
 
@@ -91,7 +90,7 @@ class URLNode(HarTreeNode):
     def add_rendered_features(self, all_requests: list[str], rendered_html: BytesIO | None=None, downloaded_file: tuple[str, BytesIO | None] | None=None) -> None:
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
-            rendered_external, rendered_embedded = find_external_ressources(self.rendered_soup, self.name, all_requests)
+            rendered_external, rendered_embedded = find_external_ressources(self.mimetype, self.rendered_html.getvalue(), self.name, all_requests)
             if hasattr(self, 'external_ressources'):
                 # for the external ressources, the keys are always the same
                 self.external_ressources: dict[str, list[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
@@ -365,8 +364,7 @@ class URLNode(HarTreeNode):
             if not hasattr(self, 'mimetype'):
                 self.add_feature('mimetype', '')
 
-            soup = self._make_soup(self.body.getvalue())
-            external_ressources, embedded_ressources = find_external_ressources(soup, self.name, all_requests)
+            external_ressources, embedded_ressources = find_external_ressources(self.mimetype, self.body.getvalue(), self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
 
@@ -505,19 +503,11 @@ class URLNode(HarTreeNode):
 
         return sorted(urls)
 
-    def _make_soup(self, html: bytes) -> BeautifulSoup:
-        # make BS4 life easier and avoid it to attempt to decode
-        doc_as_str = str(from_bytes(html).best())
-        if doc_as_str.startswith('<?xml'):
-            return BeautifulSoup(doc_as_str, 'lxml-xml')
-        else:
-            return BeautifulSoup(doc_as_str, 'lxml')
-
     @cached_property
     def rendered_soup(self) -> BeautifulSoup:
         if not hasattr(self, 'rendered_html') or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
-        return self._make_soup(self.rendered_html.getvalue())
+        return make_soup(self.rendered_html.getvalue())
 
 
 class HostNode(HarTreeNode):
@@ -529,21 +519,6 @@ class HostNode(HarTreeNode):
         self.features_to_skip.add('urls')
 
         self.add_feature('urls', [])
-        self.add_feature('js', 0)
-        self.add_feature('redirect', 0)
-        self.add_feature('redirect_to_nothing', 0)
-        self.add_feature('image', 0)
-        self.add_feature('css', 0)
-        self.add_feature('json', 0)
-        self.add_feature('html', 0)
-        self.add_feature('font', 0)
-        self.add_feature('octet_stream', 0)
-        self.add_feature('text', 0)
-        self.add_feature('pdf', 0)
-        self.add_feature('video', 0)
-        self.add_feature('unset_mimetype', 0)
-        self.add_feature('unknown_mimetype', 0)
-        self.add_feature('iframe', 0)
         self.add_feature('http_content', False)
         self.add_feature('https_content', False)
         self.add_feature('contains_rendered_urlnode', False)
@@ -614,35 +589,6 @@ class HostNode(HarTreeNode):
             # Keep a set of cookies received: different URLs will receive the same cookie
             self.cookies_received.update({(domain, cookie, is_3rd_party)
                                           for domain, cookie, is_3rd_party in url.cookies_received})
-        if hasattr(url, 'js'):
-            self.js += 1
-        if hasattr(url, 'redirect'):
-            self.redirect += 1
-        if hasattr(url, 'redirect_to_nothing'):
-            self.redirect_to_nothing += 1
-        if hasattr(url, 'image'):
-            self.image += 1
-        if hasattr(url, 'css'):
-            self.css += 1
-        if hasattr(url, 'json'):
-            self.json += 1
-        if hasattr(url, 'html'):
-            self.html += 1
-        if hasattr(url, 'font'):
-            self.font += 1
-        if hasattr(url, 'octet_stream'):
-            self.octet_stream += 1
-        if hasattr(url, 'text'):
-            self.text += 1
-        if hasattr(url, 'pdf'):
-            self.pdf += 1  # FIXME: need icon
-        if hasattr(url, 'video') or hasattr(url, 'livestream') or hasattr(url, 'audio') or hasattr(url, 'flash'):
-            self.video += 1
-        if hasattr(url, 'unknown_mimetype') or hasattr(url, 'unset_mimetype'):
-            self.unknown_mimetype += 1
-        if hasattr(url, 'iframe'):
-            self.iframe += 1
-
         if url.name.startswith('http://'):
             self.http_content = True
         elif url.name.startswith('https://'):
