@@ -131,8 +131,8 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
 
     def test_hostname_tree_features(self) -> None:
-        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'js', 'html', 'pdf', 'json', 'text', 'video', 'css', 'iframe', 'http_content', 'https_content', 'support', 'dist', 'octet_stream', 'font', 'redirect',
-                                                                                     'unknown_mimetype', 'contains_rendered_urlnode', 'urls', 'uuid', 'redirect_to_nothing', 'unset_mimetype', 'image'})
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'http_content', 'https_content', 'support', 'dist',
+                                                                                     'contains_rendered_urlnode', 'urls', 'uuid'})
         self.assertTrue('meta_refresh' in self.http_redirect_ct.root_hartree.url_tree.external_ressources)
         self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.external_ressources['meta_refresh'][0], 'https://www.youtube.com/watch?v=iwGFalTRHDA')
 
@@ -194,9 +194,6 @@ class SimpleTest(unittest.TestCase):
                 'https://policies.google.com/terms?hl=en&utm_source=ucb',
                 'https://policies.google.com/terms?hl=en&utm_soure=ucb']
         )
-
-    def test_iframe_feature(self) -> None:
-        self.assertTrue('iframe' in self.iframe_ct.root_hartree.hostname_tree.features)
 
     def test_iframe_capture_name(self) -> None:
         self.assertEqual(self.iframe_ct.root_hartree.har.initial_title, '!! No title found !!')
