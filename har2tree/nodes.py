@@ -340,6 +340,7 @@ class URLNode(HarTreeNode):
         if not self.response['content'].get('text') or self.response['content']['text'] == '':
             # If the content of the response is empty, skip.
             self.add_feature('empty_response', True)
+            self.add_feature('mimetype', 'inode/x-empty')
         else:
             self.add_feature('empty_response', False)
             if self.response['content'].get('encoding') == 'base64':

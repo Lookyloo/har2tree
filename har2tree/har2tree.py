@@ -640,10 +640,10 @@ class Har2Tree:
         if self.har.downloaded_filename and self.har.downloaded_file:
             downloaded_file = (self.har.downloaded_filename if self.har.downloaded_filename else '',
                                self.har.downloaded_file if self.har.downloaded_file else None)
-
-        self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()),
-                                                 rendered_html=self.har.html_content if self.har.html_content else None,
-                                                 downloaded_file=downloaded_file)
+        if not self.rendered_node.empty_response:
+            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()),
+                                                     rendered_html=self.har.html_content if self.har.html_content else None,
+                                                     downloaded_file=downloaded_file)
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
