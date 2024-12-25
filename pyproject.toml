@@ -24,14 +24,14 @@ classifiers = [
 python = ">=3.9,<3.14"
 ete3 = "^3.1.3"
 beautifulsoup4 = {version= "^4.12.3", extras = ["lxml", "charset_normalizer"]}
-publicsuffixlist = "^1.0.2.20241221"
+publicsuffixlist = "^1.0.2.20241225"
 filetype = "^1.2.0"
 numpy = [
     { version = "<2.1", python = "<3.10" },
     { version = "^2.2", python = ">=3.10" }
 ]
 w3lib = "^2.2.1"
-charset-normalizer = "^3.4.0"
+charset-normalizer = "^3.4.1"
 
 Sphinx = [
     {version = "^8", python = ">=3.10", optional = true}
