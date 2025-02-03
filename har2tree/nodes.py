@@ -84,7 +84,7 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('ip_address')
 
     def _compute_domhash(self) -> str:
-        to_hash = "|".join(t.name for t in self.rendered_soup.findAll()).encode()
+        to_hash = "|".join(t.name for t in self.rendered_soup.find_all()).encode()
         return sha256(to_hash).hexdigest()[:32]
 
     def add_rendered_features(self, all_requests: list[str], rendered_html: BytesIO | None=None, downloaded_file: tuple[str, BytesIO | None] | None=None) -> None:
