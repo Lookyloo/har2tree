@@ -159,11 +159,12 @@ class HarFile():
         # Used to find the root entry of a page in the capture
         # NOTE 2020-05-19: Turns out multiple pages can have the exact same timestamp...
         self.pages_start_times: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for page in self.har['log']['pages']:
-            self.pages_start_times[page['startedDateTime']].append(page)
-        # The first entry has a different start time as the one from the list, add that
-        if self.entries:
-            self.pages_start_times[self.initial_start_time].append(self.har['log']['pages'][0])
+        if 'pages' in self.har['log']:
+            for page in self.har['log']['pages']:
+                self.pages_start_times[page['startedDateTime']].append(page)
+            # The first entry has a different start time as the one from the list, add that
+            if self.entries:
+                self.pages_start_times[self.initial_start_time].append(self.har['log']['pages'][0])
 
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
@@ -200,7 +201,7 @@ class HarFile():
     @property
     def initial_title(self) -> str:
         """Title of the first page in the capture"""
-        if self.har['log']['pages'][0]['title']:
+        if 'pages' in self.har['log'] and self.har['log']['pages'][0]['title']:
             return self.har['log']['pages'][0]['title']
         else:
             return '!! No title found !!'
@@ -670,10 +671,12 @@ class Har2Tree:
 
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
         # IF we have more than one page in the list
-        # AND the orphan node's pageref points to an other page than the first one <= FIXME not enabled yet
+        # AND the orphan node's pageref points to an other page than the first one
         # AND we already have a node in the tree with this pageref
         # => attach to that node.
-        if len(self.har.har['log']['pages']) > 1 and node.pageref != self.har.har['log']['pages'][0] and self.pages_root[node.pageref] != node.uuid:
+        if ('pages' in self.har.har['log'] and len(self.har.har['log']['pages']) > 1
+                and node.pageref != self.har.har['log']['pages'][0]
+                and self.pages_root[node.pageref] != node.uuid):
             # In that case, we check if there is already a page with the pageref of the orphan node,
             # and attach the node to that. NOTE: we can only do that if there is already a node with this pageref in the tree.
             # This node is not a page root, we can attach it \o/
@@ -689,7 +692,7 @@ class Har2Tree:
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
             self._make_subtree(self.url_tree.search_nodes(name=self.har.final_redirect)[0], [node])
-        else:
+        elif 'pages' in self.har.har['log']:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
             for page in self.har.har['log']['pages'][1:]:
@@ -711,6 +714,9 @@ class Har2Tree:
                 page_root_node = self.url_tree
                 self.logger.warning('The pages in the HAR are in in the wrong order, this should not happen but here we are')
             self._make_subtree(page_root_node, [node])
+        else:
+            # no way to attach it to anything else, attach to the root node
+            self._make_subtree(self.url_tree, [node])
 
     @trace_make_subtree
     def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
