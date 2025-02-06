@@ -775,8 +775,13 @@ class Har2Tree:
                 else:
                     self.logger.warning(f'The URLNode has a redirect to something we already processed ({unode.redirect_url}), this should not happen.')
 
-            # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
+            # 2025-02-06: If a node has no redirect **and** no content (empty response), we don't want to attach anything to it (it is a leaf)
+            # Example: A POST to self that triggers the **parent** to load an other URL. In this case,
+            # the proper attachment point is the parent, not this node, even if we have other nodes with this node URL as a referer.
+            if unode.empty_response:
+                continue
 
+            # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
             if self.all_initiator_url.get(unode.name):
                 # The URL (unode.name) is in the list of known urls initiating calls
                 for u in self.all_initiator_url[unode.name]:
