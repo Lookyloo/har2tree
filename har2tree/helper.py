@@ -333,8 +333,14 @@ def find_external_ressources_in_css(css: str) -> list[str]:
     for r in __flatten_rules(rules):
         # other entries may have urls, but they will always be in a url() function
         if r.type == 'url':
-            to_return.append(r.value)
+            try:
+                to_return.append(r.value)
+            except Exception as e:
+                logger.warning(f'Parsing error in tinycss2: {e} - {r}')
         elif r.type == 'function' and r.lower_name == 'url':
+            if isinstance(r.arguments[0], tinycss2.ast.ParseError):
+                # CSS is broken, cannot parse it. Generally a missing closing quote.
+                continue
             to_return.append(r.arguments[0].value)
     return to_return
 
