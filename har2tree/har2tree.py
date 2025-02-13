@@ -191,7 +191,7 @@ class HarFile():
                 self.final_redirect = self.final_redirect.split('?', 1)[0]
                 self._search_final_redirect()
             else:
-                self.logger.warning(f'Unable to find the final redirect: {self.final_redirect}')
+                self.logger.info(f'Unable to find the final redirect: {self.final_redirect}')
 
     @property
     def number_entries(self) -> int:
