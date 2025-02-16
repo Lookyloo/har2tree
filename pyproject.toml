@@ -18,8 +18,8 @@ dependencies = [
     "filetype (>=1.2.0)",
     # poetry up fails with the version of numpy forced for python < 3.10.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
-    "numpy (<=2.1) ; python_version == \"3.9\"",
-    "numpy (>=2.2.2) ; python_version >= \"3.10\"",
+    "numpy (<2.1) ; python_version == \"3.9\"",
+    "numpy (>=2.2.3) ; python_version >= \"3.10\"",
     "w3lib (>=2.3.1)",
     "tinycss2 (>=1.4.0)",
     "legacy-cgi (>=2.6.2) ; python_version >= \"3.13,<4.0\"",
