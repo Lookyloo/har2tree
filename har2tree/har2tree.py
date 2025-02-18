@@ -566,7 +566,8 @@ class Har2Tree:
         if node:
             return node[0]
 
-        if self.har.final_redirect:
+        browser_errors = ['chrome-error', 'about:blank']
+        if self.har.final_redirect and not any(self.har.final_redirect.startswith(r) for r in browser_errors):
             self.logger.warning(f'Final redirect URL from adress bar not in tree: {self.har.final_redirect}')
         else:
             # No final redirect, already logged earlier.
