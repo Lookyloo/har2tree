@@ -8,8 +8,9 @@ import hashlib
 import ipaddress
 import json
 import logging
-import uuid
 import re
+import uuid
+import warnings
 
 from base64 import b64decode
 from datetime import datetime, timedelta
@@ -52,16 +53,22 @@ class HarTreeNode(Tree):  # type: ignore[misc]
         self.features_to_skip: set[str] = set()
 
     def add_feature(self, feature_name: str, feature_value: Any) -> None:
+        warnings.warn("Deprecated in ete4, use add_prop instead", DeprecationWarning)
         self.add_prop(feature_name, feature_value)
 
     def __getattr__(self, attribute: str) -> Any:
-        if attribute in self.features:
-            # Simulate ete3
+        """Ete3 was storing the properties as attributes in the node, ete4 has them in a dict.
+        This method allows to simulate the ete3 behavior, but the properties are still stored in the dict.
+        """
+        if attribute in self.props:
+            warnings.warn("Deprecated in ete4, use get_prop instead", DeprecationWarning)
             return self.props[attribute]
         return super().__getattr__(attribute)
 
     @property
     def features(self) -> set[str]:
+        """Deprecated, use props instead"""
+        warnings.warn("Deprecated in ete4, use props instead", DeprecationWarning)
         return set(self.props.keys())
 
     @overload
@@ -84,7 +91,7 @@ class HarTreeNode(Tree):  # type: ignore[misc]
         """Make a dict that can then be dumped in json.
         """
         to_return = {'uuid': self.uuid, 'children': []}
-        for feature in self.features:
+        for feature in self.props:
             if feature in self.features_to_skip:
                 continue
             to_return[feature] = self.props[feature]
@@ -127,7 +134,7 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('external_ressources', rendered_external)
 
-            if 'embedded_ressources' in self.features:
+            if 'embedded_ressources' in self.props:
                 # for the embedded ressources, the keys are the mimetypes, they may not overlap
                 mimetypes = list(self.embedded_ressources.keys()) + list(rendered_embedded.keys())
                 self.embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = {mimetype: self.embedded_ressources.get(mimetype, []) + rendered_embedded.get(mimetype, []) for mimetype in mimetypes}
@@ -194,7 +201,7 @@ class URLNode(HarTreeNode):
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
 
-        if 'file_on_disk' in self.features:
+        if 'file_on_disk' in self.props:
             # TODO: Do something better? hostname is the feature name used for the aggregated tree
             # so we need that unless we want to change the JS
             self.add_feature('hostname', str(Path(self.url_split.path).parent))
@@ -214,7 +221,7 @@ class URLNode(HarTreeNode):
             # Not an IP
             pass
 
-        if 'hostname_is_ip' not in self.features or not self.hostname_is_ip:
+        if 'hostname_is_ip' not in self.props or not self.hostname_is_ip:
             try:
                 # attempt to decode if the hostname is idna encoded
                 idna_decoded = self.hostname.encode().decode('idna')
@@ -223,7 +230,7 @@ class URLNode(HarTreeNode):
             except UnicodeError:
                 pass
 
-        if 'hostname_is_ip' not in self.features and 'file_on_disk' not in self.features:
+        if 'hostname_is_ip' not in self.props and 'file_on_disk' not in self.props:
             tld = get_public_suffix_list().publicsuffix(self.hostname)
             if tld:
                 self.add_feature('known_tld', tld)
@@ -238,7 +245,7 @@ class URLNode(HarTreeNode):
             if h['name'].lower() == 'user-agent':
                 self.add_feature('user_agent', h['value'])
 
-        if 'user_agent' not in self.features:
+        if 'user_agent' not in self.props:
             self.add_feature('user_agent', '')
 
         if 'method' in self.request and self.request['method'] == 'POST' and 'postData' in self.request:
@@ -387,12 +394,12 @@ class URLNode(HarTreeNode):
                 if mt not in ["application/octet-stream", "x-unknown"]:
                     self.add_feature('mimetype', mt)
 
-            if 'mimetype' not in self.features:
+            if 'mimetype' not in self.props:
                 # try to guess something better
                 if kind := filetype.guess(self.body.getvalue()):
                     self.add_feature('mimetype', kind.mime)
 
-            if 'mimetype' not in self.features:
+            if 'mimetype' not in self.props:
                 self.add_feature('mimetype', '')
 
             external_ressources, embedded_ressources = find_external_ressources(self.mimetype, self.body.getvalue(), self.name, all_requests)
@@ -485,9 +492,9 @@ class URLNode(HarTreeNode):
     @property
     def resources_hashes(self) -> set[str]:
         all_ressources_hashes = set()
-        if 'body_hash' in self.features:
+        if 'body_hash' in self.props:
             all_ressources_hashes.add(self.body_hash)
-            if 'embedded_ressources' in self.features:
+            if 'embedded_ressources' in self.props:
                 for _mimetype, blobs in self.embedded_ressources.items():
                     all_ressources_hashes.update([h for h, b in blobs])
         return all_ressources_hashes
@@ -507,7 +514,7 @@ class URLNode(HarTreeNode):
                 return None
             return href
 
-        if 'rendered_html' not in self.features or not self.rendered_html:
+        if 'rendered_html' not in self.props or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
         urls: set[str] = set()
 
@@ -597,10 +604,10 @@ class HostNode(HarTreeNode):
         """Add a URL node to the Host node, initialize/update the features"""
         if not self.name:
             self.add_feature('name', url.hostname)
-            if 'idna' in url.features:
+            if 'idna' in url.props:
                 self.add_feature('idna', url.idna)
 
-        if 'hostname_is_ip' in url.features and url.hostname_is_ip:
+        if 'hostname_is_ip' in url.props and url.hostname_is_ip:
             self.add_feature('hostname_is_ip', True)
 
         self.urls.append(url)
@@ -608,15 +615,15 @@ class HostNode(HarTreeNode):
         # Add to URLNode a reference to the HostNode UUID
         url.add_feature('hostnode_uuid', self.uuid)
 
-        if 'rendered_html' in url.features or 'downloaded_filename' in url.features:
+        if 'rendered_html' in url.props or 'downloaded_filename' in url.props:
             self.contains_rendered_urlnode = True
-            if 'downloaded_filename' in url.features:
+            if 'downloaded_filename' in url.props:
                 self.add_feature('downloaded_filename', url.downloaded_filename)
 
-        if 'cookies_sent' in url.features:
+        if 'cookies_sent' in url.props:
             # Keep a set of cookies sent: different URLs will send the same cookie
             self.cookies_sent.update(set(url.cookies_sent.keys()))
-        if 'cookies_received' in url.features:
+        if 'cookies_received' in url.props:
             # Keep a set of cookies received: different URLs will receive the same cookie
             self.cookies_received.update({(domain, cookie, is_3rd_party)
                                           for domain, cookie, is_3rd_party in url.cookies_received})
