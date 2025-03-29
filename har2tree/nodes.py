@@ -13,10 +13,12 @@ import re
 
 from base64 import b64decode
 from datetime import datetime, timedelta
-from functools import lru_cache
+from functools import lru_cache, cached_property
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import MutableMapping, Any, overload, Literal
+from typing import Any, overload, Literal
+from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin
 
 import filetype  # type: ignore
@@ -26,7 +28,7 @@ from publicsuffixlist import PublicSuffixList  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
-from .helper import find_external_ressources, rebuild_url, find_identifiers
+from .helper import find_external_ressources, rebuild_url, find_identifiers, make_soup
 from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
 
 
@@ -52,18 +54,11 @@ class HarTreeNode(Tree):  # type: ignore[misc]
     def add_feature(self, feature_name: str, feature_value: Any) -> None:
         self.add_prop(feature_name, feature_value)
 
-    def __setattr__(self, attribute: str, value: Any) -> None:
-        if hasattr(self, 'props') and self.props and attribute in self.props:
-            self.props[attribute] = value
-        else:
-            super().__setattr__(attribute, value)
-
     def __getattr__(self, attribute: str) -> Any:
-        try:
-            return super().__getattribute__(attribute)
-        except AttributeError:
-            # reproduce ete3.
+        if attribute in self.features:
+            # Simulate ete3
             return self.props[attribute]
+        return super().__getattr__(attribute)
 
     @property
     def features(self) -> set[str]:
@@ -118,11 +113,15 @@ class URLNode(HarTreeNode):
         self.features_to_skip.add('time_content_received')
         self.features_to_skip.add('ip_address')
 
+    def _compute_domhash(self) -> str:
+        to_hash = "|".join(t.name for t in self.rendered_soup.find_all()).encode()
+        return sha256(to_hash).hexdigest()[:32]
+
     def add_rendered_features(self, all_requests: list[str], rendered_html: BytesIO | None=None, downloaded_file: tuple[str, BytesIO | None] | None=None) -> None:
         if rendered_html:
             self.add_feature('rendered_html', rendered_html)
-            rendered_external, rendered_embedded = find_external_ressources(rendered_html.getvalue(), self.name, all_requests)
-            if 'external_ressources' in self.features:
+            rendered_external, rendered_embedded = find_external_ressources(self.mimetype, self.rendered_html.getvalue(), self.name, all_requests)
+            if hasattr(self, 'external_ressources'):
                 # for the external ressources, the keys are always the same
                 self.external_ressources: dict[str, list[str]] = {initiator_type: urls + rendered_external[initiator_type] for initiator_type, urls in self.external_ressources.items()}
             else:
@@ -135,8 +134,11 @@ class URLNode(HarTreeNode):
             else:
                 self.add_feature('embedded_ressources', rendered_embedded)
 
-            if identifiers := find_identifiers(rendered_html.getvalue()):
+            if identifiers := find_identifiers(self.rendered_soup):
                 self.add_feature('identifiers', identifiers)
+
+            if domhash := self._compute_domhash():
+                self.add_feature('domhash', domhash)
 
         if downloaded_file:
             downloaded_filename, downloaded_file_data = downloaded_file
@@ -368,7 +370,7 @@ class URLNode(HarTreeNode):
         if not self.response['content'].get('text') or self.response['content']['text'] == '':
             # If the content of the response is empty, skip.
             self.add_feature('empty_response', True)
-            self.add_feature('mimetype', '')
+            self.add_feature('mimetype', 'inode/x-empty')
         else:
             self.add_feature('empty_response', False)
             if self.response['content'].get('encoding') == 'base64':
@@ -393,7 +395,7 @@ class URLNode(HarTreeNode):
             if 'mimetype' not in self.features:
                 self.add_feature('mimetype', '')
 
-            external_ressources, embedded_ressources = find_external_ressources(self.body.getvalue(), self.name, all_requests)
+            external_ressources, embedded_ressources = find_external_ressources(self.mimetype, self.body.getvalue(), self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
 
@@ -420,10 +422,6 @@ class URLNode(HarTreeNode):
                     # TODO: new type, redirect_html or something like that
                     self.add_feature('redirect', True)
                     self.add_feature('redirect_url', self.external_ressources['meta_refresh'][0])
-
-            if self.generic_type == 'unknown_mimetype':
-                if self.mimetype not in ['x-unknown']:
-                    self.logger.warning(f'Unknown mimetype: {self.mimetype}')
 
         # NOTE: Chrome/Chromium/Playwright only feature
         if har_entry.get('serverIPAddress'):
@@ -476,64 +474,6 @@ class URLNode(HarTreeNode):
                     original_redirect=self.response['redirectURL'],
                     modified_redirect=redirect_url))
 
-    @property
-    def generic_type(self) -> str:
-        if 'javascript' in self.mimetype or 'ecmascript' in self.mimetype or self.mimetype.startswith('js'):
-            return 'js'
-        elif (self.mimetype.startswith('image')
-              or self.mimetype.startswith('img')
-              or 'webp' in self.mimetype):
-            return 'image'
-        elif self.mimetype.startswith('text/css'):
-            return 'css'
-        elif 'json' in self.mimetype:
-            return 'json'
-        elif 'html' in self.mimetype:
-            return 'html'
-        elif ('font' in self.mimetype
-                or 'woff' in self.mimetype
-                or 'opentype' in self.mimetype):
-            return 'font'
-        elif ('octet-stream' in self.mimetype
-                or 'application/x-protobuf' in self.mimetype
-                or 'application/pkix-cert' in self.mimetype
-                or 'application/x-123' in self.mimetype
-                or 'application/x-binary' in self.mimetype
-                or 'application/x-msdownload' in self.mimetype
-                or 'application/x-thrift' in self.mimetype
-                or 'application/x-troff-man' in self.mimetype
-                or 'application/x-typekit-augmentation' in self.mimetype
-                or 'application/grpc-web' in self.mimetype
-                or 'model/gltf-binary' in self.mimetype
-                or 'model/obj' in self.mimetype
-                or 'application/wasm' in self.mimetype):
-            return 'octet-stream'
-        elif ('text' in self.mimetype or 'xml' in self.mimetype
-                or self.mimetype.startswith('multipart')
-                or self.mimetype.startswith('message')
-                or 'application/x-www-form-urlencoded' in self.mimetype
-                or 'application/vnd.oasis.opendocument.formula-template' in self.mimetype):
-            return 'text'
-        elif 'video' in self.mimetype:
-            return 'video'
-        elif ('audio' in self.mimetype or 'ogg' in self.mimetype):
-            return 'audio'
-        elif ('mpegurl' in self.mimetype
-                or 'application/vnd.yt-ump' in self.mimetype):
-            return 'livestream'
-        elif ('application/x-shockwave-flash' in self.mimetype
-                or 'application/x-shockware-flash' in self.mimetype):  # Yes, shockwaRe
-            return 'flash'
-        elif 'application/pdf' in self.mimetype:
-            return 'pdf'
-        elif ('application/gzip' in self.mimetype
-                or 'application/zip' in self.mimetype):
-            return 'archive'
-        elif not self.mimetype or self.mimetype == 'none':
-            return 'unset_mimetype'
-        else:
-            return 'unknown_mimetype'
-
     def _find_initiator_in_stack(self, stack: MutableMapping[str, Any]) -> str | None:
         # Because everything is terrible, and the call stack can have parents
         if stack['callFrames']:
@@ -570,10 +510,9 @@ class URLNode(HarTreeNode):
         if 'rendered_html' not in self.features or not self.rendered_html:
             raise Har2TreeError('Not the node of a page rendered, invalid request.')
         urls: set[str] = set()
-        soup = BeautifulSoup(self.rendered_html.getvalue(), "lxml")
 
         # The simple ones: the links.
-        for a_tag in soup.find_all(["a", "area"]):
+        for a_tag in self.rendered_soup.find_all(["a", "area"]):
             href = a_tag.attrs.get("href")
             if not href:
                 continue
@@ -581,7 +520,7 @@ class URLNode(HarTreeNode):
                 urls.add(href)
 
         # The rest of the mess
-        for tag in soup.find_all(True):
+        for tag in self.rendered_soup.find_all(True):
             if tag.name in ["a", "area", 'img', 'script', 'video', 'audio', 'iframe', 'embed',
                             'source', 'link', 'object']:
                 # processed either above or as external resources
@@ -595,6 +534,12 @@ class URLNode(HarTreeNode):
 
         return sorted(urls)
 
+    @cached_property
+    def rendered_soup(self) -> BeautifulSoup:
+        if not hasattr(self, 'rendered_html') or not self.rendered_html:
+            raise Har2TreeError('Not the node of a page rendered, invalid request.')
+        return make_soup(self.rendered_html.getvalue())
+
 
 class HostNode(HarTreeNode):
 
@@ -605,21 +550,6 @@ class HostNode(HarTreeNode):
         self.features_to_skip.add('urls')
 
         self.add_feature('urls', [])
-        self.add_feature('js', 0)
-        self.add_feature('redirect', 0)
-        self.add_feature('redirect_to_nothing', 0)
-        self.add_feature('image', 0)
-        self.add_feature('css', 0)
-        self.add_feature('json', 0)
-        self.add_feature('html', 0)
-        self.add_feature('font', 0)
-        self.add_feature('octet_stream', 0)
-        self.add_feature('text', 0)
-        self.add_feature('pdf', 0)
-        self.add_feature('video', 0)
-        self.add_feature('unset_mimetype', 0)
-        self.add_feature('unknown_mimetype', 0)
-        self.add_feature('iframe', 0)
         self.add_feature('http_content', False)
         self.add_feature('https_content', False)
         self.add_feature('contains_rendered_urlnode', False)
@@ -690,37 +620,6 @@ class HostNode(HarTreeNode):
             # Keep a set of cookies received: different URLs will receive the same cookie
             self.cookies_received.update({(domain, cookie, is_3rd_party)
                                           for domain, cookie, is_3rd_party in url.cookies_received})
-        if 'redirect' in url.features:
-            self.redirect += 1
-        if 'redirect_to_nothing' in url.features:
-            self.redirect_to_nothing += 1
-        if 'iframe' in url.features:
-            self.iframe += 1
-        if url.generic_type == 'js':
-            self.js += 1
-        elif url.generic_type == 'image':
-            self.image += 1
-        elif url.generic_type == 'css':
-            self.css += 1
-        elif url.generic_type == 'json':
-            self.json += 1
-        elif url.generic_type == 'html':
-            self.html += 1
-        elif url.generic_type == 'font':
-            self.font += 1
-        elif url.generic_type == 'octet_stream':
-            self.octet_stream += 1
-        elif url.generic_type == 'text':
-            self.text += 1
-        elif url.generic_type == 'pdf':
-            self.pdf += 1  # FIXME: need icon
-        elif url.generic_type in {'video', 'livestream', 'audio', 'flash'}:
-            self.video += 1
-        elif url.generic_type in {'unknown_mimetype', 'unset_mimetype'}:
-            self.unknown_mimetype += 1
-        else:
-            self.logger.warning(f'Unexpected generic type: {url.generic_type}')
-
         if url.name.startswith('http://'):
             self.http_content = True
         elif url.name.startswith('https://'):

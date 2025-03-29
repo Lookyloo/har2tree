@@ -159,11 +159,12 @@ class HarFile():
         # Used to find the root entry of a page in the capture
         # NOTE 2020-05-19: Turns out multiple pages can have the exact same timestamp...
         self.pages_start_times: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for page in self.har['log']['pages']:
-            self.pages_start_times[page['startedDateTime']].append(page)
-        # The first entry has a different start time as the one from the list, add that
-        if self.entries:
-            self.pages_start_times[self.initial_start_time].append(self.har['log']['pages'][0])
+        if 'pages' in self.har['log']:
+            for page in self.har['log']['pages']:
+                self.pages_start_times[page['startedDateTime']].append(page)
+            # The first entry has a different start time as the one from the list, add that
+            if self.entries:
+                self.pages_start_times[self.initial_start_time].append(self.har['log']['pages'][0])
 
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
@@ -190,7 +191,7 @@ class HarFile():
                 self.final_redirect = self.final_redirect.split('?', 1)[0]
                 self._search_final_redirect()
             else:
-                self.logger.warning(f'Unable to find the final redirect: {self.final_redirect}')
+                self.logger.info(f'Unable to find the final redirect: {self.final_redirect}')
 
     @property
     def number_entries(self) -> int:
@@ -200,7 +201,7 @@ class HarFile():
     @property
     def initial_title(self) -> str:
         """Title of the first page in the capture"""
-        if self.har['log']['pages'][0]['title']:
+        if 'pages' in self.har['log'] and self.har['log']['pages'][0]['title']:
             return self.har['log']['pages'][0]['title']
         else:
             return '!! No title found !!'
@@ -564,7 +565,8 @@ class Har2Tree:
         if node := self.url_tree.get_first_by_feature('name', self.har.final_redirect, expect_missing=True):
             return node
 
-        if self.har.final_redirect:
+        browser_errors = ['chrome-error', 'about:blank']
+        if self.har.final_redirect and not any(self.har.final_redirect.startswith(r) for r in browser_errors):
             self.logger.warning(f'Final redirect URL from adress bar not in tree: {self.har.final_redirect}')
         else:
             # No final redirect, already logged earlier.
@@ -639,10 +641,10 @@ class Har2Tree:
         if self.har.downloaded_filename and self.har.downloaded_file:
             downloaded_file = (self.har.downloaded_filename if self.har.downloaded_filename else '',
                                self.har.downloaded_file if self.har.downloaded_file else None)
-
-        self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()),
-                                                 rendered_html=self.har.html_content if self.har.html_content else None,
-                                                 downloaded_file=downloaded_file)
+        if not self.rendered_node.empty_response:
+            self.rendered_node.add_rendered_features(list(self.all_url_requests.keys()),
+                                                     rendered_html=self.har.html_content if self.har.html_content else None,
+                                                     downloaded_file=downloaded_file)
 
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
@@ -669,10 +671,12 @@ class Har2Tree:
 
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
         # IF we have more than one page in the list
-        # AND the orphan node's pageref points to an other page than the first one <= FIXME not enabled yet
+        # AND the orphan node's pageref points to an other page than the first one
         # AND we already have a node in the tree with this pageref
         # => attach to that node.
-        if len(self.har.har['log']['pages']) > 1 and node.pageref != self.har.har['log']['pages'][0] and self.pages_root[node.pageref] != node.uuid:
+        if ('pages' in self.har.har['log'] and len(self.har.har['log']['pages']) > 1
+                and node.pageref != self.har.har['log']['pages'][0]
+                and self.pages_root[node.pageref] != node.uuid):
             # In that case, we check if there is already a page with the pageref of the orphan node,
             # and attach the node to that. NOTE: we can only do that if there is already a node with this pageref in the tree.
             # This node is not a page root, we can attach it \o/
@@ -680,15 +684,15 @@ class Har2Tree:
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
             self._make_subtree(page_root_node, [node])
-        elif final_node := self.url_tree.get_first_by_feature('name', self.har.final_redirect, expect_missing=True):
+        elif final_redirect := self.url_tree.get_first_by_feature('name', self.har.final_redirect, expect_missing=True):
             # Generally, when we have a bunch of redirects, they do not branch out before the final landing page
             # *but* it is not always the case: some intermediary redirects will have calls to 3rd party pages.
             # Hopefully, this last case was taken care of in the branch above.
             # In this branch, we get the landing page after the redirects (if any), and attach the node to it.
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
-            self._make_subtree(final_node, [node])
-        else:
+            self._make_subtree(final_redirect, [node])
+        elif 'pages' in self.har.har['log']:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
             for page in self.har.har['log']['pages'][1:]:
@@ -710,6 +714,9 @@ class Har2Tree:
                 page_root_node = self.url_tree
                 self.logger.warning('The pages in the HAR are in in the wrong order, this should not happen but here we are')
             self._make_subtree(page_root_node, [node])
+        else:
+            # no way to attach it to anything else, attach to the root node
+            self._make_subtree(self.url_tree, [node])
 
     @trace_make_subtree
     def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
@@ -723,7 +730,6 @@ class Har2Tree:
             for unode in nodes_to_attach:
                 if dev_debug:
                     self.logger.warning(f'Attaching URLNode {unode.name} to {root.name}.')
-
                 unodes.append(root.add_child(unode))
 
         if dev_debug:
@@ -769,8 +775,13 @@ class Har2Tree:
                 else:
                     self.logger.warning(f'The URLNode has a redirect to something we already processed ({unode.redirect_url}), this should not happen.')
 
-            # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
+            # 2025-02-06: If a node has no redirect **and** no content (empty response), we don't want to attach anything to it (it is a leaf)
+            # Example: A POST to self that triggers the **parent** to load an other URL. In this case,
+            # the proper attachment point is the parent, not this node, even if we have other nodes with this node URL as a referer.
+            if unode.empty_response:
+                continue
 
+            # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
             if self.all_initiator_url.get(unode.name):
                 # The URL (unode.name) is in the list of known urls initiating calls
                 for u in self.all_initiator_url[unode.name]:
@@ -792,16 +803,13 @@ class Har2Tree:
             for ref in _referer_strings:
                 if self.all_referer.get(ref):
                     matching_urls = []
+                    # 2024-11-20: Referers are kinda weak, we can have multiple URLs with the same referer even one of the nodes should be attached somewhere else.
+                    #             Let's attach the nodes one by one there (if they've not been attached recursively)
                     for u in self.all_referer[ref]:
-                        matching_urls += [url_node for url_node in self.all_url_requests[u]
-                                          if url_node in self._nodes_list
-                                          and 'referer' in url_node.features
-                                          and url_node.referer == ref]
-                        self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
-                        if dev_debug:
-                            self.logger.warning(f'Found via referer from {unode.name} to {matching_urls}.')
-                    # 2022-04-27: build subtrees recursively *after* we find all the best referer matches
-                    self._make_subtree(unode, matching_urls)
+                        for url_node in self.all_url_requests[u]:
+                            if url_node in self._nodes_list and hasattr(url_node, 'referer') and url_node.referer == ref:
+                                self._nodes_list = [node for node in self._nodes_list if node != url_node]
+                                self._make_subtree(unode, [url_node])
 
             if 'external_ressources' in unode.features:
                 # the url loads external things, and some of them have no referer....
@@ -811,7 +819,13 @@ class Har2Tree:
                             # We have a lot of false positives
                             # 2021-06-19: or the URL of the final redirect is somewhere in an embeded content. In that case, we don't want to attach to the sub-node.
                             continue
-                        matching_urls = [url_node for url_node in self.all_url_requests[link] if url_node in self._nodes_list]
+                        # 2024-11-21: We only want to attach via external ressources *if*
+                        # 1. the node has no referer
+                        # 2. the node has a referer, but it is not in the list of potental nodes we can attach them to so they would be dangling.
+
+                        matching_urls = [url_node for url_node in self.all_url_requests[link]
+                                         if url_node in self._nodes_list
+                                         and (not hasattr(url_node, 'referer') or url_node.referer not in self.all_url_requests)]
                         self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
                         if dev_debug:
                             self.logger.warning(f'Found from {unode.name} via external ressources ({external_tag}): {matching_urls}.')

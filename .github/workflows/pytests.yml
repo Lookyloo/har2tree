@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
       run: |
         git submodule update --init --recursive
         pipx install poetry
-        poetry install
+        poetry install --with dev --all-extras
 
     - name: Test with pytest
       run: |
@@ -34,4 +34,4 @@ jobs:
         poetry run pytest --cov=har2tree tests/simple_test.py
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5

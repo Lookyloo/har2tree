@@ -11,16 +11,19 @@ import warnings
 
 from base64 import b64decode
 from collections import defaultdict
-from functools import lru_cache
 from io import BytesIO
 from logging import LoggerAdapter
-from typing import Mapping, MutableMapping, Any
+from typing import Any
+from collections.abc import Iterable
+from collections.abc import Mapping, MutableMapping
 from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 
 import filetype  # type: ignore
 
 from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
 from charset_normalizer import from_bytes
+import tinycss2  # type: ignore[import-untyped]
+from tinycss2.ast import URLToken, Node  # type: ignore[import-untyped]
 
 warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 
@@ -88,7 +91,7 @@ def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
         mime, b64data = uri.split(';base64', 1)
         if not b64data or b64data[0] != ',':
             return None
-        b64data = b64data[1:].strip()
+        b64data = b64data[1:].strip().replace('\n', '')
         if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
             return None
         if len(b64data) % 4:
@@ -103,6 +106,7 @@ def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
         if ',' not in uri:
             return None
         mime, d = uri.split(',', 1)
+        d = unquote_plus(d)
         data = d.encode()
 
     if mime:
@@ -243,26 +247,10 @@ def _unpack_data_uri(data: str) -> tuple[str, str, BytesIO] | None:
     return None
 
 
-@lru_cache(maxsize=5)
-def init_bs4(html_doc: bytes) -> BeautifulSoup | None:
-    # make BS4 life easier and avoid it to attempt to decode
-    doc_as_str = str(from_bytes(html_doc).best())
-    if not doc_as_str:
-        # no need to bother.
-        return None
-    if doc_as_str.startswith('<?xml'):
-        return BeautifulSoup(doc_as_str, 'lxml-xml')
-    else:
-        return BeautifulSoup(doc_as_str, 'lxml')
-
-
-def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
+def find_identifiers(soup: BeautifulSoup) -> dict[str, list[str]] | None:
     ''' Extracts the identifiers from the HTML blob.
     The identifier we extract now is the recapthca site key, but there will be more.
     '''
-    soup = init_bs4(html_doc)
-    if soup is None:
-        return None
     to_return: dict[str, list[str]] = defaultdict(list)
 
     default_captchas = ['g-recaptcha', 'h-captcha', 'cf-turnstile']
@@ -280,15 +268,84 @@ def find_identifiers(html_doc: bytes) -> dict[str, list[str]] | None:
     # This is beta and kinda fragile, but it's going to find (most) of the google tag IDs
     # https://support.google.com/google-ads/answer/12326985?hl=en_us_us
     # NOTE: the doc says 9 X, but all the examples I found have 10 X so we cannot trust it
-    if google_tag_ids := set(re.findall(rb"(?:G-|AW-|GA-|UA-)\w{9,13}", html_doc)):
-        blocklist = {b'UA-Compatible'}
+    if google_tag_ids := set(re.findall(r"(?:G-|AW-|GA-|UA-)\w{9,13}", str(soup))):
+        blocklist = {'UA-Compatible'}
         google_tag_ids -= blocklist
-        to_return['google_tag_ids'] = [i.decode() for i in google_tag_ids]
+        if google_tag_ids:
+            to_return['google_tag_ids'] = list(google_tag_ids)
 
     return to_return
 
 
-def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
+def make_soup(html: bytes) -> BeautifulSoup:
+    # make BS4 life easier and avoid it to attempt to decode
+    doc_as_str = str(from_bytes(html).best())
+    if doc_as_str.startswith('<?xml'):
+        return BeautifulSoup(doc_as_str, 'lxml-xml')
+    else:
+        return BeautifulSoup(doc_as_str, 'lxml')
+
+# The CSS processing bit is taked out of WeasyPrint
+# https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/css/__init__.py#L876 -> preprocess_stylesheet
+
+# the only entries we care about are:
+# * @import (at-rule with keyword import)
+# * URLToken
+# * Function with name url
+
+
+def __remove_whitespace(tokens: tuple[Node]) -> tuple[Node]:
+    """Remove any top-level whitespace and comments in a token list."""
+    return tuple(
+        token for token in tokens
+        if token.type not in ('whitespace', 'comment'))
+
+
+def __flatten_rules(rules: list[Node]) -> Iterable[Node]:
+    """Flatten qualified rules in a list of CSS rules."""
+    for rule in rules:
+        if rule.type == 'at-rule':
+            # make a urltoken if it is an import for a url
+            if rule.lower_at_keyword == 'import':
+                # make a urltoken because this one might be a url function, or a string
+                for p in __remove_whitespace(rule.prelude):
+                    if p.type == 'url' or p.type == 'string':
+                        yield URLToken(999, 999, p.value, p.value)
+                        break
+                    elif p.type == 'function' and p.lower_name == 'url':
+                        yield URLToken(999, 999, p.arguments[0].value, p.arguments[0].value)
+                        break
+            else:
+                yield from rule.prelude
+        if not hasattr(rule, 'content') or not rule.content:
+            continue
+        for r in rule.content:
+            if r.type in ['[] block', '{} block', '() block']:
+                if r.content:
+                    yield from __flatten_rules(r.content)
+            else:
+                yield r
+
+
+def find_external_ressources_in_css(css: str) -> list[str]:
+    rules = tinycss2.parse_stylesheet(css, skip_comments=True, skip_whitespace=True)
+    to_return = []
+    for r in __flatten_rules(rules):
+        # other entries may have urls, but they will always be in a url() function
+        if r.type == 'url':
+            try:
+                to_return.append(r.value)
+            except Exception as e:
+                logger.warning(f'Parsing error in tinycss2: {e} - {r}')
+        elif r.type == 'function' and r.lower_name == 'url':
+            if isinstance(r.arguments[0], tinycss2.ast.ParseError):
+                # CSS is broken, cannot parse it. Generally a missing closing quote.
+                continue
+            to_return.append(r.arguments[0].value)
+    return to_return
+
+
+def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
     """ Get URLs to external contents out of an HTML blob."""
     # Source: https://stackoverflow.com/questions/31666584/beutifulsoup-to-extract-all-external-resources-from-html
     # Because this is awful.
@@ -311,97 +368,91 @@ def find_external_ressources(html_doc: bytes, base_url: str, all_requests: list[
                                                  'meta_refresh': []}
 
     embedded_ressources: dict[str, list[tuple[str, BytesIO]]] = defaultdict(list)
-    soup = init_bs4(html_doc)
-    if soup is None:
-        return external_ressources, embedded_ressources
-    for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed',
-                               'source', 'link', 'object']):
-        uri = None
-        if link.get('src'):  # img script video audio iframe embed source
-            uri = link.get('src')
-        if link.get('srcset'):  # img source
-            uri = link.get('srcset')
-        if link.get('longdesc'):  # img
-            uri = link.get('longdesc')
-        if link.get('poster'):  # video
-            uri = link.get('poster')
-        if link.get('href'):  # link
-            uri = link.get('href')
-        if link.get('data'):  # object
-            uri = link.get('data')
-        if not uri:
-            continue
+    if mimetype.startswith('text/css'):
+        doc_as_str = str(from_bytes(data).best())
+        # external stuff loaded from css content, because reasons.
+        for url in find_external_ressources_in_css(doc_as_str):
+            if url.startswith('data:'):
+                unpacked = _unpack_data_uri(url)
+                if unpacked:
+                    mime, b_hash, blob = unpacked
+                    embedded_ressources[mime].append((b_hash, blob))
+            else:
+                external_ressources['css'].append(url)
+    else:
+        soup = make_soup(data)
+        string_soup = str(soup)
+        if not string_soup:
+            # Empty HTML document, nothing to do
+            return external_ressources, embedded_ressources
+        for link in soup.find_all(['img', 'script', 'video', 'audio', 'iframe', 'embed',
+                                   'source', 'link', 'object']):
+            uri = None
+            if link.get('src'):  # img script video audio iframe embed source
+                uri = link.get('src')
+            if link.get('srcset'):  # img source
+                uri = link.get('srcset')
+            if link.get('longdesc'):  # img
+                uri = link.get('longdesc')
+            if link.get('poster'):  # video
+                uri = link.get('poster')
+            if link.get('href'):  # link
+                uri = link.get('href')
+            if link.get('data'):  # object
+                uri = link.get('data')
+            if not uri:
+                continue
 
-        if uri.startswith('data:'):
-            unpacked = _unpack_data_uri(uri)
-            if unpacked:
-                mime, b_hash, blob = unpacked
-                embedded_ressources[mime].append((b_hash, blob))
-        else:
-            external_ressources[link.name].append(unquote_plus(uri))
+            if uri.startswith('data:'):
+                unpacked = _unpack_data_uri(uri)
+                if unpacked:
+                    mime, b_hash, blob = unpacked
+                    embedded_ressources[mime].append((b_hash, blob))
+            else:
+                external_ressources[link.name].append(unquote_plus(uri))
 
-    # Search for meta refresh redirect madness
-    # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
-    meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile("^refresh$", re.I)})
-    if meta_refresh and isinstance(meta_refresh, Tag) and meta_refresh.get('content'):
-        # NOTE 2021-05-15: in theory, a meta key look like that: <number>;url=<url>
-        # but the url= part may not be present
-        content = meta_refresh['content']
-        if isinstance(content, str):
-            content = content.strip()
-            if ';' in content:
-                timeout, url = content.split(';', 1)
-                if timeout.isdigit():
-                    # Strip timeout
-                    content = url.strip()
-            if content[:4].lower() == 'url=':
-                content = content[4:].strip()
-            external_ressources['meta_refresh'].append(content)
+        # Search for meta refresh redirect madness
+        # NOTE: we may want to move that somewhere else, but that's currently the only place BeautifulSoup is used.
+        meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile("^refresh$", re.I)})
+        if meta_refresh and isinstance(meta_refresh, Tag) and meta_refresh.get('content'):
+            # NOTE 2021-05-15: in theory, a meta key look like that: <number>;url=<url>
+            # but the url= part may not be present
+            content = meta_refresh['content']
+            if isinstance(content, str):
+                content = content.strip()
+                if ';' in content:
+                    timeout, url = content.split(';', 1)
+                    if timeout.isdigit():
+                        # Strip timeout
+                        content = url.strip()
+                if content[:4].lower() == 'url=':
+                    content = content[4:].strip()
+                external_ressources['meta_refresh'].append(content)
 
-    # external stuff loaded from css content, because reasons.
-    for u in re.findall(rb'url\((?:[\'"])?(.*?)(?:[\'"])?\)', html_doc):
-        try:
-            url = u.decode()
-        except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode ressource in CSS {u[:20]}[...]: {e}')
-            continue
-        if url.startswith('data:'):
-            unpacked = _unpack_data_uri(url)
-            if unpacked:
-                mime, b_hash, blob = unpacked
-                embedded_ressources[mime].append((b_hash, blob))
-        else:
-            external_ressources['css'].append(url)
+        # Javascript changing the current page
+        # I never found a website where it matched anything useful
+        for url in re.findall('(?:window|self|top).location(?:.*)\"(.*?)\"', string_soup):
+            external_ressources['javascript'].append(url)
+        # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
+        # Just in case, there is sometimes an unescape call in JS code
+        for to_unescape in re.findall(r'unescape\(\'(.*)\'\)', string_soup):
+            unescaped = unquote_to_bytes(to_unescape)
+            kind = filetype.guess(unescaped)
+            if kind:
+                mimetype = kind.mime
+            else:
+                mimetype = ''
+            blob = BytesIO(unescaped)
+            b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
+            embedded_ressources[mimetype].append((b_hash, blob))
 
-    # Javascript changing the current page
-    # I never found a website where it matched anything useful
-    for u in re.findall(b'(?:window|self|top).location(?:.*)\"(.*?)\"', html_doc):
-        try:
-            url = u.decode()
-        except UnicodeDecodeError as e:
-            logger.info(f'Unable to decode ressource in JS {u[:20]}[...]: {e}')
-            continue
-        external_ressources['javascript'].append(url)
-    # NOTE: we may want to extract calls to decodeURI and decodeURIComponent
-    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURI
-    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/decodeURIComponent
-    # Just in case, there is sometimes an unescape call in JS code
-    for to_unescape in re.findall(br'unescape\(\'(.*)\'\)', html_doc):
-        unescaped = unquote_to_bytes(to_unescape)
-        kind = filetype.guess(unescaped)
-        if kind:
-            mimetype = kind.mime
-        else:
-            mimetype = ''
-        blob = BytesIO(unescaped)
-        b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
-        embedded_ressources[mimetype].append((b_hash, blob))
-
-    if full_text_search:
-        # Just regex in the whole blob, because we can
-        external_ressources['full_regex'] = [url.decode() for url in re.findall(rb'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', html_doc)]
-        # print("################ REGEXES ", external_ressources['full_regex'])
-    # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
+        if full_text_search:
+            # Just regex in the whole blob, because we can
+            external_ressources['full_regex'] = re.findall(r'(?:http[s]?:)?//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', str(soup))
+            # print("################ REGEXES ", external_ressources['full_regex'])
+        # NOTE: unescaping a potential URL as HTML content can make it unusable (example: (...)&ltime=(...>) => (...)<ime=(...))
     return url_cleanup(external_ressources, base_url, all_requests), embedded_ressources
 
 

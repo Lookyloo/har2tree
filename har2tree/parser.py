@@ -6,7 +6,7 @@ from pathlib import Path
 import copy
 from datetime import datetime
 from collections import defaultdict
-from typing import Iterable
+from collections.abc import Iterable
 import logging
 from .har2tree import Har2Tree
 from .nodes import URLNode
