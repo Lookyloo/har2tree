@@ -369,32 +369,32 @@ class Har2Tree:
                                 # If the body of the response was empty, skip.
                                 continue
                             if type_ressource == 'img':
-                                node.add_feature('image', True)
+                                node.add_prop('image', True)
 
                             if type_ressource == 'script':
-                                node.add_feature('js', True)
+                                node.add_prop('js', True)
 
                             if type_ressource == 'video':
-                                node.add_feature('video', True)
+                                node.add_prop('video', True)
 
                             if type_ressource == 'audio':
-                                node.add_feature('audio', True)
+                                node.add_prop('audio', True)
 
                             if type_ressource == 'iframe':
-                                node.add_feature('iframe', True)
+                                node.add_prop('iframe', True)
 
                             if type_ressource == 'embed':  # FIXME other icon?
-                                node.add_feature('octet_stream', True)
+                                node.add_prop('octet_stream', True)
 
                             if type_ressource == 'source':  # FIXME: Can be audio, video, or picture
-                                node.add_feature('octet_stream', True)
+                                node.add_prop('octet_stream', True)
 
                             # NOTE: the URL is probably not a CSS
                             # if type_ressource == 'link':  # FIXME: Probably a css?
-                            #    node.add_feature('css', True)
+                            #    node.add_prop('css', True)
 
                             if type_ressource == 'object':  # FIXME: Same as embed, but more things
-                                node.add_feature('octet_stream', True)
+                                node.add_prop('octet_stream', True)
 
         self.url_tree = self._nodes_list.pop(0)
 
@@ -547,7 +547,7 @@ class Har2Tree:
                         if 'pageref' not in node.props:
                             # 2022-11-19: No pageref for this node in the HAR file,
                             #             this is weird but we need it as a fallback.
-                            node.add_feature('pageref', page['id'])
+                            node.add_prop('pageref', page['id'])
                         if node.pageref == page['id']:
                             self.pages_root[node.pageref] = node.uuid
                             break
