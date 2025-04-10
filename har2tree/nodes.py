@@ -616,7 +616,7 @@ class HostNode(HarTreeNode):
         url.add_prop('hostnode_uuid', self.uuid)
 
         if 'rendered_html' in url.props or 'downloaded_filename' in url.props:
-            self.contains_rendered_urlnode = True
+            self.add_prop('contains_rendered_urlnode', True)
             if 'downloaded_filename' in url.props:
                 self.add_prop('downloaded_filename', url.downloaded_filename)
 
