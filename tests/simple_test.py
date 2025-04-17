@@ -243,7 +243,7 @@ class SimpleTest(unittest.TestCase):
     def test_hostnode_to_json(self) -> None:
 
         # Easiest way to test the to_json method without having a huge string here is extracting one from a file
-        # This file is already cleaned, no UUIDs (see)
+        # This file is already cleaned, no UUIDs
         with open(self.test_dir / 'iframe' / 'to_json.json') as json_file:
             expected_dict = json.load(json_file)
 
