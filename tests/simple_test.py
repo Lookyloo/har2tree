@@ -131,7 +131,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
 
     def test_hostname_tree_features(self) -> None:
-        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'http_content', 'https_content', 'support', 'dist',
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'http_content', 'https_content',
                                                                                      'contains_rendered_urlnode', 'urls', 'uuid'})
         self.assertTrue('meta_refresh' in self.http_redirect_ct.root_hartree.url_tree.external_ressources)
         self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.external_ressources['meta_refresh'][0], 'https://www.youtube.com/watch?v=iwGFalTRHDA')

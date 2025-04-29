@@ -628,9 +628,9 @@ class HostNode(HarTreeNode):
             self.cookies_received.update({(domain, cookie, is_3rd_party)
                                           for domain, cookie, is_3rd_party in url.cookies_received})
         if url.name.startswith('http://'):
-            self.http_content = True
+            self.add_prop('http_content', True)
         elif url.name.startswith('https://'):
-            self.https_content = True
+            self.add_prop('https_content', True)
 
 
 def harnode_json_default(obj: HarTreeNode) -> MutableMapping[str, Any]:
