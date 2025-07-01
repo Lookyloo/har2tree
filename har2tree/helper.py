@@ -385,8 +385,13 @@ def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requ
             else:
                 external_ressources['css'].append(url)
     else:
-        soup = make_soup(data)
-        string_soup = str(soup)
+        try:
+            soup = make_soup(data)
+            string_soup = str(soup)
+        except Exception as e:
+            logger.warning(f'Unable to parse HTML blob: {e}')
+            string_soup = ''
+
         if not string_soup:
             # Empty HTML document, nothing to do
             return external_ressources, embedded_ressources
