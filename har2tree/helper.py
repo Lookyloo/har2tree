@@ -286,7 +286,7 @@ def make_soup(html: bytes) -> BeautifulSoup:
         try:
             return BeautifulSoup(doc_as_str, 'lxml')
         except Exception as e:
-            logger.warning(f'Unable to parse doc with lxml, try again with the default parser: {e}')
+            logger.info(f'Unable to parse doc with lxml, try again with the default parser: {e}')
             # Fallback to the default python parser
             return BeautifulSoup(doc_as_str, 'html.parser')
 
