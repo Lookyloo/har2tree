@@ -131,7 +131,7 @@ class SimpleTest(unittest.TestCase):
         self.assertEqual(rebuild_url_double_slash, 'https://www.youtube.com/watch?v=iwGFalTRHDA')
 
     def test_hostname_tree_features(self) -> None:
-        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'http_content', 'https_content', 'support', 'dist',
+        self.assertEqual(self.http_redirect_ct.root_hartree.hostname_tree.features, {'name', 'http_content', 'https_content',
                                                                                      'contains_rendered_urlnode', 'urls', 'uuid'})
         self.assertTrue('meta_refresh' in self.http_redirect_ct.root_hartree.url_tree.external_ressources)
         self.assertEqual(self.http_redirect_ct.root_hartree.url_tree.external_ressources['meta_refresh'][0], 'https://www.youtube.com/watch?v=iwGFalTRHDA')
@@ -243,7 +243,7 @@ class SimpleTest(unittest.TestCase):
     def test_hostnode_to_json(self) -> None:
 
         # Easiest way to test the to_json method without having a huge string here is extracting one from a file
-        # This file is already cleaned, no UUIDs (see)
+        # This file is already cleaned, no UUIDs
         with open(self.test_dir / 'iframe' / 'to_json.json') as json_file:
             expected_dict = json.load(json_file)
 
