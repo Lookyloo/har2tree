@@ -283,7 +283,12 @@ def make_soup(html: bytes) -> BeautifulSoup:
     if doc_as_str.startswith('<?xml'):
         return BeautifulSoup(doc_as_str, 'lxml-xml')
     else:
-        return BeautifulSoup(doc_as_str, 'lxml')
+        try:
+            return BeautifulSoup(doc_as_str, 'lxml')
+        except Exception as e:
+            logger.info(f'Unable to parse doc with lxml, try again with the default parser: {e}')
+            # Fallback to the default python parser
+            return BeautifulSoup(doc_as_str, 'html.parser')
 
 # The CSS processing bit is taked out of WeasyPrint
 # https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/css/__init__.py#L876 -> preprocess_stylesheet
@@ -380,8 +385,13 @@ def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requ
             else:
                 external_ressources['css'].append(url)
     else:
-        soup = make_soup(data)
-        string_soup = str(soup)
+        try:
+            soup = make_soup(data)
+            string_soup = str(soup)
+        except Exception as e:
+            logger.warning(f'Unable to parse HTML blob: {e}')
+            string_soup = ''
+
         if not string_soup:
             # Empty HTML document, nothing to do
             return external_ressources, embedded_ressources
