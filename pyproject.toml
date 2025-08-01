@@ -14,13 +14,13 @@ dynamic = [ "classifiers" ]
 dependencies = [
     "ete3 (>=3.1.3)",
     "beautifulsoup4[charset-normalizer,lxml] (>=4.13.4)",
-    "publicsuffixlist (>=1.0.2.20250719)",
+    "publicsuffixlist (>=1.0.2.20250724)",
     "filetype (>=1.2.0)",
     # poetry up fails with the version of numpy forced for python < 3.10.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (<2.1) ; python_version < \"3.10\"",
     "numpy (<2.3) ; python_version < \"3.11\"",
-    "numpy (>=2.3.1) ; python_version >= \"3.11\"",
+    "numpy (>=2.3.2) ; python_version >= \"3.11\"",
     "w3lib (>=2.3.1)",
     "tinycss2 (>=1.4.0)",
     "legacy-cgi (>=2.6.3) ; python_version >= \"3.13,<4.0\"",
@@ -45,9 +45,9 @@ classifiers = [
 docs = ["Sphinx (>=8.2.3) ; python_version >= \"3.11\"", "six (>=1.17.0)"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.17.0"
+mypy = "^1.17.1"
 pytest-cov = "^6.2.1"
-coverage = "^7.9.2"
+coverage = "^7.10.1"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
 [build-system]
