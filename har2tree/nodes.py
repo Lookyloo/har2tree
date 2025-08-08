@@ -219,7 +219,7 @@ class URLNode(HarTreeNode):
                 # If the POST content is empty
                 self.logger.debug('Empty POST request.')
                 decoded_posted_data = ''
-            elif self.request['postData']['params']:
+            elif self.request['postData'].get('params'):
                 # NOTE 2025-08-08
                 # if the posted data mimetype is "application/x-www-form-urlencoded"
                 # the HAR contains the decoded entry in the params key
