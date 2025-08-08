@@ -211,20 +211,39 @@ class URLNode(HarTreeNode):
         if 'user_agent' not in self.features:
             self.add_feature('user_agent', '')
 
-        if 'method' in self.request and self.request['method'] == 'POST' and 'postData' in self.request:
-            # If the content is empty, we don't care
-            if self.request['postData']['text']:
-                _posted_data: str = self.request['postData']['text']
-                decoded_posted_data: str | bytes | int | float | bool
+        if 'method' in self.request and self.request['method'] == 'POST':
+            decoded_posted_data: str | bytes | int | float | bool | dict[str, str] | None = None
+            if 'postData' not in self.request or 'text' not in self.request['postData']:
+                self.logger.debug('POST request with no content.')
+            elif not self.request['postData']['text']:
+                # If the POST content is empty
+                self.logger.debug('Empty POST request.')
+                decoded_posted_data = ''
+            elif self.request['postData']['params']:
+                # NOTE 2025-08-08
+                # if the posted data mimetype is "application/x-www-form-urlencoded"
+                # the HAR contains the decoded entry in the params key
+                # The params key is a list of dicts with a key and a value
+                #   {"name": <key>, "value": <data>}
+                # I'd rather have it as {<key>: <data>}
+                # TODO: some processing on the data part (it's often a json blob)
+                self.logger.debug('Got a params POST.')
+                decoded_posted_data = {entry['name']: entry['value'] for entry in self.request['postData']['params']}
+            else:
                 # NOTE 2023-08-22: Blind attempt to base64 decode the data
+                self.logger.debug('Got a normal POST')
                 try:
-                    decoded_posted_data = self._dirty_safe_b64decode(_posted_data)
+                    decoded_posted_data = self._dirty_safe_b64decode(self.request['postData']['text'])
                 except binascii.Error:
-                    decoded_posted_data = _posted_data
+                    decoded_posted_data = self.request['postData']['text']
                 if 'mimeType' in self.request['postData']:
                     # make it easier to compare.
                     mimetype_lower = self.request['postData']['mimeType'].lower()
                     if mimetype_lower.startswith('application/x-www-form-urlencoded'):
+                        # NOTE: this should never happen as there should
+                        # be something in self.request['postData']['params']
+                        # and we already processed it before but just in case...
+                        self.logger.warning(f'Got a application/x-www-form-urlencoded without params key: {self.request}')
                         # 100% sure there will be websites where decode will fail
                         try:
                             if isinstance(decoded_posted_data, bytes):
@@ -247,17 +266,19 @@ class URLNode(HarTreeNode):
                                 decoded_posted_data = json.loads(decoded_posted_data)
                             except Exception:
                                 if isinstance(decoded_posted_data, (str, bytes)):
-                                    self.logger.debug(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
+                                    self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
                                 else:
-                                    self.logger.debug(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
+                                    self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
 
                     elif mimetype_lower.startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
+                        self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
                     elif mimetype_lower.startswith('application/x-protobuf'):
                         # FIXME If possible, decode?
+                        self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
-                    elif mimetype_lower.startswith('text'):
+                    elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
                         try:
                             # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
                             # loads here may give us a int, float or a bool.
@@ -267,34 +288,40 @@ class URLNode(HarTreeNode):
                             pass
                     elif mimetype_lower.endswith('javascript'):
                         # keep it as it is
+                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
                     elif mimetype_lower == '?':
                         # Just skip it, no need to go in the warnings
+                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
                     elif mimetype_lower in ['application/octet-stream', 'application/binary']:
                         # Should flag it, maybe?
+                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
                     elif mimetype_lower in ['application/unknown', 'application/grpc-web+proto']:
                         # Weird but already seen stuff
+                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
                     else:
                         self.logger.warning(f'Unexpected mime type: {mimetype_lower}')
+                else:
+                    self.logger.warning(f'Missing mimetype in POST: {self.request["postData"]}')
 
-                # NOTE 2023-08-22: Blind attempt to process the data as json
-                if isinstance(decoded_posted_data, (str, bytes)):
-                    try:
-                        decoded_posted_data = json.loads(decoded_posted_data)
-                    except Exception:
-                        pass
+            # NOTE 2023-08-22: Blind attempt to process the data as json
+            if isinstance(decoded_posted_data, (str, bytes)):
+                try:
+                    decoded_posted_data = json.loads(decoded_posted_data)
+                except Exception:
+                    pass
 
-                if isinstance(decoded_posted_data, bytes):
-                    # NOTE 2023-08-22: Blind attempt to decode the bytes
-                    # Try to decode it as utf-8
-                    try:
-                        decoded_posted_data = decoded_posted_data.decode('utf-8')
-                    except Exception:
-                        pass
-                self.add_feature('posted_data', decoded_posted_data)
+            if isinstance(decoded_posted_data, bytes):
+                # NOTE 2023-08-22: Blind attempt to decode the bytes
+                # Try to decode it as utf-8
+                try:
+                    decoded_posted_data = decoded_posted_data.decode('utf-8')
+                except Exception:
+                    pass
+            self.add_feature('posted_data', decoded_posted_data)
 
         self.add_feature('response', har_entry['response'])
         try:
