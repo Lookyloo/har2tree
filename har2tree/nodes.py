@@ -19,7 +19,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 from collections.abc import MutableMapping
-from urllib.parse import unquote_plus, urlparse, urljoin
+from urllib.parse import unquote_plus, urlparse, urljoin, parse_qs
 
 import filetype  # type: ignore
 from bs4 import BeautifulSoup
@@ -212,7 +212,7 @@ class URLNode(HarTreeNode):
             self.add_feature('user_agent', '')
 
         if 'method' in self.request and self.request['method'] == 'POST':
-            decoded_posted_data: str | bytes | int | float | bool | dict[str, str] | None = None
+            decoded_posted_data: str | bytes | int | float | bool | dict[str, str] | dict[str, list[str]] | None = None
             if 'postData' not in self.request or 'text' not in self.request['postData']:
                 self.logger.debug('POST request with no content.')
             elif not self.request['postData']['text']:
@@ -243,15 +243,17 @@ class URLNode(HarTreeNode):
                         # NOTE: this should never happen as there should
                         # be something in self.request['postData']['params']
                         # and we already processed it before but just in case...
-                        self.logger.warning(f'Got a application/x-www-form-urlencoded without params key: {self.request}')
+                        self.logger.debug('Got a application/x-www-form-urlencoded without params key')
                         # 100% sure there will be websites where decode will fail
                         try:
                             if isinstance(decoded_posted_data, bytes):
                                 decoded_posted_data = decoded_posted_data.decode()
                             if isinstance(decoded_posted_data, str):
                                 decoded_posted_data = unquote_plus(decoded_posted_data)
+                            if isinstance(decoded_posted_data, str):
+                                decoded_posted_data = parse_qs(decoded_posted_data)
                         except Exception as e:
-                            self.logger.warning(f'Unable to unquote form data "{decoded_posted_data!r}": {e}')
+                            self.logger.warning(f'Unable to unquote or parse form data "{decoded_posted_data!r}": {e}')
                     elif (mimetype_lower.startswith('application/json')
                           or mimetype_lower.startswith('application/csp-report')
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
