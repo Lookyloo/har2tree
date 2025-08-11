@@ -15,13 +15,15 @@ from base64 import b64decode
 from datetime import datetime, timedelta
 from functools import lru_cache, cached_property
 from hashlib import sha256
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
 from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin, parse_qs
 
 import filetype  # type: ignore
+import json_stream  # type: ignore
+
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
 from publicsuffixlist import PublicSuffixList  # type: ignore
@@ -212,7 +214,7 @@ class URLNode(HarTreeNode):
             self.add_feature('user_agent', '')
 
         if 'method' in self.request and self.request['method'] == 'POST':
-            decoded_posted_data: str | bytes | int | float | bool | dict[str, str] | dict[str, list[str]] | None = None
+            decoded_posted_data: list[Any] | str | bytes | int | float | bool | dict[str, str] | dict[str, list[str]] | None = None
             if 'postData' not in self.request or 'text' not in self.request['postData']:
                 self.logger.debug('POST request with no content.')
             elif not self.request['postData']['text']:
@@ -257,7 +259,6 @@ class URLNode(HarTreeNode):
                     elif (mimetype_lower.startswith('application/json')
                           or mimetype_lower.startswith('application/csp-report')
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
-                          or mimetype_lower.startswith('application/x-json-stream')
                           or mimetype_lower.startswith('application/reports+json')
                           or mimetype_lower.endswith('json')
                           ):
@@ -271,7 +272,22 @@ class URLNode(HarTreeNode):
                                     self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
                                 else:
                                     self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
-
+                    elif mimetype_lower.startswith('application/x-json-stream'):
+                        try:
+                            to_stream: StringIO | BytesIO
+                            if isinstance(decoded_posted_data, str):
+                                to_stream = StringIO(decoded_posted_data)
+                            elif isinstance(decoded_posted_data, bytes):
+                                to_stream = BytesIO(decoded_posted_data)
+                            else:
+                                raise ValueError(f'Invalid type: {type(decoded_posted_data)}')
+                            streamed_data = json_stream.load(to_stream)
+                            decoded_posted_data = json_stream.to_standard_types(streamed_data)
+                        except Exception:
+                            if isinstance(decoded_posted_data, (str, bytes)):
+                                self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
+                            else:
+                                self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
                     elif mimetype_lower.startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
                         self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
@@ -296,11 +312,17 @@ class URLNode(HarTreeNode):
                         # Just skip it, no need to go in the warnings
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
-                    elif mimetype_lower in ['application/octet-stream', 'application/binary']:
+                    elif mimetype_lower == 'application/binary':
+                        # generally a broken gzipped blob
+                        self.logger.debug(f'Got a POST {mimetype_lower}, most probably a broken gziped blob: {decoded_posted_data!r}')
+                    elif mimetype_lower in ['application/octet-stream']:
                         # Should flag it, maybe?
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
-                    elif mimetype_lower in ['application/unknown', 'application/grpc-web+proto']:
+                    elif mimetype_lower in ['application/grpc-web+proto']:
+                        # Can be decoded?
+                        self.logger.warning(f'Got a POST {mimetype_lower} - can be decoded: {decoded_posted_data!r}')
+                    elif mimetype_lower in ['application/unknown']:
                         # Weird but already seen stuff
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         pass
@@ -324,6 +346,7 @@ class URLNode(HarTreeNode):
                 except Exception:
                     pass
             self.add_feature('posted_data', decoded_posted_data)
+            self.add_feature('posted_data_mimetype', self.request['postData']['mimeType'])
 
         self.add_feature('response', har_entry['response'])
         try:
