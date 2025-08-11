@@ -346,7 +346,8 @@ class URLNode(HarTreeNode):
                 except Exception:
                     pass
             self.add_feature('posted_data', decoded_posted_data)
-            self.add_feature('posted_data_mimetype', self.request['postData']['mimeType'])
+            if 'postData' in self.request and self.request['postData'].get('mimeType'):
+                self.add_feature('posted_data_mimetype', self.request['postData']['mimeType'])
 
         self.add_feature('response', har_entry['response'])
         try:
