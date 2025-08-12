@@ -1017,14 +1017,14 @@ testing = ["coverage", "pytest", "pytest-benchmark"]
 
 [[package]]
 name = "publicsuffixlist"
-version = "1.0.2.20250809"
+version = "1.0.2.20250812"
 description = "publicsuffixlist implement"
 optional = false
 python-versions = ">=3.5"
 groups = ["main"]
 files = [
-    {file = "publicsuffixlist-1.0.2.20250809-py2.py3-none-any.whl", hash = "sha256:b447f1356cb2d6c0e79ca7599d72d7e56ce9cfcab290c044aaf4b144e198bbc9"},
-    {file = "publicsuffixlist-1.0.2.20250809.tar.gz", hash = "sha256:793bd8193c2e4a34fb6da9fb07dc52fbc1f325f88c1e71086525e29a33329091"},
+    {file = "publicsuffixlist-1.0.2.20250812-py2.py3-none-any.whl", hash = "sha256:456f4f47bca9108a64fab0896a0fa88d56e245bf5b7d68dae8ff829da0dd9893"},
+    {file = "publicsuffixlist-1.0.2.20250812.tar.gz", hash = "sha256:cbc0b92e0e747a991c191df09d21e18ab70ac06798e777dca269ad12e2df5143"},
 ]
 
 [package.extras]
@@ -1462,4 +1462,4 @@ docs = ["Sphinx", "six"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4.0"
-content-hash = "3c932b1a4c13cba9e62e0b109ae9c00e34246f941fc01d0466ef378eec4352bb"
+content-hash = "f1697d220af67b72182a2b2d176f3673b79b6782cc5e42f2b6022ae8023701e8"
