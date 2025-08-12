@@ -217,10 +217,12 @@ class URLNode(HarTreeNode):
             decoded_posted_data: list[Any] | str | bytes | int | float | bool | dict[str, str] | dict[str, list[str]] | None = None
             if 'postData' not in self.request or 'text' not in self.request['postData']:
                 self.logger.debug('POST request with no content.')
+                self.add_feature('posted_data_info', "No content.")
             elif not self.request['postData']['text']:
                 # If the POST content is empty
                 self.logger.debug('Empty POST request.')
                 decoded_posted_data = ''
+                self.add_feature('posted_data_info', "Empty request.")
             elif self.request['postData']['text'].startswith('\x1f\uFFFD\x08'):
                 # b'\x1f\xef\xbf\xbd\x08', decoded to UTF-8
                 # => the replacement character
@@ -238,10 +240,11 @@ class URLNode(HarTreeNode):
                 # TODO: some processing on the data part (it's often a json blob)
                 self.logger.debug('Got a params POST.')
                 decoded_posted_data = {entry['name']: entry['value'] for entry in self.request['postData']['params']}
+                self.add_feature('posted_data_info', "POST request as URL params.")
             else:
-                # NOTE 2023-08-22: Blind attempt to base64 decode the data
                 self.logger.debug('Got a normal POST')
                 try:
+                    # NOTE 2023-08-22: Blind attempt to base64 decode the data
                     decoded_posted_data = self._dirty_safe_b64decode(self.request['postData']['text'])
                 except binascii.Error:
                     decoded_posted_data = self.request['postData']['text']
@@ -261,8 +264,10 @@ class URLNode(HarTreeNode):
                                 decoded_posted_data = unquote_plus(decoded_posted_data)
                             if isinstance(decoded_posted_data, str):
                                 decoded_posted_data = parse_qs(decoded_posted_data)
+                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
                         except Exception as e:
                             self.logger.warning(f'Unable to unquote or parse form data "{decoded_posted_data!r}": {e}')
+                            self.add_feature('posted_data_info', "Unable to decode POST request.")
                     elif (mimetype_lower.startswith('application/json')
                           or mimetype_lower.startswith('application/csp-report')
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
@@ -274,7 +279,9 @@ class URLNode(HarTreeNode):
                             try:
                                 # NOTE 2023-08-22: loads here may give us a int, float or a bool.
                                 decoded_posted_data = json.loads(decoded_posted_data)
+                                self.add_feature('posted_data_info', "Successfully decoded POST request.")
                             except Exception:
+                                self.add_feature('posted_data_info', "Unable to decode POST request.")
                                 if isinstance(decoded_posted_data, (str, bytes)):
                                     self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
                                 else:
@@ -290,71 +297,91 @@ class URLNode(HarTreeNode):
                                 raise ValueError(f'Invalid type: {type(decoded_posted_data)}')
                             streamed_data = json_stream.load(to_stream)
                             decoded_posted_data = json_stream.to_standard_types(streamed_data)
+                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
                         except Exception:
                             if isinstance(decoded_posted_data, (str, bytes)):
                                 self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
                             else:
                                 self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
+                            self.add_feature('posted_data_info', "Unable to decode POST request.")
                     elif mimetype_lower.startswith('multipart/form-data'):
                         # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
                         self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
                     elif mimetype_lower.startswith('application/x-protobuf'):
                         # FIXME If possible, decode?
                         self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
                     elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
                         try:
                             # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
                             # loads here may give us a int, float or a bool.
                             decoded_posted_data = json.loads(decoded_posted_data)
+                            self.add_feature('posted_data_info', "Decoded JSON out of POST request.")
                         except Exception:
                             # keep it as it is otherwise.
                             pass
                     elif mimetype_lower.endswith('javascript'):
                         # keep it as it is
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"Pretty rendering of {mimetype_lower} is not supported yet.")
                     elif mimetype_lower == '?':
                         # Just skip it, no need to go in the warnings
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"Weird MimeType ({mimetype_lower}) is not supported yet.")
                     elif mimetype_lower == 'application/binary':
-                        # generally a broken gzipped blob
-                        self.logger.debug(f'Got a POST {mimetype_lower}, most probably a broken gziped blob: {decoded_posted_data!r}')
+                        self.logger.warning(f'Got a POST {mimetype_lower}, not a broken gziped blob: {decoded_posted_data!r}')
+                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
                     elif mimetype_lower in ['application/octet-stream']:
                         # Should flag it, maybe?
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
                     elif mimetype_lower in ['application/grpc-web+proto']:
                         # Can be decoded?
                         self.logger.warning(f'Got a POST {mimetype_lower} - can be decoded: {decoded_posted_data!r}')
+                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
                     elif mimetype_lower in ['application/unknown']:
                         # Weird but already seen stuff
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        pass
+                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
                     else:
-                        self.logger.warning(f'Unexpected mime type: {mimetype_lower}')
+                        self.logger.warning(f'Unexpected mime type: {mimetype_lower} - {decoded_posted_data!r}')
+                        self.add_feature('posted_data_info', f"Unexpected MimeType ({mimetype_lower}) is not supported yet.")
                 else:
                     self.logger.warning(f'Missing mimetype in POST: {self.request["postData"]}')
+                    self.add_feature('posted_data_info', "Missing MimeType, not sure what to do.")
 
             # NOTE 2023-08-22: Blind attempt to process the data as json
-            if isinstance(decoded_posted_data, (str, bytes)):
+            if decoded_posted_data and isinstance(decoded_posted_data, (str, bytes)):
                 try:
                     decoded_posted_data = json.loads(decoded_posted_data)
                 except Exception:
                     pass
 
-            if isinstance(decoded_posted_data, bytes):
+            if decoded_posted_data and isinstance(decoded_posted_data, bytes):
                 # NOTE 2023-08-22: Blind attempt to decode the bytes
                 # Try to decode it as utf-8
                 try:
                     decoded_posted_data = decoded_posted_data.decode('utf-8')
                 except Exception:
                     pass
+
             self.add_feature('posted_data', decoded_posted_data)
             if 'postData' in self.request and self.request['postData'].get('mimeType'):
                 self.add_feature('posted_data_mimetype', self.request['postData']['mimeType'])
+            # Get size, post decode.
+            if not decoded_posted_data:
+                # empty or None, set to 0
+                self.add_feature('posted_data_size', 0)
+            elif isinstance(decoded_posted_data, (list, dict)):
+                # set size to the json dump
+                self.add_feature('posted_data_size', len(json.dumps(decoded_posted_data)))
+            elif isinstance(decoded_posted_data, (str, bytes)):
+                # length
+                self.add_feature('posted_data_size', len(decoded_posted_data))
+            else:
+                # Stringify and len
+                self.add_feature('posted_data_size', len(str(decoded_posted_data)))
 
         self.add_feature('response', har_entry['response'])
         try:
