@@ -221,6 +221,13 @@ class URLNode(HarTreeNode):
                 # If the POST content is empty
                 self.logger.debug('Empty POST request.')
                 decoded_posted_data = ''
+            elif self.request['postData']['text'].startswith('\x1f\uFFFD\x08'):
+                # b'\x1f\xef\xbf\xbd\x08', decoded to UTF-8
+                # => the replacement character
+                # https://www.cogsci.ed.ac.uk/~richard/utf-8.cgi?input=%EF%BF%BD&mode=char
+                self.logger.debug('Got a garbled gzipped POST blob.')
+                self.add_feature('posted_data_info', "It was a POSTed gzipped blob, but the data has been garbled.")
+                decoded_posted_data = self.request['postData']['text']
             elif self.request['postData'].get('params'):
                 # NOTE 2025-08-08
                 # if the posted data mimetype is "application/x-www-form-urlencoded"
