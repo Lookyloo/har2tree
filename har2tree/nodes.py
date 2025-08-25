@@ -27,6 +27,7 @@ import json_stream  # type: ignore
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
 from publicsuffixlist import PublicSuffixList  # type: ignore
+from requests_toolbelt.multipart import decoder  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
@@ -272,6 +273,8 @@ class URLNode(HarTreeNode):
                           or mimetype_lower.startswith('application/csp-report')
                           or mimetype_lower.startswith('application/x-amz-json-1.1')
                           or mimetype_lower.startswith('application/reports+json')
+                          or mimetype_lower.startswith('application/vnd.adobe.dc+json')
+                          or mimetype_lower.startswith('application/ion+json')
                           or mimetype_lower.endswith('json')
                           ):
                         if isinstance(decoded_posted_data, (str, bytes)):
@@ -304,10 +307,29 @@ class URLNode(HarTreeNode):
                             else:
                                 self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
                             self.add_feature('posted_data_info', "Unable to decode POST request.")
-                    elif mimetype_lower.startswith('multipart/form-data'):
-                        # FIXME multipart content (similar to email). Not totally sure what do do with it tight now.
-                        self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
+                    elif mimetype_lower.startswith('multipart'):
+                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is partially supported.")
+                        if isinstance(decoded_posted_data, str):
+                            # must be encoded for decoding
+                            multipart_to_decode = decoded_posted_data.encode()
+                        elif isinstance(decoded_posted_data, bytes):
+                            multipart_to_decode = decoded_posted_data
+                        else:
+                            raise ValueError(f'Invalid type for multipart POST: {type(decoded_posted_data)}')
+                        if b"\r\n" not in multipart_to_decode:
+                            # the decoder wants that
+                            multipart_to_decode = multipart_to_decode.replace(b"\n", b"\r\n")
+                        try:
+                            multipart_data = decoder.MultipartDecoder(multipart_to_decode, mimetype_lower)
+                            decoded_posted_data = []
+                            for part in multipart_data.parts:
+                                headers = {k.decode(): v.decode() for k, v in part.headers.items()}
+                                content = part.text
+                                decoded_posted_data.append({'headers': headers, 'content': content})
+                        except Exception as e:
+                            self.logger.warning(f'Unable to decode multipart POST: {e}')
+                            self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
+
                     elif mimetype_lower.startswith('application/x-protobuf'):
                         # FIXME If possible, decode?
                         self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
@@ -325,8 +347,7 @@ class URLNode(HarTreeNode):
                         # keep it as it is
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         self.add_feature('posted_data_info', f"Pretty rendering of {mimetype_lower} is not supported yet.")
-                    elif mimetype_lower == '?':
-                        # Just skip it, no need to go in the warnings
+                    elif mimetype_lower in ['?', '*/*']:
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         self.add_feature('posted_data_info', f"Weird MimeType ({mimetype_lower}) is not supported yet.")
                     elif mimetype_lower == 'application/binary':
