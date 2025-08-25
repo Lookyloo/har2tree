@@ -586,7 +586,7 @@ class URLNode(HarTreeNode):
             return href
 
         if not hasattr(self, 'rendered_html') or not self.rendered_html:
-            raise Har2TreeError('Not the node of a page rendered, invalid request.')
+            raise Har2TreeError('Not the node of a page rendered ({self.uuid}), invalid request.')
         urls: set[str] = set()
 
         # The simple ones: the links.

@@ -115,8 +115,10 @@ class HarFile():
         last_redirect_file = self.path.parent / f'{root_name}.last_redirect.txt'
         if last_redirect_file.is_file():
             with last_redirect_file.open('r') as _lr:
-                self.final_redirect: str = unquote_plus(_lr.read())
-            self._search_final_redirect()
+                last_redirect = unquote_plus(_lr.read())
+            self.final_redirect: str = last_redirect
+            if not self._search_final_redirect():
+                self.logger.warning(f'Final redirect URL from address bar not in tree: {last_redirect}')
         else:
             self.logger.debug('No last_redirect file available.')
             self.final_redirect = ''
@@ -169,29 +171,30 @@ class HarFile():
         # Set to false if initial_redirects fails to find the chain.
         self.need_tree_redirects = False
 
-    def _search_final_redirect(self) -> None:
+    def _search_final_redirect(self) -> bool:
         """Try to find the final path to the final redirect without building the tree"""
         for e in self.entries:
             unquoted_url = unquote_plus(e['request']['url'])
             if unquoted_url == self.final_redirect:
-                break
+                return True
             elif unquoted_url.startswith(f'{self.final_redirect}?'):
                 # WARNING: the URL in that file may not be present in the HAR: the query part is stripped by splash
                 self.final_redirect = unquoted_url
-                break
+                return True
         else:
             # Update 2020-04-01: .. but the fragment is not striped so self.final_redirect may not be found
             # Unless we find the entry in the har, we need to search again without the fragment
             if '#' in self.final_redirect:
                 self.final_redirect = self.final_redirect.split('#', 1)[0]
-                self._search_final_redirect()
+                return self._search_final_redirect()
             elif '?' in self.final_redirect:
                 # At this point, we're trying things. The final URL returned by splash may have been changed
                 # in JavaScript and never appear in the HAR. Let's try to find the closest one with the same path
                 self.final_redirect = self.final_redirect.split('?', 1)[0]
-                self._search_final_redirect()
+                return self._search_final_redirect()
             else:
                 self.logger.info(f'Unable to find the final redirect: {self.final_redirect}')
+        return False
 
     @property
     def number_entries(self) -> int:
@@ -566,12 +569,6 @@ class Har2Tree:
         if node:
             return node[0]
 
-        browser_errors = ['chrome-error', 'about:blank']
-        if self.har.final_redirect and not any(self.har.final_redirect.startswith(r) for r in browser_errors):
-            self.logger.warning(f'Final redirect URL from adress bar not in tree: {self.har.final_redirect}')
-        else:
-            # No final redirect, already logged earlier.
-            pass
         # Just try to get the best guess: first node after JS/HTTP redirects
         curnode = self.url_tree
         while hasattr(curnode, 'redirect') and curnode.redirect:
@@ -679,20 +676,25 @@ class Har2Tree:
                 and node.pageref != self.har.har['log']['pages'][0]
                 and self.pages_root[node.pageref] != node.uuid):
             # In that case, we check if there is already a page with the pageref of the orphan node,
-            # and attach the node to that. NOTE: we can only do that if there is already a node with this pageref in the tree.
+            # and attach the node to that.
+            # NOTE: we can only do that if there is already a node with this pageref in the tree.
             # This node is not a page root, we can attach it \o/
             page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
             self._make_subtree(page_root_node, [node])
-        elif self.url_tree.search_nodes(name=self.har.final_redirect):
-            # Generally, when we have a bunch of redirects, they do not branch out before the final landing page
-            # *but* it is not always the case: some intermediary redirects will have calls to 3rd party pages.
+        elif self.rendered_node != self.url_tree:
+            # Generally, when we have a bunch of redirects, they (generally) do not branch out
+            # before the final landing page *but* it is not always the case: some intermediary
+            # redirects will have calls to 3rd party pages.
             # Hopefully, this last case was taken care of in the branch above.
-            # In this branch, we get the landing page after the redirects (if any), and attach the node to it.
+            # In this branch, we get the landing page after the redirects, and attach the node to it.
+
+            # We skip this call if there are no redirects as it is the very last fallback at the
+            # end of this method anyway
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
-            self._make_subtree(self.url_tree.search_nodes(name=self.har.final_redirect)[0], [node])
+            self._make_subtree(self.rendered_node, [node])
         elif 'pages' in self.har.har['log']:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
