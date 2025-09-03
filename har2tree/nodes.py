@@ -485,6 +485,7 @@ class URLNode(HarTreeNode):
 
             # Common JS redirect we can catch easily
             # NOTE: it is extremely fragile and doesn't work very often but is kinda better than nothing.
+            # NOTE 2025-08-30: Also, finding that doesn't mean it is in a part of the code that is executed without user interaction. It can be triggered after a user fills a form for example.
             # Source: https://stackoverflow.com/questions/13363174/regular-expression-to-catch-as-many-javascript-redirections-as-possible
             regex = re.compile(br"""((location.href)|(window.location)|(location.replace)|(location.assign))(( ?= ?)|( ?\( ?))("|')([^'"]*)("|')( ?\) ?)?;""", re.I)
             matches = re.findall(regex, self.body.getvalue())
