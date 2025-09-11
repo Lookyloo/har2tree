@@ -118,7 +118,11 @@ class HarFile():
                 last_redirect = unquote_plus(_lr.read())
             self.final_redirect: str = last_redirect
             if not self._search_final_redirect():
-                self.logger.info(f'Final redirect URL from address bar not in tree: {last_redirect}')
+                if last_redirect.startswith('chrome') or last_redirect.startswith('about'):
+                    # the capture failed.
+                    pass
+                else:
+                    self.logger.info(f'Final redirect URL from address bar not in tree: {last_redirect}')
         else:
             self.logger.debug('No last_redirect file available.')
             self.final_redirect = ''
