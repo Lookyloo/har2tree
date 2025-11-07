@@ -13,7 +13,8 @@ from functools import wraps, lru_cache
 from io import BytesIO
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, TypedDict
+from collections.abc import Callable
 from urllib.parse import unquote_plus, urlparse
 
 from .helper import rebuild_url, Har2TreeError, Har2TreeLogAdapter
@@ -58,7 +59,8 @@ def trace_make_subtree_fallback(method: Callable[..., None]) -> Callable[..., No
 
 def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
     @wraps(method)
-    def _impl(self: Any, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
+    def _impl(self: Any, root: URLNode, nodes_to_attach: list[URLNode] | None=None,
+              dev_debug: bool=False, fallback: bool=False) -> None:
         if dev_debug_mode:
             __load_debug_files()
             if dev_debug_url and root.name == dev_debug_url or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.name == dev_debug_url):
@@ -67,7 +69,7 @@ def trace_make_subtree(method: Callable[..., None]) -> Callable[..., None]:
             elif dev_debug_hostname and root.hostname == dev_debug_hostname or nodes_to_attach is not None and any(True for u in nodes_to_attach if u.hostname == dev_debug_hostname):
                 root.logger.warning(f'Debugging Hostname: {dev_debug_hostname}.')
                 dev_debug = True
-        return method(self, root, nodes_to_attach, dev_debug)
+        return method(self, root, nodes_to_attach, dev_debug, fallback)
     return _impl
 
 
@@ -82,6 +84,15 @@ def __load_debug_files() -> None:
     if hostname_path.exists():
         with hostname_path.open() as f:
             dev_debug_hostname = f.read().strip()
+
+
+# NOTE: Copy from PlaywrightCapture to avoid extra dep
+class FramesResponse(TypedDict, total=False):
+
+    name: str
+    url: str
+    content: str | None
+    children: list[FramesResponse] | None
 
 
 class HarFile():
@@ -134,6 +145,14 @@ class HarFile():
         else:
             self.logger.debug('No cookies file available.')
             self.cookies = []
+
+        framesfile = self.path.parent / f'{root_name}.frames.json'
+        if framesfile.is_file():
+            with framesfile.open() as c:
+                self.frames: FramesResponse = json.load(c)
+        else:
+            self.logger.debug('No frames file available.')
+            self.frames = {}
 
         dlfile = self.path.parent / f'{root_name}.data'
         dlfilename = self.path.parent / f'{root_name}.data.filename'
@@ -405,6 +424,54 @@ class Har2Tree:
 
         self.url_tree = self._nodes_list.pop(0)
 
+    def _load_iframes(self, current: URLNode, frames: FramesResponse) -> None:
+        if not frames.get('content') or frames['content'] is None:
+            # NOTE: debug stuff, no content makes it pretty useless.
+            if frames.get('url'):
+                if frames['url'] == "about:blank":
+                    self.logger.info('Got a frame to about:blank with no content.')
+                else:
+                    u = unquote_plus(frames['url'])
+                    self.logger.warning(f'Got a url ({u}) for the frame, but no content')
+            else:
+                self.logger.info('Got a frame, but no content.')
+            return
+
+        if frames.get('url') and not (frames['url'] in ['about:blank']):
+            u = unquote_plus(frames['url'])
+            # this url should be in a node directly attached to that one
+            # we need to find that node
+            for child in current.traverse():
+                if child.name in [u, u.split('#', 1)[0]]:
+                    self.logger.debug(f'Found URL "{u}".')
+                    # Found the node, adding the content
+                    if not hasattr(child, 'rendered_frame'):
+                        child.rendered_frame = []
+                    child.rendered_frame.append(BytesIO(frames['content'].encode()))
+                    # and mark the node as iframe
+                    child.add_feature('iframe', True)
+                    # if there are children, use that node as parent and call the current method recursvely
+                    if f_children := frames.get('children'):
+                        for f_child in f_children:
+                            self._load_iframes(child, f_child)
+                    break
+            else:
+                # Couldn'd find the node Oo
+                self.logger.warning(f'Unable to find "{u}" in the children of "{current.name}"')
+        else:
+            self.logger.debug(f'"{current.name}" contains an iFrame.')
+            # No URL, this frame is directly in the parent frame.
+            if not hasattr(current, 'rendered_frame'):
+                current.rendered_frame = []
+            current.rendered_frame.append(BytesIO(frames['content'].encode()))
+            self.logger.debug(f'"{current.name}" has {len(current.rendered_frame)} iFrames.')
+            # and mark the node as iframe
+            current.add_feature('iframe', True)
+            # if there are children, use that node as parent and call the current method recursvely
+            if f_children := frames.get('children'):
+                for f_child in f_children:
+                    self._load_iframes(current, f_child)
+
     @property
     def initial_referer(self) -> str | None:
         '''The referer passed to the first URL in the tree'''
@@ -621,6 +688,14 @@ class Har2Tree:
             for child_node_hostname, child_nodes_url in sub_roots.items():
                 self.make_hostname_tree(child_nodes_url, child_node_hostname)
 
+    def _all_urlnodes_in_host_tree(self) -> None:
+        # debug: check if all the nodes in the URL tree are in the hostnode tree (they must have an UUID)
+        self.logger.warning('Validating host tree....')
+        for urlnode in self.url_tree.traverse():
+            if not hasattr(urlnode, 'hostnode_uuid'):
+                self.logger.error(f'URL Node not un host tree: {urlnode}')
+        self.logger.warning('host tree validated.')
+
     def make_tree(self) -> URLNode:
         """Build URL and Host trees"""
         self._make_subtree(self.url_tree)
@@ -651,6 +726,12 @@ class Har2Tree:
         # Initialize the hostname tree root
         self.hostname_tree.add_url(self.url_tree)
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
+        if dev_debug_mode:
+            self._all_urlnodes_in_host_tree()
+        if self.har.frames.get('children') and self.har.frames['children'] is not None:
+            # we have frames in the main one
+            for f_child in self.har.frames['children']:
+                self._load_iframes(self.rendered_node, f_child)
         return self.url_tree
 
     @trace_make_subtree_fallback
@@ -668,7 +749,7 @@ class Har2Tree:
                             # we got an non-empty response, breaking
                             break
                     # attach to the the first response with something, or to whatever we get.
-                    self._make_subtree(node_with_hostname, [node])
+                    self._make_subtree(node_with_hostname, [node], fallback=True)
                     return
 
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
@@ -686,7 +767,7 @@ class Har2Tree:
             page_root_node = self.get_url_node_by_uuid(self.pages_root[node.pageref])
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to page {node.pageref} - Node: {page_root_node.uuid} - {page_root_node.name}.')
-            self._make_subtree(page_root_node, [node])
+            self._make_subtree(page_root_node, [node], fallback=True)
         elif self.rendered_node != self.url_tree:
             # Generally, when we have a bunch of redirects, they (generally) do not branch out
             # before the final landing page *but* it is not always the case: some intermediary
@@ -698,7 +779,7 @@ class Har2Tree:
             # end of this method anyway
             if dev_debug:
                 self.logger.warning(f'Failed to attach URLNode in the normal process, attaching node to final redirect: {self.har.final_redirect}.')
-            self._make_subtree(self.rendered_node, [node])
+            self._make_subtree(self.rendered_node, [node], fallback=True)
         elif 'pages' in self.har.har['log']:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
@@ -720,13 +801,14 @@ class Har2Tree:
                 # node to the root node
                 page_root_node = self.url_tree
                 self.logger.warning('The pages in the HAR are in in the wrong order, this should not happen but here we are')
-            self._make_subtree(page_root_node, [node])
+            self._make_subtree(page_root_node, [node], fallback=True)
         else:
             # no way to attach it to anything else, attach to the root node
-            self._make_subtree(self.url_tree, [node])
+            self._make_subtree(self.url_tree, [node], fallback=True)
 
     @trace_make_subtree
-    def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None, dev_debug: bool=False) -> None:
+    def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None,
+                      dev_debug: bool=False, fallback: bool=False) -> None:
         """Recursive method building each level of the tree"""
         matching_urls: list[URLNode]
         if nodes_to_attach is None:
@@ -819,6 +901,12 @@ class Har2Tree:
             if hasattr(unode, 'external_ressources'):
                 # the url loads external things, and some of them have no referer....
                 for external_tag, links in unode.external_ressources.items():
+                    # 2025-11-06: skip full regex until we're calling this method in the fallback
+                    #             the iframes will often (not always) have a referer set and the URL
+                    #             might be found by the regex and it will not be attached at the
+                    #             right place
+                    if external_tag == 'full_regex' and not fallback:
+                        continue
                     for link in links:
                         if link not in self.all_url_requests or link == self.har.final_redirect:
                             # We have a lot of false positives

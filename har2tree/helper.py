@@ -364,7 +364,8 @@ def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requ
     # link: https://www.w3schools.com/TAGs/tag_link.asp -> href
     # object: https://www.w3schools.com/TAGs/tag_object.asp -> data
     external_ressources: dict[str, list[str]] = {'img': [], 'script': [], 'video': [], 'audio': [],
-                                                 'iframe': [], 'embed': [], 'source': [],
+                                                 'iframe': [],
+                                                 'embed': [], 'source': [],
                                                  'link': [],
                                                  'object': [],
                                                  'css': [],
