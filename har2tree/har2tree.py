@@ -728,10 +728,13 @@ class Har2Tree:
         self.make_hostname_tree(self.url_tree, self.hostname_tree)
         if dev_debug_mode:
             self._all_urlnodes_in_host_tree()
-        if self.har.frames.get('children') and self.har.frames['children'] is not None:
-            # we have frames in the main one
-            for f_child in self.har.frames['children']:
-                self._load_iframes(self.rendered_node, f_child)
+        if isinstance(self.har.frames, dict):
+            if self.har.frames.get('children') and self.har.frames['children'] is not None:
+                # we have frames in the main one
+                for f_child in self.har.frames['children']:
+                    self._load_iframes(self.rendered_node, f_child)
+        else:
+            self.logger.warning(f'Wrong format for the frames ({type(self.har.frames)}), very old capture.')
         return self.url_tree
 
     @trace_make_subtree_fallback
