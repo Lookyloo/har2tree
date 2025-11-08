@@ -437,7 +437,10 @@ class Har2Tree:
                 self.logger.info('Got a frame, but no content.')
             return
 
-        if frames.get('url') and not (frames['url'] in ['about:blank']):
+        if (frames.get('url')
+                and not (frames['url'] in ['about:blank']  # not loading anything, same as empty
+                         or frames['url'].startswith('data')  # base64 encoded content
+                         )):
             u = unquote_plus(frames['url'])
             # this url should be in a node directly attached to that one
             # we need to find that node
