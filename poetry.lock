@@ -1056,14 +1056,14 @@ testing = ["coverage", "pytest", "pytest-benchmark"]
 
 [[package]]
 name = "publicsuffixlist"
-version = "1.0.2.20251107"
+version = "1.0.2.20251109"
 description = "publicsuffixlist implement"
 optional = false
 python-versions = ">=3.5"
 groups = ["main"]
 files = [
-    {file = "publicsuffixlist-1.0.2.20251107-py2.py3-none-any.whl", hash = "sha256:069fcdf4cf0ed41132fecad4486d8f5987a7778cb16661f07a29b4cf05eecfeb"},
-    {file = "publicsuffixlist-1.0.2.20251107.tar.gz", hash = "sha256:8a092d10445b05a94b255908e660c766986c7cc5d8fa2e0cf59c06f1a797aa86"},
+    {file = "publicsuffixlist-1.0.2.20251109-py2.py3-none-any.whl", hash = "sha256:9436fe219f3a5d7b9d15f1170b57fbca85c003fe8c41f86af66d5361c90ca98b"},
+    {file = "publicsuffixlist-1.0.2.20251109.tar.gz", hash = "sha256:b9e77ada96ffd5bb0b20063b6515b79e98ddddf772fef6692c89e37c5ae5417b"},
 ]
 
 [package.extras]
