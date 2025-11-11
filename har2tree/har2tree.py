@@ -440,6 +440,7 @@ class Har2Tree:
         if (frames.get('url')
                 and not (frames['url'] in ['about:blank']  # not loading anything, same as empty
                          or frames['url'].startswith('data')  # base64 encoded content
+                         or frames['url'].startswith('blob')  # blobs aren't URLs
                          )):
             u = unquote_plus(frames['url'])
             # this url should be in a node directly attached to that one
