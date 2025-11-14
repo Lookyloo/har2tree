@@ -14,6 +14,7 @@ from io import BytesIO
 from operator import itemgetter
 from pathlib import Path
 from typing import Any, TypedDict
+from collections.abc import Iterator
 from collections.abc import Callable
 from urllib.parse import unquote_plus, urlparse
 
@@ -443,10 +444,11 @@ class Har2Tree:
                          or frames['url'].startswith('blob')  # blobs aren't URLs
                          )):
             u = unquote_plus(frames['url'])
+            possile_child_name = [u, u.split('#', 1)[0]]
             # this url should be in a node directly attached to that one
             # we need to find that node
             for child in current.traverse():
-                if child.name in [u, u.split('#', 1)[0]]:
+                if child.name in possile_child_name:
                     self.logger.debug(f'Found URL "{u}".')
                     # Found the node, adding the content
                     if not hasattr(child, 'rendered_frame'):
@@ -461,7 +463,9 @@ class Har2Tree:
                     break
             else:
                 # Couldn'd find the node Oo
-                self.logger.warning(f'Unable to find "{u}" in the children of "{current.name}"')
+                to_print = ', '.join(possile_child_name)
+                children_to_print = ', '.join([child.name for child in current.traverse()])
+                self.logger.warning(f'Unable to find "{to_print}" in the children of "{current.name}" - {children_to_print}')
         else:
             self.logger.debug(f'"{current.name}" contains an iFrame.')
             # No URL, this frame is directly in the parent frame.
@@ -813,6 +817,33 @@ class Har2Tree:
             # no way to attach it to anything else, attach to the root node
             self._make_subtree(self.url_tree, [node], fallback=True)
 
+    def all_real_urls_in_children(self, frame: FramesResponse) -> Iterator[str]:
+        # from a frame, search all the real urls in each of the children, stop at the first one
+        if (frame.get('url') and frame['url'] is not None
+                and not (frame['url'] in ['about:blank']  # not loading anything, same as empty
+                         or frame['url'].startswith('data')  # base64 encoded content
+                         or frame['url'].startswith('blob'))):  # blobs aren't URLs
+            yield frame['url']
+        else:
+            # got no real URL, try the children
+            if frame.get('children') and frame['children'] is not None:
+                for c in frame['children']:
+                    yield from self.all_real_urls_in_children(c)
+
+    def search_in_frames(self, urls: set[str], frame: FramesResponse) -> Iterator[str]:
+        # If the frame doesn't have children, there are no potential URLs to attach
+        if not frame.get('children') or frame['children'] is None:
+            return None
+
+        if frame.get('url'):
+            u = unquote_plus(frame['url'])
+            if urls & {u, u.split('#', 1)[0]}:
+                # got a matching URL, get list of potential iframes urls
+                for c in frame['children']:
+                    yield from self.all_real_urls_in_children(c)
+        for c in frame['children']:
+            yield from self.search_in_frames(urls, c)
+
     @trace_make_subtree
     def _make_subtree(self, root: URLNode, nodes_to_attach: list[URLNode] | None=None,
                       dev_debug: bool=False, fallback: bool=False) -> None:
@@ -876,6 +907,24 @@ class Har2Tree:
             # the proper attachment point is the parent, not this node, even if we have other nodes with this node URL as a referer.
             if unode.empty_response:
                 continue
+
+            # 2025-11-14
+            # the referer of an iframe is the hostname of the parent, even if the parent
+            # is a URL with a full path. Before using the referer, we need to check if we have
+            # the current url in the frame tree. If we do, find nodes (in the remaining list)
+            # with the URLs of the children - any fragment will be missing - and attach that node
+            possible_iframe_urls = {unode.name, unode.name.split('#', 1)[0]}
+            for possible_url in self.search_in_frames(possible_iframe_urls, self.har.frames):
+                cu = unquote_plus(possible_url)
+                for u in {cu, cu.split('#', 1)[0]}:
+                    if u not in self.all_url_requests:
+                        continue
+                    matching_urls = [url_node for url_node in self.all_url_requests[u]
+                                     if url_node in self._nodes_list]
+                    self._nodes_list = [node for node in self._nodes_list if node not in matching_urls]
+                    if dev_debug:
+                        self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
+                    self._make_subtree(unode, matching_urls)
 
             # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
             if self.all_initiator_url.get(unode.name):
