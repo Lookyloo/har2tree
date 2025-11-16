@@ -333,8 +333,9 @@ class Har2Tree:
         self.pages_root: dict[str, str] = {}
 
         self.all_redirects: list[str] = []
-        self.all_referer: dict[str, list[str]] = defaultdict(list)
-        self.all_initiator_url: dict[str, list[str]] = defaultdict(list)
+        # 2025-11-16: make values of referers and initiators sets because there will be duplicates
+        self.all_referer: dict[str, set[str]] = defaultdict(set)
+        self.all_initiator_url: dict[str, set[str]] = defaultdict(set)
         self._load_url_entries()
 
         # Generate cookies lookup tables
@@ -441,14 +442,15 @@ class Har2Tree:
         if (frames.get('url')
                 and not (frames['url'] in ['about:blank']  # not loading anything, same as empty
                          or frames['url'].startswith('data')  # base64 encoded content
+                         or frames['url'].startswith('chrome-error')  # not in the HAR/tree
                          or frames['url'].startswith('blob')  # blobs aren't URLs
                          )):
             u = unquote_plus(frames['url'])
-            possile_child_name = [u, u.split('#', 1)[0]]
+            possible_child_name = {u, u.split('#', 1)[0]}
             # this url should be in a node directly attached to that one
             # we need to find that node
             for child in current.traverse():
-                if child.name in possile_child_name:
+                if child.name in possible_child_name:
                     self.logger.debug(f'Found URL "{u}".')
                     # Found the node, adding the content
                     if not hasattr(child, 'rendered_frame'):
@@ -463,7 +465,7 @@ class Har2Tree:
                     break
             else:
                 # Couldn'd find the node Oo
-                to_print = ', '.join(possile_child_name)
+                to_print = ', '.join(possible_child_name)
                 children_to_print = ', '.join([child.name for child in current.traverse()])
                 self.logger.warning(f'Unable to find "{to_print}" in the children of "{current.name}" - {children_to_print}')
         else:
@@ -602,7 +604,7 @@ class Har2Tree:
 
             if hasattr(n, 'initiator_url'):
                 # The HAR file was created by chrome/chromium and we got the _initiator key
-                self.all_initiator_url[n.initiator_url].append(n.name)
+                self.all_initiator_url[n.initiator_url].add(n.name)
 
             if url_entry['startedDateTime'] in self.har.pages_start_times:
                 for page in self.har.pages_start_times[url_entry['startedDateTime']]:
@@ -615,7 +617,7 @@ class Har2Tree:
             if hasattr(n, 'referer') and i > 0:
                 # NOTE 2021-05-14: referer to self are a real thing: url -> POST to self
                 if n.name != n.referer or ('method' in n.request and n.request['method'] == 'POST'):
-                    self.all_referer[n.referer].append(n.name)
+                    self.all_referer[n.referer].add(n.name)
 
             self._nodes_list.append(n)
             self.all_url_requests[n.name].append(n)
@@ -918,6 +920,7 @@ class Har2Tree:
                 cu = unquote_plus(possible_url)
                 for u in {cu, cu.split('#', 1)[0]}:
                     if u not in self.all_url_requests:
+                        self.logger.info(f'"{u}" in the frames URLs, but not in the HAR.')
                         continue
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
                                      if url_node in self._nodes_list]
