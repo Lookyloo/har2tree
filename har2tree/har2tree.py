@@ -822,8 +822,9 @@ class Har2Tree:
     def all_real_urls_in_children(self, frame: FramesResponse) -> Iterator[str]:
         # from a frame, search all the real urls in each of the children, stop at the first one
         if (frame.get('url') and frame['url'] is not None
-                and not (frame['url'] in ['about:blank']  # not loading anything, same as empty
+                and not (frame['url'] in ['about:blank', 'about:srcdoc']  # not loading anything, same as empty
                          or frame['url'].startswith('data')  # base64 encoded content
+                         or frame['url'].startswith('chrome-error')  # not in the HAR/tree
                          or frame['url'].startswith('blob'))):  # blobs aren't URLs
             yield frame['url']
         else:
@@ -920,7 +921,8 @@ class Har2Tree:
                 cu = unquote_plus(possible_url)
                 for u in {cu, cu.split('#', 1)[0]}:
                     if u not in self.all_url_requests:
-                        self.logger.info(f'"{u}" in the frames URLs, but not in the HAR.')
+                        if '#' not in u:
+                            self.logger.info(f'"{u}" in the frames URLs, but not in the HAR.')
                         continue
                     matching_urls = [url_node for url_node in self.all_url_requests[u]
                                      if url_node in self._nodes_list]
