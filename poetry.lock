@@ -1057,14 +1057,14 @@ testing = ["coverage", "pytest", "pytest-benchmark"]
 
 [[package]]
 name = "publicsuffixlist"
-version = "1.0.2.20251113"
+version = "1.0.2.20251115"
 description = "publicsuffixlist implement"
 optional = false
 python-versions = ">=3.5"
 groups = ["main"]
 files = [
-    {file = "publicsuffixlist-1.0.2.20251113-py2.py3-none-any.whl", hash = "sha256:27df059a5844b8dd817047196543e75d73cc45875d2400acdad5089deeeb4b97"},
-    {file = "publicsuffixlist-1.0.2.20251113.tar.gz", hash = "sha256:d9bbfd47a0742727add6bce97c9ae35ea86cd6769411e068252b315a4fca69a9"},
+    {file = "publicsuffixlist-1.0.2.20251115-py2.py3-none-any.whl", hash = "sha256:2fd26c6bf3fe706d6d8904b90dbd6a3731d3b2046ab6f83abec4af9ba395820c"},
+    {file = "publicsuffixlist-1.0.2.20251115.tar.gz", hash = "sha256:03d8398e961d4d9de1e2b5dcc3f3b1c5a5ecada35c35d22642d121279e03d2a7"},
 ]
 
 [package.extras]
@@ -1455,14 +1455,29 @@ types-html5lib = "*"
 
 [[package]]
 name = "types-html5lib"
-version = "1.1.11.20251014"
+version = "1.1.11.20251115"
 description = "Typing stubs for html5lib"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "types_html5lib-1.1.11.20251014-py3-none-any.whl", hash = "sha256:4ff2cf18dfc547009ab6fa4190fc3de464ba815c9090c3dd4a5b65f664bfa76c"},
-    {file = "types_html5lib-1.1.11.20251014.tar.gz", hash = "sha256:cc628d626e0111a2426a64f5f061ecfd113958b69ff6b3dc0eaaed2347ba9455"},
+    {file = "types_html5lib-1.1.11.20251115-py3-none-any.whl", hash = "sha256:6cee9173cdf4a3494174b84c8c78adffabb8a1d4f532da4edaad3ec1643fc6e7"},
+    {file = "types_html5lib-1.1.11.20251115.tar.gz", hash = "sha256:a4b666a06e496d7b2a9489dc9206f09a249fab7c62865ac6024cec24628b15d3"},
+]
+
+[package.dependencies]
+types-webencodings = "*"
+
+[[package]]
+name = "types-webencodings"
+version = "0.5.0.20251108"
+description = "Typing stubs for webencodings"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "types_webencodings-0.5.0.20251108-py3-none-any.whl", hash = "sha256:e21f81ff750795faffddaffd70a3d8bfff77d006f22c27e393eb7812586249d8"},
+    {file = "types_webencodings-0.5.0.20251108.tar.gz", hash = "sha256:2378e2ceccced3d41bb5e21387586e7b5305e11519fc6b0659c629f23b2e5de4"},
 ]
 
 [[package]]
@@ -1525,4 +1540,4 @@ docs = ["Sphinx", "six"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "ab64b00a30f6d619ffd7c615b8255b4a176d685d181fd3a1315111115ccc2fae"
+content-hash = "c5a6d333b0eb75d9fe610733543db7f370e79e84c2af8d4333f101b7b988e501"
