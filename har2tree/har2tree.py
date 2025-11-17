@@ -427,7 +427,8 @@ class Har2Tree:
         self.url_tree = self._nodes_list.pop(0)
 
     def _url_to_local_only_content(self, url: str | None) -> bool:
-        return (url in ['about:blank', 'about:srcdoc', '', None]  # not loading anything remotely
+        return (url is None
+                or url in ['about:blank', 'about:srcdoc', '']  # not loading anything remotely
                 or url.startswith('data')  # base64 encoded content
                 or url.startswith('chrome-error')  # not in the HAR/tree
                 or url.startswith('blob')  # blobs aren't URLs
