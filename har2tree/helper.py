@@ -72,7 +72,7 @@ def make_hhhash(entry: dict[str, Any]) -> str:
     # We need the HTTP version used for the query:
     # * The HTTP Header names in HTTP 1.1 can have uppercase characters
     # * The HTTP Header names in HTTP 2 *must* be lowercase: https://www.rfc-editor.org/rfc/rfc7540#section-8.1.2
-    if entry['httpVersion'].lower() in ["http/1.1", "http/1.0"]:
+    if entry['httpVersion'].lower() in ["http/1.1", "http/1.0", "1.1"]:
         return f'hhh:1:{sha256}'
     if entry['httpVersion'].lower() == "http/2.0":
         return f'hhh:2:{sha256}'
