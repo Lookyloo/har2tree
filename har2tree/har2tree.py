@@ -426,12 +426,19 @@ class Har2Tree:
 
         self.url_tree = self._nodes_list.pop(0)
 
+    def _url_to_local_only_content(self, url: str | None) -> bool:
+        return (url in ['about:blank', 'about:srcdoc', '', None]  # not loading anything remotely
+                or url.startswith('data')  # base64 encoded content
+                or url.startswith('chrome-error')  # not in the HAR/tree
+                or url.startswith('blob')  # blobs aren't URLs
+                )
+
     def _load_iframes(self, current: URLNode, frames: FramesResponse) -> None:
         if not frames.get('content') or frames['content'] is None:
             # NOTE: debug stuff, no content makes it pretty useless.
             if frames.get('url'):
-                if frames['url'] == "about:blank":
-                    self.logger.info('Got a frame to about:blank with no content.')
+                if self._url_to_local_only_content(frames['url']):
+                    self.logger.info('Got an empty frame to local content.')
                 else:
                     u = unquote_plus(frames['url'])
                     self.logger.warning(f'Got a url ({u}) for the frame, but no content')
@@ -439,12 +446,7 @@ class Har2Tree:
                 self.logger.info('Got a frame, but no content.')
             return
 
-        if (frames.get('url')
-                and not (frames['url'] in ['about:blank']  # not loading anything, same as empty
-                         or frames['url'].startswith('data')  # base64 encoded content
-                         or frames['url'].startswith('chrome-error')  # not in the HAR/tree
-                         or frames['url'].startswith('blob')  # blobs aren't URLs
-                         )):
+        if frames.get('url') and not self._url_to_local_only_content(frames['url']):
             u = unquote_plus(frames['url'])
             possible_child_name = {u, u.split('#', 1)[0]}
             # this url should be in a node directly attached to that one
@@ -821,11 +823,7 @@ class Har2Tree:
 
     def all_real_urls_in_children(self, frame: FramesResponse) -> Iterator[str]:
         # from a frame, search all the real urls in each of the children, stop at the first one
-        if (frame.get('url') and frame['url'] is not None
-                and not (frame['url'] in ['about:blank', 'about:srcdoc']  # not loading anything, same as empty
-                         or frame['url'].startswith('data')  # base64 encoded content
-                         or frame['url'].startswith('chrome-error')  # not in the HAR/tree
-                         or frame['url'].startswith('blob'))):  # blobs aren't URLs
+        if (frame.get('url') and frame['url'] is not None and not self._url_to_local_only_content(frame['url'])):
             yield frame['url']
         else:
             # got no real URL, try the children
