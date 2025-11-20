@@ -834,7 +834,7 @@ class Har2Tree:
 
     def search_in_frames(self, urls: set[str], frame: FramesResponse) -> Iterator[str]:
         # If the frame doesn't have children, there are no potential URLs to attach
-        if not frame.get('children') or frame['children'] is None:
+        if not isinstance(frame, dict) or not frame.get('children') or frame['children'] is None:
             return None
 
         if frame.get('url'):
