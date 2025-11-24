@@ -1368,14 +1368,14 @@ test = ["pytest"]
 
 [[package]]
 name = "tinycss2"
-version = "1.5.0"
+version = "1.5.1"
 description = "A tiny CSS parser"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "tinycss2-1.5.0-py3-none-any.whl", hash = "sha256:6645326e562ea497d6d11cfa608ce3ad30c1e96576b0e43d678dcf6275df6761"},
-    {file = "tinycss2-1.5.0.tar.gz", hash = "sha256:6a7be7a654f38a2a55b61d2d97b1f65a7eb40d1cb4057ac37145f675f16efdf9"},
+    {file = "tinycss2-1.5.1-py3-none-any.whl", hash = "sha256:3415ba0f5839c062696996998176c4a3751d18b7edaaeeb658c9ce21ec150661"},
+    {file = "tinycss2-1.5.1.tar.gz", hash = "sha256:d339d2b616ba90ccce58da8495a78f46e55d4d25f9fd71dfd526f07e7d53f957"},
 ]
 
 [package.dependencies]
