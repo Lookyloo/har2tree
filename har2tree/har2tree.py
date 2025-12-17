@@ -750,23 +750,47 @@ class Har2Tree:
             self.logger.warning(f'Wrong format for the frames ({type(self.har.frames)}), very old capture.')
         return self.url_tree
 
+    def _guess_best_node_for_partial_referer(self, node: URLNode, potential_parents: list[URLNode]) -> URLNode:
+        # we have more than one node with the hostname of the referer *and* content.
+        # 2025-12-17:
+        # 1. find the deepest HTML node in the list
+        for pp in reversed(potential_parents):
+            if 'html' in pp.mimetype:
+                return pp
+        else:
+            # 2. if there are no HTML node anywhere in the list, attach to the deepest node
+            return potential_parents[-1]
+
     @trace_make_subtree_fallback
     def _make_subtree_fallback(self, node: URLNode, dev_debug: bool=False) -> None:
         if hasattr(node, 'referer'):
             # 2022-04-28: the node has a referer, but for some reason, it could't be attached to the tree
             #             Probable reason: the referer is a part of the URL (hostname)
-            # FIXME: this is a very dirty fix, but I'm not sure we can do it any better
             if (referer_hostname := urlparse(node.referer).hostname):
-                # the referer has a hostname
                 if (nodes_with_hostname := self.url_tree.search_nodes(hostname=referer_hostname)):
-                    # the hostname has at least a node in the tree
-                    for node_with_hostname in nodes_with_hostname:
-                        if not node_with_hostname.empty_response:
-                            # we got an non-empty response, breaking
-                            break
-                    # attach to the the first response with something, or to whatever we get.
-                    self._make_subtree(node_with_hostname, [node], fallback=True)
-                    return
+                    attach_to: URLNode
+                    # 2025-12-17: we have at least one node with that hostname.
+                    if len(nodes_with_hostname) == 1:
+                        # That's the only one, use it
+                        attach_to = nodes_with_hostname[0]
+                    else:
+                        # check if there are empty nodes
+                        if (nodes_with_hostname_and_response := [n for n in nodes_with_hostname if not n.empty_response]):
+                            if len(nodes_with_hostname_and_response) == 1:
+                                attach_to = nodes_with_hostname_and_response[0]
+                            else:
+                                # multiple non-empty nodes with that hostname, this is the more difficult one
+                                attach_to = self._guess_best_node_for_partial_referer(node, nodes_with_hostname_and_response)
+                        else:
+                            # more than one node with that hostname, but they're all empty, attach to the first one
+                            attach_to = nodes_with_hostname[0]
+                    return self._make_subtree(attach_to, [node], fallback=True)
+                else:
+                    # no node with that hostname at all, this should not happen
+                    self.logger.warning(f'Unable to find any node with the hostname {referer_hostname}, despites it being set as referer.')
+            else:
+                # the referer has no hostname and it is fascinating
+                self.logger.warning(f'Unable to get hostname out of referer: {node.referer}')
 
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
         # IF we have more than one page in the list
@@ -929,7 +953,6 @@ class Har2Tree:
                     if dev_debug:
                         self.logger.warning(f'Found via initiator from {unode.name} to {matching_urls}.')
                     self._make_subtree(unode, matching_urls)
-
             # The node can have a redirect, but also trigger ressources refering to themselves, we need to trigger this code on each node.
             if self.all_initiator_url.get(unode.name):
                 # The URL (unode.name) is in the list of known urls initiating calls
