@@ -798,7 +798,7 @@ class Har2Tree:
         # AND we already have a node in the tree with this pageref
         # => attach to that node.
         if ('pages' in self.har.har['log'] and len(self.har.har['log']['pages']) > 1
-                and node.pageref != self.har.har['log']['pages'][0]
+                and hasattr(node, 'pageref') and node.pageref != self.har.har['log']['pages'][0]
                 and self.pages_root[node.pageref] != node.uuid):
             # In that case, we check if there is already a page with the pageref of the orphan node,
             # and attach the node to that.
@@ -824,7 +824,7 @@ class Har2Tree:
             # No luck, the node is root for this pageref, let's attach it to the prior page in the list, or the very first node (tree root)
             page_before = self.har.har['log']['pages'][0]
             for page in self.har.har['log']['pages'][1:]:
-                if page['id'] == node.pageref:
+                if hasattr(node, 'pageref') and page['id'] == node.pageref:
                     break
                 # Sometimes, the page listed in the list of pages is not related to
                 # any of the entries. Go figure what happened.
