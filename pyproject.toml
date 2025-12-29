@@ -49,7 +49,7 @@ docs = ["Sphinx (>=9.0.4) ; python_version >= \"3.11\"", "six (>=1.17.0)"]
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
 pytest-cov = "^7.0.0"
-coverage = "^7.13.0"
+coverage = "^7.13.1"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
 [build-system]
