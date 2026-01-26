@@ -268,7 +268,7 @@ def find_identifiers(soup: BeautifulSoup) -> dict[str, list[str]] | None:
     # This is beta and kinda fragile, but it's going to find (most) of the google tag IDs
     # https://support.google.com/google-ads/answer/12326985?hl=en_us_us
     # NOTE: the doc says 9 X, but all the examples I found have 10 X so we cannot trust it
-    if google_tag_ids := set(re.findall(r"(?:G-|AW-|GA-|UA-)\w{9,13}", str(soup))):
+    if google_tag_ids := set(re.findall(r"(?:G-|AW-|GA-|UA-|GTM-)\w{9,15}", str(soup))):
         blocklist = {'UA-Compatible'}
         google_tag_ids -= blocklist
         if google_tag_ids:
