@@ -13,40 +13,32 @@ import re
 
 from base64 import b64decode
 from datetime import datetime, timedelta
-from functools import lru_cache, cached_property
+from functools import cached_property
 from hashlib import sha256
 from io import BytesIO, StringIO
-from pathlib import Path
+from pathlib import PurePath
 from typing import Any
 from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin, parse_qs
 
-import filetype  # type: ignore
 import json_stream  # type: ignore
 
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
-from publicsuffixlist import PublicSuffixList  # type: ignore
+from pyfaup import Url
 from requests_toolbelt.multipart import decoder  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
-from .helper import find_external_ressources, rebuild_url, find_identifiers, make_soup
+from .helper import find_external_ressources, rebuild_url, find_identifiers, make_soup, guess_magic_type
 from .helper import Har2TreeError, Har2TreeLogAdapter, make_hhhash, HHHashError, HHHashNote
-
-
-@lru_cache(64)
-def get_public_suffix_list() -> PublicSuffixList:
-    # Initialize Public Suffix List
-    # TODO (?): fetch the list
-    return PublicSuffixList()
 
 
 class HarTreeNode(TreeNode):  # type: ignore[misc]
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str):
         """Node dumpable in json to display with d3js"""
-        super().__init__(**kwargs)
+        super().__init__()
         logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.logger = Har2TreeLogAdapter(logger, {'uuid': capture_uuid})
         self.add_feature('uuid', str(uuid.uuid4()))
@@ -75,12 +67,11 @@ class URLNode(HarTreeNode):
 
     start_time: datetime
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str):
         """Node of the URL Tree"""
-        super().__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid)
         # Do not add the body in the json dump
         self.features_to_skip.add('body')
-        self.features_to_skip.add('url_split')
         self.features_to_skip.add('start_time')
         self.features_to_skip.add('time')
         self.features_to_skip.add('time_content_received')
@@ -134,23 +125,74 @@ class URLNode(HarTreeNode):
             return b64decode(_to_decode, altchars=b'-_', validate=True)
         return b64decode(_to_decode, validate=True)
 
+    @cached_property
+    def known_tld(self) -> str | None:
+        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+            return None
+        try:
+            faup_url = Url(self.original_url)
+            if faup_url.suffix:
+                return str(faup_url.suffix)
+
+            self.logger.warning(f'No TLD: "{self.name}"')
+            return None
+        except Exception as e:
+            self.logger.warning(f'Unable to parse URI "{self.name}": {e}')
+            return None
+
+    @cached_property
+    def domain(self) -> str | None:
+        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+            return None
+        try:
+            faup_url = Url(self.original_url)
+            if faup_url.domain:
+                return str(faup_url.domain)
+
+            self.logger.warning(f'No domain: "{self.name}"')
+            return None
+        except Exception as e:
+            self.logger.warning(f'Unable to parse URI "{self.name}": {e}')
+            return None
+
     def load_har_entry(self, har_entry: MutableMapping[str, Any], all_requests: list[str]) -> None:
         """Load one entry of the HAR file, initialize most of the features of the node"""
-        if not self.name:
-            # We're in the actual root node
-            # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
-            self.add_feature('name', unquote_plus(har_entry['request']['url']))
+
+        # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
+        self.add_feature('name', unquote_plus(har_entry['request']['url']))
+        # 2026-30-01: Keep original URL so it can be parsed by faup
+        self.add_feature('original_url', har_entry['request']['url'])
 
         splitted_url = urlparse(self.name)
-        if splitted_url.scheme == 'blob':
-            # this is a new weird feature, but it seems to be usable as a URL, so let's do that
-            self.add_feature('url_split', urlparse(splitted_url.path))
-        elif splitted_url.scheme == 'file':
+        if splitted_url.scheme == 'file':
             # file on disk, we do not have a proper URL
             self.add_feature('file_on_disk', True)
-            self.add_feature('url_split', urlparse(splitted_url.path))
+            # TODO: Do something better? hostname is the feature name used for the aggregated tree
+            # so we need that unless we want to change the JS
+            path = PurePath(splitted_url.path)
+            self.add_feature('hostname', str(path.parent))
+            if path.name:
+                self.add_feature('filename', path.name)
+            else:
+                self.add_feature('filename', 'file.bin')
         else:
-            self.add_feature('url_split', splitted_url)
+            # We have a URL
+            if splitted_url.scheme == 'blob':
+                # this is a new weird feature, but it seems to be usable as a URL, so let's do that
+                splitted_url = urlparse(splitted_url.path)
+            if splitted_url.hostname:
+                self.add_feature('hostname', splitted_url.hostname)
+            else:
+                self.logger.warning(f'Weird URI with no hostname (?): "{self.name}"')
+                self.add_feature('hostname', self.name)
+
+            if filename := PurePath(splitted_url.path).name:
+                self.add_feature('filename', filename)
+            else:
+                self.add_feature('filename', 'file.bin')
+
+        if not self.hostname:
+            self.logger.warning(f'Missing hostname, something is broken in that node: {har_entry}')
 
         # If the URL contains a fragment (i.e. something after a #), it is stripped in the referer.
         # So we need an alternative URL to do a lookup against
@@ -167,19 +209,6 @@ class URLNode(HarTreeNode):
         self.add_feature('time', timedelta(milliseconds=har_entry['time']))
         self.add_feature('time_content_received', self.start_time + self.time)  # Instant the response is fully received (and the processing of the content by the browser can start)
 
-        if hasattr(self, 'file_on_disk'):
-            # TODO: Do something better? hostname is the feature name used for the aggregated tree
-            # so we need that unless we want to change the JS
-            self.add_feature('hostname', str(Path(self.url_split.path).parent))
-        else:
-            if self.url_split.hostname:
-                self.add_feature('hostname', self.url_split.hostname)
-            else:
-                self.add_feature('hostname', self.name)
-
-        if not self.hostname:
-            self.logger.warning(f'Something is broken in that node: {har_entry}')
-
         try:
             ipaddress.ip_address(self.hostname)
             self.add_feature('hostname_is_ip', True)
@@ -195,13 +224,6 @@ class URLNode(HarTreeNode):
                     self.add_feature('idna', idna_decoded)
             except UnicodeError:
                 pass
-
-        if not hasattr(self, 'hostname_is_ip') and not hasattr(self, 'file_on_disk'):
-            tld = get_public_suffix_list().publicsuffix(self.hostname)
-            if tld:
-                self.add_feature('known_tld', tld)
-            else:
-                self.logger.debug(f'No TLD/domain broken {self.name}')
 
         self.add_feature('request', har_entry['request'])
         # Try to get a referer from the headers
@@ -249,128 +271,134 @@ class URLNode(HarTreeNode):
                     decoded_posted_data = self._dirty_safe_b64decode(self.request['postData']['text'])
                 except binascii.Error:
                     decoded_posted_data = self.request['postData']['text']
+
                 if 'mimeType' in self.request['postData']:
                     # make it easier to compare.
                     mimetype_lower = self.request['postData']['mimeType'].lower()
-                    if mimetype_lower.startswith('application/x-www-form-urlencoded'):
-                        # NOTE: this should never happen as there should
-                        # be something in self.request['postData']['params']
-                        # and we already processed it before but just in case...
-                        self.logger.debug('Got a application/x-www-form-urlencoded without params key')
-                        # 100% sure there will be websites where decode will fail
-                        try:
-                            if isinstance(decoded_posted_data, bytes):
-                                decoded_posted_data = decoded_posted_data.decode()
-                            if isinstance(decoded_posted_data, str):
-                                decoded_posted_data = unquote_plus(decoded_posted_data)
-                            if isinstance(decoded_posted_data, str):
-                                decoded_posted_data = parse_qs(decoded_posted_data)
-                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
-                        except Exception as e:
-                            self.logger.warning(f'Unable to unquote or parse form data "{decoded_posted_data!r}": {e}')
-                            self.add_feature('posted_data_info', "Unable to decode POST request.")
-                    elif (mimetype_lower.startswith('application/json')
-                          or mimetype_lower.startswith('application/csp-report')
-                          or mimetype_lower.startswith('application/x-amz-json-1.1')
-                          or mimetype_lower.startswith('application/reports+json')
-                          or mimetype_lower.startswith('application/vnd.adobe.dc+json')
-                          or mimetype_lower.startswith('application/ion+json')
-                          or mimetype_lower.endswith('json')
-                          ):
-                        if isinstance(decoded_posted_data, (str, bytes)):
-                            # at this stage, it will always be bytes or str
-                            try:
-                                # NOTE 2023-08-22: loads here may give us a int, float or a bool.
-                                decoded_posted_data = json.loads(decoded_posted_data)
-                                self.add_feature('posted_data_info', "Successfully decoded POST request.")
-                            except Exception:
-                                self.add_feature('posted_data_info', "Unable to decode POST request.")
-                                if isinstance(decoded_posted_data, (str, bytes)):
-                                    self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
-                                else:
-                                    self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
-                    elif mimetype_lower.startswith('application/x-json-stream'):
-                        try:
-                            to_stream: StringIO | BytesIO
-                            if isinstance(decoded_posted_data, str):
-                                to_stream = StringIO(decoded_posted_data)
-                            elif isinstance(decoded_posted_data, bytes):
-                                to_stream = BytesIO(decoded_posted_data)
-                            else:
-                                raise ValueError(f'Invalid type: {type(decoded_posted_data)}')
-                            streamed_data = json_stream.load(to_stream)
-                            decoded_posted_data = json_stream.to_standard_types(streamed_data)
-                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
-                        except Exception:
-                            if isinstance(decoded_posted_data, (str, bytes)):
-                                self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
-                            else:
-                                self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
-                            self.add_feature('posted_data_info', "Unable to decode POST request.")
-                    elif mimetype_lower.startswith('multipart'):
-                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is partially supported.")
-                        if isinstance(decoded_posted_data, str):
-                            # must be encoded for decoding
-                            multipart_to_decode = decoded_posted_data.encode()
-                        elif isinstance(decoded_posted_data, bytes):
-                            multipart_to_decode = decoded_posted_data
-                        else:
-                            raise ValueError(f'Invalid type for multipart POST: {type(decoded_posted_data)}')
-                        if b"\r\n" not in multipart_to_decode:
-                            # the decoder wants that
-                            multipart_to_decode = multipart_to_decode.replace(b"\n", b"\r\n")
-                        try:
-                            multipart_data = decoder.MultipartDecoder(multipart_to_decode, mimetype_lower)
-                            decoded_posted_data = []
-                            for part in multipart_data.parts:
-                                headers = {k.decode(): v.decode() for k, v in part.headers.items()}
-                                content = part.text
-                                decoded_posted_data.append({'headers': headers, 'content': content})
-                        except Exception as e:
-                            self.logger.warning(f'Unable to decode multipart POST: {e}')
-                            self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
-
-                    elif mimetype_lower.startswith('application/x-protobuf'):
-                        # FIXME If possible, decode?
-                        self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
-                    elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
-                        try:
-                            # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
-                            # loads here may give us a int, float or a bool.
-                            decoded_posted_data = json.loads(decoded_posted_data)
-                            self.add_feature('posted_data_info', "Decoded JSON out of POST request.")
-                        except Exception:
-                            # keep it as it is otherwise.
-                            pass
-                    elif mimetype_lower.endswith('javascript'):
-                        # keep it as it is
-                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"Pretty rendering of {mimetype_lower} is not supported yet.")
-                    elif mimetype_lower in ['?', '*/*']:
-                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"Weird MimeType ({mimetype_lower}) is not supported yet.")
-                    elif mimetype_lower == 'application/binary':
-                        self.logger.warning(f'Got a POST {mimetype_lower}, not a broken gziped blob: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-                    elif mimetype_lower in ['application/octet-stream']:
-                        # Should flag it, maybe?
-                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-                    elif mimetype_lower in ['application/grpc-web+proto']:
-                        # Can be decoded?
-                        self.logger.warning(f'Got a POST {mimetype_lower} - can be decoded: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-                    elif mimetype_lower in ['application/unknown']:
-                        # Weird but already seen stuff
-                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-                    else:
-                        self.logger.warning(f'Unexpected mime type: {mimetype_lower} - {decoded_posted_data!r}')
-                        self.add_feature('posted_data_info', f"Unexpected MimeType ({mimetype_lower}) is not supported yet.")
                 else:
-                    self.logger.warning(f'Missing mimetype in POST: {self.request["postData"]}')
-                    self.add_feature('posted_data_info', "Missing MimeType, not sure what to do.")
+                    if isinstance(decoded_posted_data, bytes):
+                        # if b64 decode worked, we may have a useful type there.
+                        mimetype_lower = guess_magic_type(decoded_posted_data)
+                    else:
+                        mimetype_lower = 'text/plain'
+                    self.logger.warning(f'Missing mimetype in POST, guessed it: {mimetype_lower}')
+
+                if mimetype_lower.startswith('application/x-www-form-urlencoded'):
+                    # NOTE: this should never happen as there should
+                    # be something in self.request['postData']['params']
+                    # and we already processed it before but just in case...
+                    self.logger.debug('Got a application/x-www-form-urlencoded without params key')
+                    # 100% sure there will be websites where decode will fail
+                    try:
+                        if isinstance(decoded_posted_data, bytes):
+                            decoded_posted_data = decoded_posted_data.decode()
+                        if isinstance(decoded_posted_data, str):
+                            decoded_posted_data = unquote_plus(decoded_posted_data)
+                        if isinstance(decoded_posted_data, str):
+                            decoded_posted_data = parse_qs(decoded_posted_data)
+                        self.add_feature('posted_data_info', "Successfully decoded POST request.")
+                    except Exception as e:
+                        self.logger.warning(f'Unable to unquote or parse form data "{decoded_posted_data!r}": {e}')
+                        self.add_feature('posted_data_info', "Unable to decode POST request.")
+                elif (mimetype_lower.startswith('application/json')
+                      or mimetype_lower.startswith('application/csp-report')
+                      or mimetype_lower.startswith('application/x-amz-json-1.1')
+                      or mimetype_lower.startswith('application/reports+json')
+                      or mimetype_lower.startswith('application/vnd.adobe.dc+json')
+                      or mimetype_lower.startswith('application/ion+json')
+                      or mimetype_lower.endswith('json')
+                      ):
+                    if isinstance(decoded_posted_data, (str, bytes)):
+                        # at this stage, it will always be bytes or str
+                        try:
+                            # NOTE 2023-08-22: loads here may give us a int, float or a bool.
+                            decoded_posted_data = json.loads(decoded_posted_data)
+                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
+                        except Exception:
+                            self.add_feature('posted_data_info', "Unable to decode POST request.")
+                            if isinstance(decoded_posted_data, (str, bytes)):
+                                self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
+                            else:
+                                self.logger.warning(f"Expected json, got garbage: {mimetype_lower} - {decoded_posted_data}")
+                elif mimetype_lower.startswith('application/x-json-stream'):
+                    try:
+                        to_stream: StringIO | BytesIO
+                        if isinstance(decoded_posted_data, str):
+                            to_stream = StringIO(decoded_posted_data)
+                        elif isinstance(decoded_posted_data, bytes):
+                            to_stream = BytesIO(decoded_posted_data)
+                        else:
+                            raise ValueError(f'Invalid type: {type(decoded_posted_data)}')
+                        streamed_data = json_stream.load(to_stream)
+                        decoded_posted_data = json_stream.to_standard_types(streamed_data)
+                        self.add_feature('posted_data_info', "Successfully decoded POST request.")
+                    except Exception:
+                        if isinstance(decoded_posted_data, (str, bytes)):
+                            self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data[:20]!r}[...]")
+                        else:
+                            self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
+                        self.add_feature('posted_data_info', "Unable to decode POST request.")
+                elif mimetype_lower.startswith('multipart'):
+                    self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is partially supported.")
+                    if isinstance(decoded_posted_data, str):
+                        # must be encoded for decoding
+                        multipart_to_decode = decoded_posted_data.encode()
+                    elif isinstance(decoded_posted_data, bytes):
+                        multipart_to_decode = decoded_posted_data
+                    else:
+                        raise ValueError(f'Invalid type for multipart POST: {type(decoded_posted_data)}')
+                    if b"\r\n" not in multipart_to_decode:
+                        # the decoder wants that
+                        multipart_to_decode = multipart_to_decode.replace(b"\n", b"\r\n")
+                    try:
+                        multipart_data = decoder.MultipartDecoder(multipart_to_decode, mimetype_lower)
+                        decoded_posted_data = []
+                        for part in multipart_data.parts:
+                            headers = {k.decode(): v.decode() for k, v in part.headers.items()}
+                            content = part.text
+                            decoded_posted_data.append({'headers': headers, 'content': content})
+                    except Exception as e:
+                        self.logger.warning(f'Unable to decode multipart POST: {e}')
+                        self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
+
+                elif mimetype_lower.startswith('application/x-protobuf'):
+                    # FIXME If possible, decode?
+                    self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
+                elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
+                    try:
+                        # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
+                        # loads here may give us a int, float or a bool.
+                        decoded_posted_data = json.loads(decoded_posted_data)
+                        self.add_feature('posted_data_info', "Decoded JSON out of POST request.")
+                    except Exception:
+                        # keep it as it is otherwise.
+                        pass
+                elif mimetype_lower.endswith('javascript'):
+                    # keep it as it is
+                    self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"Pretty rendering of {mimetype_lower} is not supported yet.")
+                elif mimetype_lower in ['?', '*/*']:
+                    self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"Weird MimeType ({mimetype_lower}) is not supported yet.")
+                elif mimetype_lower == 'application/binary':
+                    self.logger.warning(f'Got a POST {mimetype_lower}, not a broken gziped blob: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
+                elif mimetype_lower in ['application/octet-stream']:
+                    # Should flag it, maybe?
+                    self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
+                elif mimetype_lower in ['application/grpc-web+proto']:
+                    # Can be decoded?
+                    self.logger.warning(f'Got a POST {mimetype_lower} - can be decoded: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
+                elif mimetype_lower in ['application/unknown']:
+                    # Weird but already seen stuff
+                    self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
+                else:
+                    self.logger.warning(f'Unexpected mime type: {mimetype_lower} - {decoded_posted_data!r}')
+                    self.add_feature('posted_data_info', f"Unexpected MimeType ({mimetype_lower}) is not supported yet.")
 
             # NOTE 2023-08-22: Blind attempt to process the data as json
             if decoded_posted_data and isinstance(decoded_posted_data, (str, bytes)):
@@ -467,8 +495,8 @@ class URLNode(HarTreeNode):
 
             if not hasattr(self, 'mimetype'):
                 # try to guess something better
-                if kind := filetype.guess(self.body.getvalue()):
-                    self.add_feature('mimetype', kind.mime)
+                if mime := guess_magic_type(self.body.getvalue()):
+                    self.add_feature('mimetype', mime)
 
             if not hasattr(self, 'mimetype'):
                 self.add_feature('mimetype', '')
@@ -476,12 +504,6 @@ class URLNode(HarTreeNode):
             external_ressources, embedded_ressources = find_external_ressources(self.mimetype, self.body.getvalue(), self.name, all_requests)
             self.add_feature('external_ressources', external_ressources)
             self.add_feature('embedded_ressources', embedded_ressources)
-
-            filename = Path(self.url_split.path).name
-            if filename:
-                self.add_feature('filename', filename)
-            else:
-                self.add_feature('filename', 'file.bin')
 
             # Common JS redirect we can catch easily
             # NOTE: it is extremely fragile and doesn't work very often but is kinda better than nothing.
@@ -622,9 +644,9 @@ class URLNode(HarTreeNode):
 
 class HostNode(HarTreeNode):
 
-    def __init__(self, capture_uuid: str, **kwargs: Any):
+    def __init__(self, capture_uuid: str):
         """Node of the Hostname Tree"""
-        super().__init__(capture_uuid=capture_uuid, **kwargs)
+        super().__init__(capture_uuid=capture_uuid)
         # Do not add the URLs in the json dump
         self.features_to_skip.add('urls')
 

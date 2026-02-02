@@ -13,12 +13,11 @@ from base64 import b64decode
 from collections import defaultdict
 from io import BytesIO
 from logging import LoggerAdapter
+from pure_magic_rs import MagicDb
 from typing import Any
 from collections.abc import Iterable
 from collections.abc import Mapping, MutableMapping
 from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
-
-import filetype  # type: ignore
 
 from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
 from charset_normalizer import from_bytes
@@ -233,11 +232,7 @@ def _unpack_data_uri(data: str) -> tuple[str, str, BytesIO] | None:
             mime, mimeparams, unpacked_data = parsed_uri
             if '/' not in mime:
                 # Turns out, it happens. The mimetype can be null for example.
-                kind = filetype.guess(unpacked_data)
-                if kind:
-                    mime = kind.mime
-                else:
-                    mime = ''
+                mime = guess_magic_type(unpacked_data)
 
             blob = BytesIO(unpacked_data)
             b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
@@ -450,11 +445,7 @@ def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requ
         # Just in case, there is sometimes an unescape call in JS code
         for to_unescape in re.findall(r'unescape\(\'(.*)\'\)', string_soup):
             unescaped = unquote_to_bytes(to_unescape)
-            kind = filetype.guess(unescaped)
-            if kind:
-                mimetype = kind.mime
-            else:
-                mimetype = ''
+            mimetype = guess_magic_type(unescaped)
             blob = BytesIO(unescaped)
             b_hash = hashlib.sha512(blob.getvalue()).hexdigest()
             embedded_ressources[mimetype].append((b_hash, blob))
@@ -473,3 +464,14 @@ class Har2TreeLogAdapter(LoggerAdapter):  # type: ignore[type-arg]
     """
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         return '[{}] {}'.format(self.extra['uuid'], msg), kwargs  # type: ignore[index]
+
+
+magic_db = None
+
+
+def guess_magic_type(data: bytes) -> str:
+    global magic_db
+    if magic_db is None:
+        magic_db = MagicDb()
+    m = magic_db.best_magic_buffer(data)
+    return m.mime_type

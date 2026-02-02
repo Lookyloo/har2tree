@@ -600,7 +600,7 @@ class Har2Tree:
             if i in ignore:
                 continue
 
-            n = URLNode(capture_uuid=self.har.capture_uuid, name=unquote_plus(url_entry['request']['url']))
+            n = URLNode(capture_uuid=self.har.capture_uuid)
             n.load_har_entry(url_entry, list(self.all_url_requests.keys()))
             if hasattr(n, 'redirect_url'):
                 self.all_redirects.append(n.redirect_url)
