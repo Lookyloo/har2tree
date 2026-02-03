@@ -25,7 +25,7 @@ import json_stream  # type: ignore
 
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
-from pyfaup import Url, Hostname
+from pyfaup import Url, Host
 from requests_toolbelt.multipart import decoder  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
@@ -711,11 +711,17 @@ class HostNode(HarTreeNode):
         if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
             return None
         try:
-            faup_hostname = Hostname(self.name)
+            faup_host = Host(self.name)
+            if not faup_host.is_hostname():
+                return None
+            faup_hostname = faup_host.try_into_hostname()
             if faup_hostname.domain:
                 return str(faup_hostname.domain)
 
             self.logger.warning(f'No domain: "{self.name}"')
+            return None
+        except ValueError as e:
+            self.logger.warning(f'Not a Host "{self.name}": {e}')
             return None
         except Exception as e:
             self.logger.warning(f'Unable to parse Hostname "{self.name}": {e}')
@@ -726,11 +732,17 @@ class HostNode(HarTreeNode):
         if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
             return None
         try:
-            faup_hostname = Hostname(self.name)
+            faup_host = Host(self.name)
+            if not faup_host.is_hostname():
+                return None
+            faup_hostname = faup_host.try_into_hostname()
             if faup_hostname.suffix:
                 return str(faup_hostname.suffix)
 
             self.logger.warning(f'No domain: "{self.name}"')
+            return None
+        except ValueError as e:
+            self.logger.warning(f'Not a Host "{self.name}": {e}')
             return None
         except Exception as e:
             self.logger.warning(f'Unable to parse Hostname "{self.name}": {e}')
