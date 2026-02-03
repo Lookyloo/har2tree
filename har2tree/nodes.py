@@ -25,7 +25,7 @@ import json_stream  # type: ignore
 
 from bs4 import BeautifulSoup
 from ete3 import TreeNode  # type: ignore
-from pyfaup import Url
+from pyfaup import Url, Hostname
 from requests_toolbelt.multipart import decoder  # type: ignore
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
@@ -126,8 +126,8 @@ class URLNode(HarTreeNode):
         return b64decode(_to_decode, validate=True)
 
     @cached_property
-    def known_tld(self) -> str | None:
-        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+    def tld(self) -> str | None:
+        if not hasattr(self, 'original_url'):
             return None
         try:
             faup_url = Url(self.original_url)
@@ -141,8 +141,13 @@ class URLNode(HarTreeNode):
             return None
 
     @cached_property
+    def known_tld(self) -> str | None:
+        # An alias, to avoid breaking things.
+        return self.tld
+
+    @cached_property
     def domain(self) -> str | None:
-        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+        if not hasattr(self, 'original_url'):
             return None
         try:
             faup_url = Url(self.original_url)
@@ -160,8 +165,14 @@ class URLNode(HarTreeNode):
 
         # NOTE: by the HAR specs: "Absolute URL of the request (fragments are not included)."
         self.add_feature('name', unquote_plus(har_entry['request']['url']))
+
         # 2026-30-01: Keep original URL so it can be parsed by faup
-        self.add_feature('original_url', har_entry['request']['url'])
+        if (har_entry['request']['url'].startswith('blob:')
+                and har_entry['request']['url'][5:].startswith('http')):
+            self.add_feature('original_url', har_entry['request']['url'][5:])
+
+        elif har_entry['request']['url'].startswith('http'):
+            self.add_feature('original_url', har_entry['request']['url'])
 
         splitted_url = urlparse(self.name)
         if splitted_url.scheme == 'file':
@@ -180,6 +191,7 @@ class URLNode(HarTreeNode):
             if splitted_url.scheme == 'blob':
                 # this is a new weird feature, but it seems to be usable as a URL, so let's do that
                 splitted_url = urlparse(splitted_url.path)
+
             if splitted_url.hostname:
                 self.add_feature('hostname', splitted_url.hostname)
             else:
@@ -694,6 +706,36 @@ class HostNode(HarTreeNode):
         """Number of unique 3rd party cookies received in the responses of all the URL nodes"""
         return sum(third for _, _, third in self.cookies_received if third)
 
+    @cached_property
+    def domain(self) -> str | None:
+        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+            return None
+        try:
+            faup_hostname = Hostname(self.name)
+            if faup_hostname.domain:
+                return str(faup_hostname.domain)
+
+            self.logger.warning(f'No domain: "{self.name}"')
+            return None
+        except Exception as e:
+            self.logger.warning(f'Unable to parse Hostname "{self.name}": {e}')
+            return None
+
+    @cached_property
+    def tld(self) -> str | None:
+        if hasattr(self, 'hostname_is_ip') or hasattr(self, 'file_on_disk'):
+            return None
+        try:
+            faup_hostname = Hostname(self.name)
+            if faup_hostname.suffix:
+                return str(faup_hostname.suffix)
+
+            self.logger.warning(f'No domain: "{self.name}"')
+            return None
+        except Exception as e:
+            self.logger.warning(f'Unable to parse Hostname "{self.name}": {e}')
+            return None
+
     def add_url(self, url: URLNode) -> None:
         """Add a URL node to the Host node, initialize/update the features"""
         if not self.name:
@@ -703,6 +745,9 @@ class HostNode(HarTreeNode):
 
         if hasattr(url, 'hostname_is_ip') and url.hostname_is_ip:
             self.add_feature('hostname_is_ip', True)
+
+        if hasattr(url, 'file_on_disk') and url.file_on_disk:
+            self.add_feature('file_on_disk', True)
 
         self.urls.append(url)
 
