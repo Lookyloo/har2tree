@@ -127,7 +127,8 @@ class URLNode(HarTreeNode):
 
     @cached_property
     def tld(self) -> str | None:
-        if not hasattr(self, 'original_url'):
+        if (not hasattr(self, 'original_url') or hasattr(self, 'hostname_is_ip')
+                or hasattr(self, 'file_on_disk')):
             return None
         try:
             faup_url = Url(self.original_url)
@@ -147,7 +148,8 @@ class URLNode(HarTreeNode):
 
     @cached_property
     def domain(self) -> str | None:
-        if not hasattr(self, 'original_url'):
+        if (not hasattr(self, 'original_url') or hasattr(self, 'hostname_is_ip')
+                or hasattr(self, 'file_on_disk')):
             return None
         try:
             faup_url = Url(self.original_url)
