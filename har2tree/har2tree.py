@@ -250,7 +250,7 @@ class HarFile():
     @property
     def root_url(self) -> str:
         """First URL of the capture"""
-        return self.entries[0]['request']['url']
+        return self.entries[0]['request']['url'].strip()
 
     def __find_header_value(self, har_entry: dict[str, Any], header_name: str) -> str | None:
         """Get the value of a specific header"""
