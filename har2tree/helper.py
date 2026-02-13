@@ -93,13 +93,21 @@ def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
         b64data = b64data[1:].strip().replace('\n', '')
         if not re.fullmatch('[A-Za-z0-9+/]*={0,2}', b64data):
             return None
+
+        # At this point, we may have a slightly broken b64 entry that for some reason has a number of
+        # data characters (everything up to the padding "=") that ends up being 1 more than a multiple of 4 (ex: "AAAAA")
+        # it raises an exception: "Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4".
+        # b64decode('AA==') decodes to b'\x00' so let's just tack a "A" at te end of the string
+        b64data = b64data.strip("=")
+        if len(b64data) % 4 == 1:
+            b64data += "A"
+
         if len(b64data) % 4:
             # Note: Too many = isn't a problem.
             b64data += "==="
         try:
             data = b64decode(b64data)
         except binascii.Error:
-            # Incorrect padding
             return None
     else:
         if ',' not in uri:
