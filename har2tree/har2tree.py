@@ -763,7 +763,7 @@ class Har2Tree:
 
     @trace_make_subtree_fallback
     def _make_subtree_fallback(self, node: URLNode, dev_debug: bool=False) -> None:
-        if hasattr(node, 'referer'):
+        if hasattr(node, 'referer') and node.referer:
             # 2022-04-28: the node has a referer, but for some reason, it could't be attached to the tree
             #             Probable reason: the referer is a part of the URL (hostname)
             if (referer_hostname := urlparse(node.referer).hostname):
@@ -790,7 +790,7 @@ class Har2Tree:
                     self.logger.warning(f'Unable to find any node with the hostname {referer_hostname}, despites it being set as referer.')
             else:
                 # the referer has no hostname and it is fascinating
-                self.logger.warning(f'Unable to get hostname out of referer: {node.referer}')
+                self.logger.warning(f'Unable to get hostname out of referer: "{node.referer}"')
 
         # Sometimes, the har has a list of pages, generally when we have HTTP redirects.
         # IF we have more than one page in the list
