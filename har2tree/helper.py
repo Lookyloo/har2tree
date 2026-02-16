@@ -83,7 +83,7 @@ def make_hhhash(entry: dict[str, Any]) -> str:
 
 
 def parse_data_uri(uri: str) -> tuple[str, str, bytes] | None:
-    if not uri.startswith('data:'):
+    if not re.match("data:", uri, re.I):
         return None
     uri = uri[5:]
     if ';base64' in uri:

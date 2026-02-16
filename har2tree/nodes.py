@@ -372,7 +372,7 @@ class URLNode(HarTreeNode):
                             content = part.text
                             decoded_posted_data.append({'headers': headers, 'content': content})
                     except Exception as e:
-                        self.logger.warning(f'Unable to decode multipart POST: {e}')
+                        self.logger.info(f'Unable to decode multipart POST: {e}')
                         self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
 
                 elif mimetype_lower.startswith('application/x-protobuf'):
