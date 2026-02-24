@@ -327,7 +327,8 @@ class Har2Tree:
         self.hostname_tree = HostNode(capture_uuid=self.har.capture_uuid)
 
         self._nodes_list: list[URLNode] = []
-        self.all_url_requests: dict[str, list[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries}
+        # 2026-02-26: do not add entries where the URL is an empty string.
+        self.all_url_requests: dict[str, list[URLNode]] = {unquote_plus(url_entry['request']['url']): [] for url_entry in self.har.entries if url_entry['request']['url']}
 
         # Format: pageref: node UUID
         self.pages_root: dict[str, str] = {}
@@ -582,6 +583,11 @@ class Har2Tree:
         ignore: list[int] = []
         for i, url_entry in enumerate(self.har.entries):
             url = unquote_plus(url_entry["request"]["url"])
+            # NOTE 2026-02-24: Got an entry where the url is empty, definitely ignore that.
+            if not url:
+                ignore.append(i)
+                continue
+
             if url_entry['response']['status'] == 0:
                 entries_with_0_status[url].append(i)
                 self.logger.debug(f'Status code 0 for {url}, maybe skip node.')
