@@ -1,6 +1,6 @@
 [project]
 name = "har2tree"
-version = "1.36.5"
+version = "1.36.6"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -16,7 +16,7 @@ dependencies = [
     "beautifulsoup4[charset-normalizer,lxml] (>=4.14.3)",
     # poetry up fails with the version of numpy forced for python < 3.11.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
-    "numpy (>=2.2,<2.3) ; python_version < '3.11'",
+    "numpy (>=2.2,<2.3) ; python_version == '3.10'",
     "numpy (>=2.4.2) ; python_version >= \"3.11\" and python_version < \"4.0\"",
     "w3lib (>=2.4.0)",
     "tinycss2 (>=1.5.1)",
