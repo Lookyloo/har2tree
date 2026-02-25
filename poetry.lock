@@ -14,6 +14,44 @@ files = [
 ]
 
 [[package]]
+name = "amazon-ion"
+version = "0.13.0"
+description = "A Python implementation of Amazon Ion."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "amazon.ion-0.13.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:1e7f1a670010509169f4960d85bd24bff2757c038a950b5000f1662128b953d5"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0a15a16086420994f6af07cfedb12512b9b8005209c2df70638dbc8bda6b2467"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4f252e4395dd269b80e675eb71a71f255e282bb8e6faf30f1dca96514f66aa40"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:896a7d7e412de935f4faf86c7e015451c15960eaac5e2ed15fad60973f53f61f"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:eca585339870c856d08927d64dd2ea7e6ccdfb4acf684fcb7cfdef605233381c"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:ee9c5153f0c2d652424583952f0787c7ff66ccbab5a5c471734e77e705c73651"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:33fd6123f282b0b437e8fccb2f955e8544220993a38e4598f4b022dc7f865b59"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:4a52c40694d5e335a41f00b84078b536fa6ad4d3057be9d363cdd7430dccbe5f"},
+    {file = "amazon.ion-0.13.0-cp310-cp310-win_amd64.whl", hash = "sha256:895e51bef03f6e00b80b48ed4abfed090580c734ec4947702deba1bfa6974320"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:bcadd9a11531434e5bc42bf72e57e120a610d5ed3503e6184782c2ec29f5f5e9"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:6999fd3f75117ff2e3d297c7faf294f3a4160bbd333d57d14503c2679479fe4e"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:bcc9ef773663c0eec40ad7d8b761b7e6f43f2a73129ec2a1515a659c62ec84e5"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:65b8fda970954936c18e934426a59375cbea9d123bb8aff7a00472cfe2f406a5"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:33abce8970e221209d825208cf2a625fc993cbb73274fc07c50031ed6f17d831"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:84d8edfe36bb16db8244ce5be67f95767c191e9a6bfe6089d8d7f5f918e0fa67"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:423805a7de0481980d0372da3ea74370e3bb404b4231a5bca6bcbfc8d9b8bf57"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:b961dcd5d0c67cdb24f88fb0c2e18e2564738b7f49a791af42619c6713205ef0"},
+    {file = "amazon.ion-0.13.0-cp311-cp311-win_amd64.whl", hash = "sha256:ecd1fa9d1abcc8b1c197667ec991a2f25aa49d9ca0e6e9cc955956cfd04e6008"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:23924e681d74d01fea566e57dc01d4caca9f00bef2f38865be877e61487a1d0a"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:09c743a38456ba6802e178338590d60a54d6c53fbd8cb123d24d3de430bf8a6c"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:3166130c3bb308d1266aebb69d5f33314397075976c58b62fa81049353a9b210"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:c49305628b791aee6f0e1cb5a9069666ee40b302249e46f7c110c6f6cf1b45ff"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:94aeac4210ea01ec006a828bbdf73fbd50571ebd4fa1ff5fdc4ff518b356a4ed"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:a945a9eb5a22374ca723add404fea3523337a7f626c392f1a46994fa46b62476"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:d39e9014fda245a29e3921cbd979a74e27896445d4182dde01515b86cedba2ba"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:5a878aa3285ab5e5b62815de5d54135784624ca3b7a363fd0cba7b4e5fe53164"},
+    {file = "amazon.ion-0.13.0-cp39-cp39-win_amd64.whl", hash = "sha256:47a3f15badda8aad8f27d8aa4934640be361e356ba088eab0ae770b0131022c1"},
+    {file = "amazon.ion-0.13.0.tar.gz", hash = "sha256:18a41d3f1192e287ada981dd833af7b2d9cdc8406f3fbb1b54558b0ce36e85be"},
+]
+
+[[package]]
 name = "babel"
 version = "2.18.0"
 description = "Internationalization utilities"
@@ -28,6 +66,21 @@ files = [
 
 [package.extras]
 dev = ["backports.zoneinfo ; python_version < \"3.9\"", "freezegun (>=1.0,<2.0)", "jinja2 (>=3.0)", "pytest (>=6.0)", "pytest-cov", "pytz", "setuptools", "tzdata ; sys_platform == \"win32\""]
+
+[[package]]
+name = "bbpb"
+version = "1.4.2"
+description = "Library for working with protobuf messages without a protobuf type definition."
+optional = false
+python-versions = "<4.0,>=3.8"
+groups = ["main"]
+files = [
+    {file = "bbpb-1.4.2-py3-none-any.whl", hash = "sha256:ca5ae8c820a12616f0f33b5647d9889515b751ace5820741213fd3f85c7485c0"},
+    {file = "bbpb-1.4.2.tar.gz", hash = "sha256:03446991bc500cfc9dd2049e6cc9489979e157c5ecb793e27936ab3d579d3496"},
+]
+
+[package.dependencies]
+six = ">=1.16,<2.0"
 
 [[package]]
 name = "beautifulsoup4"
@@ -1542,10 +1595,9 @@ files = [
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
-optional = true
+optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "extra == \"docs\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -1893,4 +1945,4 @@ docs = ["Sphinx", "six"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "9a1f5e3bd14a6091aa6962b93c0551930b65d3ecc5a835a6f8ad3cd9e8db44e2"
+content-hash = "d54b3d8493e3468ce22afa990c4f63b57a7a67cfb8712a45d0a8da492f9b9832"

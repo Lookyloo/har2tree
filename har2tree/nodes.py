@@ -21,12 +21,14 @@ from typing import Any
 from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin, parse_qs
 
-import json_stream  # type: ignore
+import blackboxprotobuf
+import json_stream  # type: ignore[import-untyped]
 
+from amazon.ion import simpleion  # type: ignore[import-untyped]
 from bs4 import BeautifulSoup
-from ete3 import TreeNode  # type: ignore
+from ete3 import TreeNode  # type: ignore[import-untyped]
 from pyfaup import Url, Host
-from requests_toolbelt.multipart import decoder  # type: ignore
+from requests_toolbelt.multipart import decoder  # type: ignore[import-untyped]
 from w3lib.html import strip_html5_whitespace
 from w3lib.url import canonicalize_url, safe_url_string
 
@@ -352,6 +354,21 @@ class URLNode(HarTreeNode):
                         else:
                             self.logger.warning(f"Expected json stream, got garbage: {mimetype_lower} - {decoded_posted_data}")
                         self.add_feature('posted_data_info', "Unable to decode POST request.")
+                elif mimetype_lower.startswith('application/x-amzn-ion'):
+                    # this is a JavaScript object, but we can convert it to json
+                    try:
+                        if isinstance(decoded_posted_data, str):
+                            ion_data = simpleion.loads(decoded_posted_data)
+                            decoded_posted_data = simpleion.dumps(ion_data, binary=False, indent="\t")
+                        elif isinstance(decoded_posted_data, bytes):
+                            ion_data = simpleion.load(decoded_posted_data)
+                            decoded_posted_data = simpleion.dumps(ion_data, binary=False, indent="\t")
+                        else:
+                            raise ValueError(f"Unexpected type ({type(decoded_posted_data)}) for ion data")
+                        self.add_feature('posted_data_info', "Successfully decoded POST request.")
+                    except Exception as e:
+                        self.logger.warning(f"Expected JS style object, got garbage: {mimetype_lower} - {decoded_posted_data!r} - {e}")
+                        self.add_feature('posted_data_info', "Unable to decode POST request.")
                 elif mimetype_lower.startswith('multipart'):
                     self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is partially supported.")
                     if isinstance(decoded_posted_data, str):
@@ -375,10 +392,35 @@ class URLNode(HarTreeNode):
                         self.logger.info(f'Unable to decode multipart POST: {e}')
                         self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
 
-                elif mimetype_lower.startswith('application/x-protobuf'):
-                    # FIXME If possible, decode?
-                    self.logger.debug(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                    self.add_feature('posted_data_info', f"Decoding {mimetype_lower} is not supported yet.")
+                elif mimetype_lower in ['application/grpc-web+proto', 'application/x-protobuf', 'application/proto']:
+                    if isinstance(decoded_posted_data, (bytes, str)):
+                        try:
+                            # Can be decoded?
+                            if isinstance(decoded_posted_data, str):
+                                decoded_posted_data = decoded_posted_data.encode()
+                            message, typedef = blackboxprotobuf.protobuf_to_json(decoded_posted_data)
+                            decoded_posted_data = [{'protobuf_message': json.loads(message), 'typedef': typedef}]
+                        except Exception as e:
+                            self.logger.warning(f'Unable to decode POST of type {mimetype_lower}: {e}')
+                            self.add_feature('posted_data_info', f"Unable to decode {mimetype_lower} POST properly.")
+                    else:
+                        self.logger.warning(f'Decode POST of type {mimetype_lower} should be a bytes stream, but it is not: {type(decoded_posted_data)}')
+                        self.add_feature('posted_data_info', f"Unable to decode {mimetype_lower} POST properly (not bytes).")
+                elif mimetype_lower.startswith('application/atom+xml'):
+                    # 2026-02-25: we're in a POST request, this is a weird type, but seen it, and it contains... a json blob
+                    got_json = False
+                    if isinstance(decoded_posted_data, (str, bytes)):
+                        try:
+                            # Check if it is a json blob, and tear it as that, or do something else.
+                            decoded_posted_data = json.loads(decoded_posted_data)
+                            self.add_feature('posted_data_info', "Successfully decoded POST request.")
+                            got_json = True
+                        except Exception:
+                            pass
+                    if not got_json:
+                        self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
+                        self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
+
                 elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
                     try:
                         # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.
@@ -401,10 +443,6 @@ class URLNode(HarTreeNode):
                 elif mimetype_lower in ['application/octet-stream']:
                     # Should flag it, maybe?
                     self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
-                    self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-                elif mimetype_lower in ['application/grpc-web+proto']:
-                    # Can be decoded?
-                    self.logger.warning(f'Got a POST {mimetype_lower} - can be decoded: {decoded_posted_data!r}')
                     self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
                 elif mimetype_lower in ['application/unknown']:
                     # Weird but already seen stuff
