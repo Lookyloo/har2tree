@@ -392,7 +392,7 @@ class URLNode(HarTreeNode):
                         self.logger.info(f'Unable to decode multipart POST: {e}')
                         self.add_feature('posted_data_info', "Unable to decode multipart in POST request.")
 
-                elif mimetype_lower in ['application/grpc-web+proto', 'application/x-protobuf', 'application/proto']:
+                elif mimetype_lower in ['application/grpc-web+proto', 'application/x-protobuf', 'application/proto', 'application/x-protobuffer']:
                     if isinstance(decoded_posted_data, (bytes, str)):
                         try:
                             # Can be decoded?
