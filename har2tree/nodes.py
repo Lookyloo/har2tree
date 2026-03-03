@@ -134,8 +134,10 @@ class URLNode(HarTreeNode):
             return None
         try:
             faup_url = Url(self.original_url)
-            if faup_url.suffix:
-                return str(faup_url.suffix)
+            if not faup_url.host or not faup_url.host.is_hostname():
+                return None
+            if suffix := faup_url.host.suffix():
+                return str(suffix)
 
             self.logger.warning(f'No TLD: "{self.name}"')
             return None
@@ -155,8 +157,10 @@ class URLNode(HarTreeNode):
             return None
         try:
             faup_url = Url(self.original_url)
-            if faup_url.domain:
-                return str(faup_url.domain)
+            if not faup_url.host or not faup_url.host.is_hostname():
+                return None
+            if domain := faup_url.host.domain():
+                return str(domain)
 
             self.logger.warning(f'No domain: "{self.name}"')
             return None
@@ -754,9 +758,8 @@ class HostNode(HarTreeNode):
             faup_host = Host(self.name)
             if not faup_host.is_hostname():
                 return None
-            faup_hostname = faup_host.try_into_hostname()
-            if faup_hostname.domain:
-                return str(faup_hostname.domain)
+            if domain := faup_host.domain():
+                return str(domain)
 
             self.logger.warning(f'No domain: "{self.name}"')
             return None
@@ -775,9 +778,8 @@ class HostNode(HarTreeNode):
             faup_host = Host(self.name)
             if not faup_host.is_hostname():
                 return None
-            faup_hostname = faup_host.try_into_hostname()
-            if faup_hostname.suffix:
-                return str(faup_hostname.suffix)
+            if suffix := faup_host.suffix():
+                return str(suffix)
 
             self.logger.warning(f'No domain: "{self.name}"')
             return None
