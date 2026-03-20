@@ -22,6 +22,7 @@ from collections.abc import MutableMapping
 from urllib.parse import unquote_plus, urlparse, urljoin, parse_qs
 
 import blackboxprotobuf
+import dns.message
 import json_stream  # type: ignore[import-untyped]
 
 from amazon.ion import simpleion  # type: ignore[import-untyped]
@@ -424,7 +425,15 @@ class URLNode(HarTreeNode):
                     if not got_json:
                         self.logger.warning(f'Got a POST {mimetype_lower}: {decoded_posted_data!r}')
                         self.add_feature('posted_data_info', f"MimeType ({mimetype_lower}) is not supported yet.")
-
+                elif mimetype_lower.startswith('application/dns-message'):
+                    # DNS in wire format: https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-wireformat/
+                    if isinstance(decoded_posted_data, bytes):
+                        try:
+                            decoded_posted_data = dns.message.from_wire(decoded_posted_data).to_text()
+                        except Exception as e:
+                            self.logger.warning(f'Unable to decode POST of type {mimetype_lower}: {e}')
+                    else:
+                        self.logger.warning(f'Unable to decode POST of type {mimetype_lower}: expect bytes.')
                 elif mimetype_lower.startswith('text') and isinstance(decoded_posted_data, (str, bytes)):
                     try:
                         # NOTE 2023-08-22: Quite a few text entries are in fact json, give it a shot.

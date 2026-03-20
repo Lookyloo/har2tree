@@ -17,7 +17,7 @@ dependencies = [
     # poetry up fails with the version of numpy forced for python < 3.11.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (>=2.2,<2.3) ; python_version == '3.10'",
-    "numpy (>=2.4.2) ; python_version >= \"3.11\" and python_version < \"4.0\"",
+    "numpy (>=2.4.3) ; python_version >= \"3.11\" and python_version < \"4.0\"",
     "w3lib (>=2.4.0)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
@@ -28,6 +28,7 @@ dependencies = [
     "pure-magic-rs (>=0.3.1,<0.4.0)",
     "bbpb (>=1.4.2,<2.0.0)",
     "amazon-ion (>=0.13.0,<0.14.0)",
+    "dnspython (>=2.8.0,<3.0.0)",
 ]
 
 [project.urls]
@@ -51,7 +52,7 @@ docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\"", "six (>=1.17.0)"]
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
 pytest-cov = "^7.0.0"
-coverage = "^7.13.4"
+coverage = "^7.13.5"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
 [build-system]
