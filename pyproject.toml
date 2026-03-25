@@ -18,10 +18,9 @@ dependencies = [
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (>=2.2,<2.3) ; python_version == '3.10'",
     "numpy (>=2.4.3) ; python_version >= \"3.11\" and python_version < \"4.0\"",
-    "w3lib (>=2.4.0)",
+    "w3lib (>=2.4.1)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
-    "multipart (>=1.3.0,<2.0.0)",
     "json-stream (>=2.3.3,<3.0.0)",
     "requests-toolbelt (>=1.0.0,<2.0.0)",
     "pyfaup-rs (>=0.4.0,<0.5)",
@@ -29,6 +28,7 @@ dependencies = [
     "bbpb (>=1.4.2,<2.0.0)",
     "amazon-ion (>=0.13.0,<0.14.0)",
     "dnspython (>=2.8.0,<3.0.0)",
+    "charset-normalizer (>=3.4.6,<4.0.0)",
 ]
 
 [project.urls]
@@ -51,7 +51,7 @@ docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\"", "six (>=1.17.0)"]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
-pytest-cov = "^7.0.0"
+pytest-cov = "^7.1.0"
 coverage = "^7.13.5"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
