@@ -362,10 +362,10 @@ class Har2Tree:
         # NOTE: locally_created contains all cookies not present in a response, and not passed at the begining of the capture to splash
         self.locally_created: dict[str, dict[str, Any]] = {}
         for c in self.har.cookies:
-            c_identifier = f'{c["name"]}={c["value"]}'
+            c_identifier = f'{c["name"]}={c.get("value", "")}'
             if (c_identifier not in self.cookies_received
                     and c_identifier not in self.initial_cookies):
-                self.locally_created[f'{c["name"]}={c["value"]}'] = c
+                self.locally_created[f'{c["name"]}={c.get("value", '')}'] = c
 
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
         self.locally_created_not_sent: dict[str, dict[str, Any]] = self.locally_created.copy()
