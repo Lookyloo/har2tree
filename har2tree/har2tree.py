@@ -365,7 +365,7 @@ class Har2Tree:
             c_identifier = f'{c["name"]}={c.get("value", "")}'
             if (c_identifier not in self.cookies_received
                     and c_identifier not in self.initial_cookies):
-                self.locally_created[f'{c["name"]}={c.get("value", '')}'] = c
+                self.locally_created[f'{c["name"]}={c.get("value", "")}'] = c
 
         # NOTE: locally_created_not_sent only contains cookies that are created locally, and never sent during the capture
         self.locally_created_not_sent: dict[str, dict[str, Any]] = self.locally_created.copy()
