@@ -17,14 +17,14 @@ dependencies = [
     # poetry up fails with the version of numpy forced for python < 3.11.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (>=2.2,<2.3) ; python_version == '3.10'",
-    "numpy (>=2.4.4) ; python_version >= \"3.11\" and python_version < \"4.0\"",
+    "numpy (>=2.4.6) ; python_version >= \"3.11\" and python_version < \"4.0\"",
     "w3lib (>=2.4.1)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
     "json-stream (>=2.3.3,<3.0.0)",
     "requests-toolbelt (>=1.0.0,<2.0.0)",
     "pyfaup-rs (>=0.4.0,<0.5)",
-    "pure-magic-rs (>=0.3.1,<0.4.0)",
+    "pure-magic-rs (>=0.4.0)",
     "bbpb (>=1.4.2,<2.0.0)",
     "amazon-ion (>=0.13.0,<0.14.0)",
     "dnspython (>=2.8.0,<3.0.0)",
