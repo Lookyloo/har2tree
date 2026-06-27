@@ -1,6 +1,6 @@
 [project]
 name = "har2tree"
-version = "1.40.0"
+version = "1.40.1"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -17,7 +17,8 @@ dependencies = [
     # poetry up fails with the version of numpy forced for python < 3.11.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (>=2.2,<2.3) ; python_version == '3.10'",
-    "numpy (>=2.4.6) ; python_version >= \"3.11\" and python_version < \"4.0\"",
+    "numpy (>=2.3,<2.4) ; python_version == '3.11'",
+    "numpy (>=2.5) ; python_version >= \"3.12\" and python_version < \"4.0\"",
     "w3lib (>=2.4.1)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
@@ -26,9 +27,9 @@ dependencies = [
     "pyfaup-rs (>=0.4.0,<0.5)",
     "pure-magic-rs (>=0.4.3)",
     "bbpb (>=1.4.2,<2.0.0)",
-    "amazon-ion (>=0.13.0,<0.14.0)",
     "dnspython (>=2.8.0,<3.0.0)",
     "charset-normalizer (>=3.4.6,<4.0.0)",
+    "amazon-ion (>=0.14.6,<0.15.0)",
 ]
 
 [project.urls]
@@ -52,7 +53,7 @@ docs = ["sphinx (>=9.1.0) ; python_version >= \"3.12\"", "six (>=1.17.0)"]
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
 pytest-cov = "^7.1.0"
-coverage = "^7.14.1"
+coverage = "^7.14.3"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
 [build-system]
