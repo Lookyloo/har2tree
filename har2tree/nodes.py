@@ -623,6 +623,11 @@ class URLNode(HarTreeNode):
                 har_entry['_securityDetails']['validTo'] = datetime.fromtimestamp(har_entry['_securityDetails']['validTo'])
             self.add_feature('security_details', har_entry['_securityDetails'])
 
+        # NOTE: Playwright only feature
+        if '_webSocketMessages' in har_entry and har_entry.get('_webSocketMessages'):
+            # got websocket messages
+            self.add_feature('websocket_messages', har_entry['_webSocketMessages'])
+
         if self.response['redirectURL']:
             self.add_feature('redirect', True)
             redirect_url = self.response['redirectURL']
@@ -811,6 +816,9 @@ class HostNode(HarTreeNode):
 
         if hasattr(url, 'file_on_disk') and url.file_on_disk:
             self.add_feature('file_on_disk', True)
+
+        if hasattr(url, 'websocket_messages') and url.websocket_messages:
+            self.add_feature('websocket_session', True)
 
         self.urls.append(url)
 
