@@ -28,7 +28,7 @@ dependencies = [
     "pure-magic-rs (>=0.4.3)",
     "bbpb (>=1.4.2,<2.0.0)",
     "dnspython (>=2.8.0,<3.0.0)",
-    "charset-normalizer (>=3.4.6,<4.0.0)",
+    "charset-normalizer (>=3.4.9,<4.0.0)",
     "amazon-ion (>=0.14.6,<0.15.0)",
 ]
 
