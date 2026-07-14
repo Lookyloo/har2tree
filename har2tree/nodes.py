@@ -183,6 +183,9 @@ class URLNode(HarTreeNode):
         elif har_entry['request']['url'].startswith('http'):
             self.add_feature('original_url', har_entry['request']['url'])
 
+        elif har_entry['request']['url'].startswith('ws'):
+            self.add_feature('original_url', har_entry['request']['url'])
+
         splitted_url = urlparse(self.name)
         if splitted_url.scheme == 'file':
             # file on disk, we do not have a proper URL
