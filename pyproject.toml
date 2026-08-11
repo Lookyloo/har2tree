@@ -1,6 +1,6 @@
 [project]
 name = "har2tree"
-version = "1.40.3"
+version = "1.40.4"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
