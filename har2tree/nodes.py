@@ -56,8 +56,7 @@ class HarTreeNode(TreeNode):  # type: ignore[misc]
                 continue
             to_return[feature] = getattr(self, feature)
 
-        for child in self.children:
-            to_return['children'].append(child)
+        to_return['children'] = sorted(self.children, key=lambda child: child.name)
 
         return to_return
 
