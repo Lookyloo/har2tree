@@ -2238,14 +2238,14 @@ types-webencodings = "*"
 
 [[package]]
 name = "types-webencodings"
-version = "0.6.0.20260825"
+version = "0.6.0.20260827"
 description = "Typing stubs for webencodings"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "types_webencodings-0.6.0.20260825-py3-none-any.whl", hash = "sha256:6bd5f0fb6d822d10fb0fb1af37567c5a316174bbb224686bf360900d2a5bdad1"},
-    {file = "types_webencodings-0.6.0.20260825.tar.gz", hash = "sha256:06faef4d563d1a2051db7d2985985d53c7e437cde0fe965ff1912a339fa030fe"},
+    {file = "types_webencodings-0.6.0.20260827-py3-none-any.whl", hash = "sha256:10600b0833f6c2a565879df74f806df69659f6fd87857f11438b924c74587416"},
+    {file = "types_webencodings-0.6.0.20260827.tar.gz", hash = "sha256:b7a8ce68141ae0d318fbc479137f28dc245ba578ae07f6ec6ce35b294f04cf41"},
 ]
 
 [[package]]
