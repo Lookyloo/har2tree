@@ -30,6 +30,7 @@ dependencies = [
     "dnspython (>=2.8.0,<3.0.0)",
     "charset-normalizer (>=3.4.9,<4.0.0)",
     "amazon-ion (>=0.14.6,<0.15.0)",
+    "tinycss2-core-attributes (>=1.5.1.0,<2.0.0.0)",
 ]
 
 [project.urls]

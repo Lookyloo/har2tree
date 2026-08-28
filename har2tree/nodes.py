@@ -538,7 +538,10 @@ class URLNode(HarTreeNode):
             # (the cookie was in the response of that request)
             self.add_feature('cookies_sent', {})
             for cookie in self.request_cookie:
-                self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
+                if 'value' in cookie:
+                    self.cookies_sent[f'{cookie["name"]}={cookie["value"]}'] = []
+                else:
+                    self.cookies_sent[f'{cookie["name"]}='] = []
 
         if not self.response['content'].get('text') or self.response['content']['text'] == '':
             # If the content of the response is empty, skip.

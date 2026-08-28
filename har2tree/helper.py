@@ -22,7 +22,7 @@ from urllib.parse import urlparse, unquote_plus, unquote_to_bytes, urljoin
 from bs4 import BeautifulSoup, Tag, MarkupResemblesLocatorWarning
 from charset_normalizer import from_bytes
 import tinycss2  # type: ignore[import-untyped]
-from tinycss2.ast import URLToken, Node  # type: ignore[import-untyped]
+import tinycss2_core_attributes  # type: ignore[import-untyped]
 
 warnings.simplefilter("ignore", MarkupResemblesLocatorWarning)
 
@@ -190,8 +190,11 @@ def rebuild_url(base_url: str, partial: str, known_urls: list[str]) -> str:
                 final_url = parsed._replace(path=resolved_path).geturl()
                 if final_url not in known_urls and resolved_path[-1] != '/':
                     # NOTE: the last '/' at the end of the path is stripped by normpath, we try to re-add it
+                    # *if* it is in known_urls
                     resolved_path += '/'
-                    final_url = parsed._replace(path=resolved_path).geturl()
+                    _final_url_with_slash = parsed._replace(path=resolved_path).geturl()
+                    if _final_url_with_slash in known_urls:
+                        final_url = _final_url_with_slash
             else:
                 # No path, just make it a /
                 final_url = parsed._replace(path='/').geturl()
@@ -225,7 +228,6 @@ def url_cleanup(dict_to_clean: Mapping[str, list[str]], base_url: str, all_reque
             if to_attach == base_url:
                 # Ignore what is basically a loop.
                 continue
-
             if to_attach.startswith('http'):
                 to_return[key].append(to_attach)
             else:
@@ -293,64 +295,27 @@ def make_soup(html: bytes) -> BeautifulSoup:
             # Fallback to the default python parser
             return BeautifulSoup(doc_as_str, 'html.parser')
 
-# The CSS processing bit is taked out of WeasyPrint
-# https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/css/__init__.py#L876 -> preprocess_stylesheet
 
-# the only entries we care about are:
-# * @import (at-rule with keyword import)
-# * URLToken
-# * Function with name url
+# URL finder takes out of freezeyt
+# https://github.com/encukou/freezeyt/blob/main/freezeyt/url_finders.py -> get_urls_from_tinycss2_value
 
-
-def __remove_whitespace(tokens: tuple[Node]) -> tuple[Node]:
-    """Remove any top-level whitespace and comments in a token list."""
-    return tuple(
-        token for token in tokens
-        if token.type not in ('whitespace', 'comment'))
-
-
-def __flatten_rules(rules: list[Node]) -> Iterable[Node]:
-    """Flatten qualified rules in a list of CSS rules."""
-    for rule in rules:
-        if rule.type == 'at-rule':
-            # make a urltoken if it is an import for a url
-            if rule.lower_at_keyword == 'import':
-                # make a urltoken because this one might be a url function, or a string
-                for p in __remove_whitespace(rule.prelude):
-                    if p.type == 'url' or p.type == 'string':
-                        yield URLToken(999, 999, p.value, p.value)
-                        break
-                    elif p.type == 'function' and p.lower_name == 'url':
-                        yield URLToken(999, 999, p.arguments[0].value, p.arguments[0].value)
-                        break
-            else:
-                yield from rule.prelude
-        if not hasattr(rule, 'content') or not rule.content:
-            continue
-        for r in rule.content:
-            if r.type in ['[] block', '{} block', '() block']:
-                if r.content:
-                    yield from __flatten_rules(r.content)
-            else:
-                yield r
-
-
-def find_external_ressources_in_css(css: str) -> list[str]:
-    rules = tinycss2.parse_stylesheet(css, skip_comments=True, skip_whitespace=True)
-    to_return = []
-    for r in __flatten_rules(rules):
-        # other entries may have urls, but they will always be in a url() function
-        if r.type == 'url':
-            try:
-                to_return.append(r.value)
-            except Exception as e:
-                logger.warning(f'Parsing error in tinycss2: {e} - {r}')
-        elif r.type == 'function' and r.lower_name == 'url':
-            if isinstance(r.arguments[0], tinycss2.ast.ParseError):
-                # CSS is broken, cannot parse it. Generally a missing closing quote.
-                continue
-            to_return.append(r.arguments[0].value)
-    return to_return
+def get_urls_from_tinycss2_value(value: Any) -> Iterable[str]:
+    if isinstance(value, list):
+        for item in value:
+            yield from get_urls_from_tinycss2_value(item)
+    elif isinstance(value, tinycss2.ast.Node):
+        for attr_name in tinycss2_core_attributes.get_core_attrs(value):
+            attr_value = getattr(value, attr_name)
+            yield from get_urls_from_tinycss2_value(attr_value)
+        if isinstance(value, tinycss2.ast.URLToken):
+            yield value.value
+        if isinstance(value, tinycss2.ast.FunctionBlock):
+            if value.name in {'url', 'src'} and value.arguments:
+                arg = value.arguments[0]
+                if isinstance(arg, tinycss2.ast.StringToken):
+                    yield arg.value
+    else:
+        pass
 
 
 def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requests: list[str], full_text_search: bool=True) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, BytesIO]]]]:
@@ -380,7 +345,8 @@ def find_external_ressources(mimetype: str, data: bytes, base_url: str, all_requ
     if mimetype.startswith('text/css'):
         doc_as_str = str(from_bytes(data).best())
         # external stuff loaded from css content, because reasons.
-        for url in find_external_ressources_in_css(doc_as_str):
+        rules = tinycss2.parse_stylesheet(doc_as_str, skip_comments=True, skip_whitespace=True)
+        for url in get_urls_from_tinycss2_value(rules):
             if url.startswith('data:'):
                 unpacked = _unpack_data_uri(url)
                 if unpacked:
