@@ -337,7 +337,10 @@ class Har2Tree:
         # 2025-11-16: make values of referers and initiators sets because there will be duplicates
         self.all_referer: dict[str, set[str]] = defaultdict(set)
         self.all_initiator_url: dict[str, set[str]] = defaultdict(set)
-        self._load_url_entries()
+        try:
+            self._load_url_entries()
+        except Exception as e:
+            raise Har2TreeError(f'The HAR file is invalid: {e}') from e
 
         # Generate cookies lookup tables
         # All the initial cookies sent with the initial request given to splash
@@ -629,6 +632,9 @@ class Har2Tree:
                     self.all_referer[n.referer].add(n.name)
 
             self._nodes_list.append(n)
+            if n.name not in self.all_url_requests:
+                # we got a weird URL, adding it manually here
+                self.all_url_requests[n.name] = [n]
             self.all_url_requests[n.name].append(n)
         # So, sometimes, the startedDateTime in the page list is fucked up
         # Ex: start time of page 3 == start time of page 1. This is wrong, but it happens
