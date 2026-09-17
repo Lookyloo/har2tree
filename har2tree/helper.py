@@ -447,5 +447,5 @@ def guess_magic_type(data: bytes) -> str:
     global magic_db
     if magic_db is None:
         magic_db = MagicDb()
-    m = magic_db.best_magic_buffer(data)
+    m = magic_db.best_magic_buffer(data, None)
     return m.mime_type
