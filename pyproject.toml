@@ -25,11 +25,11 @@ dependencies = [
     "json-stream (>=2.3.3,<3.0.0)",
     "requests-toolbelt (>=1.0.0,<2.0.0)",
     "pyfaup-rs (>=0.4.0,<0.5)",
-    "pure-magic-rs (>=0.4.3)",
+    "pure-magic-rs (>=0.5)",
     "bbpb (>=1.4.2,<2.0.0)",
     "dnspython (>=2.8.0,<3.0.0)",
     "charset-normalizer (>=3.4.9,<4.0.0)",
-    "amazon-ion (>=0.14.6,<0.15.0)",
+    "amazon-ion (>=0.15,<0.16.0)",
     "tinycss2-core-attributes (>=1.5.1.0,<2.0.0.0)",
 ]
 
