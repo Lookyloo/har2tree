@@ -1,13 +1,13 @@
 [project]
 name = "har2tree"
-version = "1.42.0"
+version = "1.43.0"
 description = "HTTP Archive (HAR) to ETE Toolkit generator"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
 ]
 license = "BSD-3-Clause"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.16"
 
 dynamic = [ "classifiers" ]
 
@@ -16,16 +16,15 @@ dependencies = [
     "beautifulsoup4[charset-normalizer,lxml] (>=4.15.0)",
     # poetry up fails with the version of numpy forced for python < 3.11.
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
-    "numpy (>=2.2,<2.3) ; python_version == '3.10'",
     "numpy (>=2.3,<2.4) ; python_version == '3.11'",
-    "numpy (>=2.5) ; python_version >= \"3.12\" and python_version < \"4.0\"",
-    "w3lib (>=2.4.1)",
+    "numpy (>=2.5.4) ; python_version >= \"3.12\" and python_version < \"4.0\"",
+    "w3lib (>=2.5.0)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
     "json-stream (>=2.3.3,<3.0.0)",
     "requests-toolbelt (>=1.0.0,<2.0.0)",
     "pyfaup-rs (>=0.4.0,<0.5)",
-    "pure-magic-rs (>=0.5)",
+    "pure-magic-rs (>=0.5.1)",
     "bbpb (>=1.4.2,<2.0.0)",
     "dnspython (>=2.8.0,<3.0.0)",
     "charset-normalizer (>=3.4.9,<4.0.0)",
@@ -52,9 +51,9 @@ classifiers = [
 docs = ["sphinx (>=9.2.0) ; python_version >= \"3.13\"", "six (>=1.17.0)"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^2.3.0"
+mypy = "^2.4.0"
 pytest-cov = "^7.1.0"
-coverage = "^7.14.3"
+coverage = "^7.17.0"
 types-beautifulsoup4 = "^4.12.0.20250516"
 
 [build-system]
