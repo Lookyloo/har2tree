@@ -51,7 +51,7 @@ classifiers = [
 docs = ["sphinx (>=9.2.0) ; python_version >= \"3.13\"", "six (>=1.17.0)"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^2.4.0"
+mypy = "^2.4.1"
 pytest-cov = "^7.1.0"
 coverage = "^7.17.0"
 types-beautifulsoup4 = "^4.12.0.20250516"
