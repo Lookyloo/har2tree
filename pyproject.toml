@@ -18,7 +18,7 @@ dependencies = [
     # The work around is to comment it, run poetry up, uncomment it. and run poetry update.
     "numpy (>=2.3,<2.4) ; python_version == '3.11'",
     "numpy (>=2.5.4) ; python_version >= \"3.12\" and python_version < \"4.0\"",
-    "w3lib (>=2.5.0)",
+    "w3lib (>=2.6.0)",
     "tinycss2 (>=1.5.1)",
     "legacy-cgi (>=2.6.4) ; python_version >= \"3.13\" and python_version < \"4.0\"",
     "json-stream (>=2.3.3,<3.0.0)",
