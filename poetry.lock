@@ -675,14 +675,14 @@ i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "json-stream"
-version = "2.5.1"
+version = "2.5.5"
 description = "Streaming JSON encoder and decoder"
 optional = false
-python-versions = "<4,>=3.5"
+python-versions = "<4,>=3.8"
 groups = ["main"]
 files = [
-    {file = "json_stream-2.5.1-py3-none-any.whl", hash = "sha256:ff74a31fc4af348bc7b17e1e92d5d4abd79b1aedca93b141138ed9429ef8d0c2"},
-    {file = "json_stream-2.5.1.tar.gz", hash = "sha256:f7a2c72f208544276c0ee3f58c11eb635f2d3c1d37c7237cac2cf6681b67f655"},
+    {file = "json_stream-2.5.5-py3-none-any.whl", hash = "sha256:806615f5adac01aa47da2152c702a22d8f7d314f744fe0ece130fa46a3ff292d"},
+    {file = "json_stream-2.5.5.tar.gz", hash = "sha256:70c001dbc16f2cacf092c021cd137a43dde2c91654ca23c6e0cb695666135869"},
 ]
 
 [package.dependencies]
@@ -2289,4 +2289,4 @@ docs = ["six", "sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.16"
-content-hash = "a8152eb0032759b1adb3f7ae1c810d8f603339d68297ffad8004fec286e00df1"
+content-hash = "4dc9bb4cb5421e0047575b4334b11bcf7f6c253d62cb4bcfc0680b6bf9caf878"
