@@ -28,7 +28,7 @@ dependencies = [
     "bbpb (>=1.4.2,<2.0.0)",
     "dnspython (>=2.8.0,<3.0.0)",
     "charset-normalizer (>=3.4.9,<4.0.0)",
-    "amazon-ion (>=0.15,<0.16.0)",
+    "amazon-ion (>=0.16)",
     "tinycss2-core-attributes (>=1.5.1.0,<2.0.0.0)",
 ]
 
